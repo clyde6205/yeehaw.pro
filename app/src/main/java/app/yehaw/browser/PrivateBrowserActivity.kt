@@ -146,7 +146,28 @@ class PrivateBrowserActivity : Activity() {
             override fun shouldOverrideUrlLoading(v: WebView, request: android.webkit.WebResourceRequest): Boolean {
                 val uri = request.url
                 if (uri.scheme == "http" || uri.scheme == "https") return false
-                try { startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (_: Exception) { }
+                val scheme = uri.scheme?.lowercase()
+                if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market")) return true
+                AlertDialog.Builder(this@PrivateBrowserActivity)
+                    .setTitle("Open another app?")
+                    .setMessage("This private page wants to open an external application (" + scheme + ").")
+                    .setPositiveButton("Open") { _, _ ->
+                        try { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                        catch (_: Exception) { Toast.makeText(this@PrivateBrowserActivity, "No compatible app is installed.", Toast.LENGTH_SHORT).show() }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                return true
+            }
+
+            override fun onRenderProcessGone(v: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                v?.let {
+                    it.stopLoading()
+                    it.destroy()
+                }
+                webView = null
+                Toast.makeText(this@PrivateBrowserActivity, "Private page ran out of memory. Close and reopen private browsing.", Toast.LENGTH_LONG).show()
+                finish()
                 return true
             }
             override fun onPageStarted(v: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
