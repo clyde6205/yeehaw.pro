@@ -33,6 +33,7 @@ import android.webkit.ValueCallback
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.HorizontalScrollView
 import android.widget.TextView
 import android.widget.Toast
 
@@ -136,7 +137,10 @@ class MainActivity : Activity() {
         controls.addView(actionButton("+") { createTab(HOME_URL) })
         controls.addView(actionButton("Tabs") { showTabPicker() })
         controls.addView(actionButton("Default") { requestDefaultBrowserRole() })
-        root.addView(controls)
+        root.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(controls)
+        })
 
         val libraryControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -149,7 +153,10 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("Find") { findOnPage() })
         libraryControls.addView(actionButton("Share") { shareCurrentPage() })
         libraryControls.addView(actionButton("More") { showBrowserMenu() })
-        root.addView(libraryControls)
+        root.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(libraryControls)
+        })
 
         statusText = TextView(this).apply {
             text = "Ready"
