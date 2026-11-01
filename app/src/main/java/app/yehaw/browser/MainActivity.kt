@@ -234,13 +234,18 @@ class MainActivity : Activity() {
                 configureWebView(popup)
                 tabs.add(BrowserTab(webView = popup))
                 showTab(tabs.lastIndex)
-                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: run {
+                val message = resultMsg ?: run {
+                    tabs.removeAt(tabs.lastIndex)
+                    popup.destroy()
+                    return false
+                }
+                val transport = message.obj as? WebView.WebViewTransport ?: run {
                     tabs.removeAt(tabs.lastIndex)
                     popup.destroy()
                     return false
                 }
                 transport.webView = popup
-                resultMsg.sendToTarget()
+                message.sendToTarget()
                 return true
             }
 
