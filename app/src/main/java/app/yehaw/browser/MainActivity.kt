@@ -129,6 +129,7 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("Bookmarks") { showSavedItems(true) })
         libraryControls.addView(actionButton("History") { showSavedItems(false) })
         libraryControls.addView(actionButton("Find") { findOnPage() })
+        libraryControls.addView(actionButton("Share") { shareCurrentPage() })
         libraryControls.addView(actionButton("More") { showBrowserMenu() })
         root.addView(libraryControls)
 
@@ -415,6 +416,16 @@ class MainActivity : Activity() {
                 it.webView.clearCache(false)
             }
         }
+    }
+
+    private fun shareCurrentPage() {
+        val tab = tabs.getOrNull(activeTabIndex) ?: return
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, tab.currentUrl)
+            putExtra(Intent.EXTRA_SUBJECT, tab.title)
+        }
+        startActivity(Intent.createChooser(share, "Share page"))
     }
 
     private fun saveBookmark() {
