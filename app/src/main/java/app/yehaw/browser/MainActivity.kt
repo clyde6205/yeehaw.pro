@@ -671,7 +671,6 @@ class MainActivity : Activity() {
         tab.webView.stopLoading()
         tab.webView.onPause()
         tab.webView.clearCache(false)
-        tab.webView.loadUrl("about:blank")
         tab.webView.destroy()
         tab.evicted = true
     }
