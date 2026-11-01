@@ -139,7 +139,7 @@ class MainActivity : Activity() {
                 } else false
             }
         }
-        addressRow.addView(addressBar, LinearLayout.LayoutParams(0, dp(46), 1f))
+        addressRow.addView(addressBar, LinearLayout.LayoutParams(0, dp(48), 1f))
         addressRow.addView(actionButton("GO") { navigateFromAddressBar() })
         root.addView(addressRow)
 
@@ -206,7 +206,8 @@ class MainActivity : Activity() {
             text = label
             textSize = 11f
             isAllCaps = false
-            minWidth = dp(38)
+            minWidth = dp(48)
+            minHeight = dp(48)
             setPadding(dp(4), 0, dp(4), 0)
             setOnClickListener { action() }
         }
