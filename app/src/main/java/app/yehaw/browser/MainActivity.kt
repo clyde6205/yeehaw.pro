@@ -163,6 +163,7 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("Save") { saveBookmark() })
         libraryControls.addView(actionButton("Bookmarks") { showSavedItems(true) })
         libraryControls.addView(actionButton("History") { showSavedItems(false) })
+        libraryControls.addView(actionButton("Downloads") { openDownloads() })
         libraryControls.addView(actionButton("Find") { findOnPage() })
         libraryControls.addView(actionButton("Share") { shareCurrentPage() })
         libraryControls.addView(actionButton("More") { showBrowserMenu() })
@@ -665,6 +666,14 @@ class MainActivity : Activity() {
                 }
             }
             REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(granted)
+        }
+    }
+
+    private fun openDownloads() {
+        try {
+            startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Downloads app is unavailable on this device.", Toast.LENGTH_SHORT).show()
         }
     }
 
