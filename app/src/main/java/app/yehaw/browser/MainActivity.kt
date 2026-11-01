@@ -205,6 +205,27 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                view: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                uploadCallback?.onReceiveValue(null)
+                uploadCallback = filePathCallback
+                return try {
+                    val chooser = fileChooserParams?.createIntent()
+                        ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                            type = "*/*"
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                        }
+                    startActivityForResult(Intent.createChooser(chooser, "Choose file"), REQUEST_FILE_CHOOSER)
+                    true
+                } catch (_: Exception) {
+                    uploadCallback = null
+                    false
+                }
+            }
+
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 tab.title = title?.take(80)?.ifBlank { "Untitled page" } ?: "Untitled page"
@@ -243,6 +264,12 @@ class MainActivity : Activity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                val tab = tabs.firstOrNull { it.webView === view }
+                if (tab != null && !url.isNullOrBlank() &&
+                    (url.startsWith("https://") || url.startsWith("http://"))) {
+                    tab.currentUrl = url
+                    browserStore.addHistory(url, tab.title)
+                }
                 if (view === currentWebView()) statusText.text = "Ready"
             }
 
