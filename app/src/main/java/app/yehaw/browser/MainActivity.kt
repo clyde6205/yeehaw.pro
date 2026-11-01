@@ -534,8 +534,7 @@ class MainActivity : Activity() {
                 .setMessage("This website wants to open an external application. Continue only if you trust the page.")
                 .setPositiveButton("Open") { _, _ ->
                     try {
-                        if (parsedIntent.resolveActivity(packageManager) != null) startActivity(parsedIntent)
-                        else openHttpFallback(fallback)
+                        startActivity(parsedIntent)
                     } catch (_: Exception) {
                         openHttpFallback(fallback)
                     }
