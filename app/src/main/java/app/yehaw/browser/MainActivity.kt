@@ -479,11 +479,23 @@ class MainActivity : Activity() {
     }
 
     private fun openExternalScheme(uri: Uri) {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, uri))
-        } catch (_: Exception) {
-            Toast.makeText(this, "This link type is not supported on this device.", Toast.LENGTH_SHORT).show()
+        val scheme = uri.scheme?.lowercase()
+        if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market", "intent")) {
+            Toast.makeText(this, "Blocked unsupported link type.", Toast.LENGTH_SHORT).show()
+            return
         }
+        AlertDialog.Builder(this)
+            .setTitle("Open another app?")
+            .setMessage("This link wants to open an external application (" + scheme + "). Continue only if you trust the page.")
+            .setPositiveButton("Open") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "No compatible app is installed.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun downloadFile(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
