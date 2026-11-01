@@ -43,7 +43,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Third-party cookies are disabled by default.
 - TLS mixed content is blocked, and certificate errors are explicitly canceled; there is no user-facing certificate bypass.
 - Android Safe Browsing is enabled where supported.
-- A separate `:private_browser` process uses an Android 9+ WebView data-directory suffix and does not write to normal history/bookmarks. It clears cookies, cache, and Web Storage at session start/end. This is an initial single-window private profile, not yet independently security-audited; service-worker/cache cleanup, crash-recovery verification and independent privacy/security review remain release gates.
+- A separate `:private_browser` process uses an Android 9+ WebView data-directory suffix and does not write to normal history/bookmarks. It clears cookies, cache, and Web Storage at session start/end, supports file uploads, media/location prompts and full-screen video. This is an initial single-window private profile, not yet independently security-audited; service-worker/cache cleanup, crash-recovery verification and independent privacy/security review remain release gates.
 - Notifications, passkeys, advanced WebAuthn, persistent per-origin permission management/revocation, and full private-mode permission parity are not implemented.
 
 ## Required release gates
