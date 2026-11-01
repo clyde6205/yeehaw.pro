@@ -455,6 +455,10 @@ class MainActivity : Activity() {
                 error: android.net.http.SslError?
             ) {
                 handler?.cancel()
+                if (view == null || error?.url != view.url) {
+                    if (view === currentWebView()) statusText.text = "Some secure page content was blocked."
+                    return
+                }
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 tab.failed = true
                 if (view === currentWebView()) {
