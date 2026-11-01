@@ -522,7 +522,7 @@ class MainActivity : Activity() {
             parsedIntent.setPackage(null)
             parsedIntent.action = Intent.ACTION_VIEW
             parsedIntent.flags = 0
-            parsedIntent.replaceExtras(null)
+            parsedIntent.replaceExtras(android.os.Bundle())
             parsedIntent.categories?.toList()?.forEach { parsedIntent.removeCategory(it) }
             parsedIntent.addCategory(Intent.CATEGORY_BROWSABLE)
             AlertDialog.Builder(this)
