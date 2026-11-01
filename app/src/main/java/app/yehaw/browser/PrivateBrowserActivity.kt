@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.view.ViewGroup
+import android.view.View
+import android.widget.FrameLayout
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
@@ -40,6 +42,10 @@ class PrivateBrowserActivity : Activity() {
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
     private var pendingGeoOrigin: String? = null
     private var ownsPrivateSession = false
+    private var browserRoot: LinearLayout? = null
+    private var fullScreenView: View? = null
+    private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var previousSystemUiVisibility = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,6 +108,34 @@ class PrivateBrowserActivity : Activity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, false)
         view.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
+                if (view == null || fullScreenView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                val decor = window.decorView as? FrameLayout ?: run {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                fullScreenView = view
+                fullScreenCallback = callback
+                previousSystemUiVisibility = decor.systemUiVisibility
+                browserRoot?.visibility = View.GONE
+                decor.addView(view, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                ))
+                decor.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+            }
+
+            override fun onHideCustomView() {
+                hideFullScreenView()
+            }
+
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val allowed = request.resources.filter {
@@ -214,6 +248,7 @@ class PrivateBrowserActivity : Activity() {
             } catch (_: Exception) { Toast.makeText(this, "Download failed.", Toast.LENGTH_SHORT).show() }
         })
         root.addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        browserRoot = root
         setContentView(root)
         // Remove remnants left by an interrupted private session before navigation.
         view.clearCache(true)
@@ -225,6 +260,17 @@ class PrivateBrowserActivity : Activity() {
                 if (!isFinishing && !isDestroyed) view.loadUrl("https://duckduckgo.com/")
             }
         }
+    }
+
+    private fun hideFullScreenView() {
+        val view = fullScreenView ?: return
+        val decor = window.decorView as? FrameLayout
+        decor?.removeView(view)
+        decor?.systemUiVisibility = previousSystemUiVisibility
+        browserRoot?.visibility = View.VISIBLE
+        fullScreenView = null
+        fullScreenCallback?.onCustomViewHidden()
+        fullScreenCallback = null
     }
 
     private fun grantPendingWebPermission() {
@@ -255,6 +301,10 @@ class PrivateBrowserActivity : Activity() {
 
     @Deprecated("Uses the private WebView navigation stack.")
     override fun onBackPressed() {
+        if (fullScreenView != null) {
+            hideFullScreenView()
+            return
+        }
         val current = webView
         if (current?.canGoBack() == true) current.goBack() else finish()
     }
@@ -282,6 +332,7 @@ class PrivateBrowserActivity : Activity() {
         }
     }
     override fun onDestroy() {
+        if (fullScreenView != null) hideFullScreenView()
         uploadCallback?.onReceiveValue(null)
         pendingWebPermission?.deny()
         pendingWebPermission = null
