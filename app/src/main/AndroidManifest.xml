@@ -10,6 +10,13 @@
         android:usesCleartextTraffic="false">
 
         <activity
+            android:name=".PrivateBrowserActivity"
+            android:process=":private_browser"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
+        <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:exported="true"
