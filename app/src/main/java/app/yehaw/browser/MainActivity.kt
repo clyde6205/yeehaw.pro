@@ -15,6 +15,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
 import android.os.Message
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -63,6 +65,9 @@ class MainActivity : Activity() {
     private var pendingWebResources: Array<String> = emptyArray()
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
     private var pendingGeoOrigin: String? = null
+    private var fullScreenView: View? = null
+    private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var previousSystemUiVisibility = 0
     private var activeTabIndex = -1
     private val maxTabs: Int by lazy {
         val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
@@ -231,6 +236,33 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null || fullScreenView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                val decor = window.decorView as? FrameLayout ?: run {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                fullScreenView = view
+                fullScreenCallback = callback
+                previousSystemUiVisibility = decor.systemUiVisibility
+                decor.addView(view, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                ))
+                decor.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
+            }
+
+            override fun onHideCustomView() {
+                hideFullScreenView()
+            }
+
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread {
                     val allowed = request.resources.filter {
@@ -529,6 +561,16 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun hideFullScreenView() {
+        val view = fullScreenView ?: return
+        val decor = window.decorView as? FrameLayout
+        decor?.removeView(view)
+        decor?.systemUiVisibility = previousSystemUiVisibility
+        fullScreenView = null
+        fullScreenCallback?.onCustomViewHidden()
+        fullScreenCallback = null
+    }
+
     private fun grantPendingWebPermission() {
         val request = pendingWebPermission ?: return
         request.grant(pendingWebResources)
@@ -682,6 +724,10 @@ class MainActivity : Activity() {
 
     @Deprecated("Uses WebView history before finishing.")
     override fun onBackPressed() {
+        if (fullScreenView != null) {
+            hideFullScreenView()
+            return
+        }
         val webView = currentWebView()
         if (webView?.canGoBack() == true) webView.goBack()
         else if (tabs.size > 1) closeCurrentTab()
@@ -695,6 +741,7 @@ class MainActivity : Activity() {
             it.webView.destroy()
         }
         tabs.clear()
+        if (fullScreenView != null) hideFullScreenView()
         uploadCallback?.onReceiveValue(null)
         uploadCallback = null
         pendingWebPermission?.deny()
