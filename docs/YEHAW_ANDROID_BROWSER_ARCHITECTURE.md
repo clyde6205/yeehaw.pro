@@ -12,7 +12,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 
 - Keep the APK independent of a bundled browser engine.
 - Limit live tabs conservatively on constrained devices.
-- Pause background WebViews under memory pressure.
+- Evict background WebViews under memory pressure, retaining their last URL/title and approximate scroll position; recreate them on demand using the shared browser profile.
 - Keep persistent history bounded.
 - Offer an explicit memory-saver mode; never silently disable JavaScript or rewrite pages.
 - Do not claim that every 1 GB device can run every modern website. A page's own memory requirements can exceed device capacity.
