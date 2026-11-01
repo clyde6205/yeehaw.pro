@@ -511,6 +511,34 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun grantPendingWebPermission() {
+        val request = pendingWebPermission ?: return
+        request.grant(pendingWebResources)
+        pendingWebPermission = null
+        pendingWebResources = emptyArray()
+    }
+
+    private fun grantPendingGeoPermission(granted: Boolean) {
+        pendingGeoCallback?.invoke(pendingGeoOrigin, granted, false)
+        pendingGeoCallback = null
+        pendingGeoOrigin = null
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+        when (requestCode) {
+            REQUEST_SITE_PERMISSION -> {
+                if (granted) grantPendingWebPermission() else {
+                    pendingWebPermission?.deny()
+                    pendingWebPermission = null
+                    pendingWebResources = emptyArray()
+                }
+            }
+            REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(granted)
+        }
+    }
+
     private fun shareCurrentPage() {
         val tab = tabs.getOrNull(activeTabIndex) ?: return
         val share = Intent(Intent.ACTION_SEND).apply {
@@ -650,6 +678,10 @@ class MainActivity : Activity() {
         tabs.clear()
         uploadCallback?.onReceiveValue(null)
         uploadCallback = null
+        pendingWebPermission?.deny()
+        pendingWebPermission = null
+        pendingGeoCallback?.invoke(pendingGeoOrigin, false, false)
+        pendingGeoCallback = null
         browserStore.close()
         super.onDestroy()
     }
@@ -659,6 +691,8 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_BROWSER_ROLE = 4102
         private const val REQUEST_FILE_CHOOSER = 4103
+        private const val REQUEST_SITE_PERMISSION = 4104
+        private const val REQUEST_GEO_PERMISSION = 4105
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private const val HOME_URL = "https://yehawapp.vercel.app/"
     }
