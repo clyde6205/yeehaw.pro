@@ -4,7 +4,7 @@ import { optimizeHtml } from "./_browser/transform.js";
 
 const MAX_URL = 2048;
 const MAX_HTML = 4 * 1024 * 1024;
-const CSP = "default-src 'self' data: blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'";
+const CSP = "default-src 'self' data: blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action http: https:";
 
 function getTarget(req) {
   const value = req.query?.url ?? new URL(req.url, "https://yehaw.app").searchParams.get("url");
