@@ -9,6 +9,7 @@ on:
       - "api/browser-health.js"
       - "tests/**"
       - "package.json"
+      - "package-lock.json"
       - ".github/workflows/cloud-browser-test.yml"
   push:
     branches: ["main", "feat/**"]
@@ -19,11 +20,12 @@ on:
       - "api/browser-health.js"
       - "tests/**"
       - "package.json"
+      - "package-lock.json"
       - ".github/workflows/cloud-browser-test.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -33,19 +35,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies and generate lockfile
-        run: npm install --no-audit --no-fund
-      - name: Commit generated npm lockfile
-        run: |
-          if [ -f package-lock.json ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            if ! git diff --cached --quiet; then
-              git commit -m "chore: lock cloud browser dependencies"
-              git push
-            fi
-          fi
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
       - name: Run automated tests
         run: npm test
       - name: Check endpoint syntax
