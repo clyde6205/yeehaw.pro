@@ -321,7 +321,7 @@ class PrivateBrowserActivity : Activity() {
     }
 
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; textSize = 11f; isAllCaps = false; setOnClickListener { action() }
+        text = label; textSize = 11f; isAllCaps = false; minWidth = dp(48); minHeight = dp(48); setOnClickListener { action() }
     }
     @Deprecated("Legacy chooser API supports minSdk 23.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
