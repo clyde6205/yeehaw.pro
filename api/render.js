@@ -16,6 +16,10 @@ function securityHeaders(res) {
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Content-Security-Policy", CSP);
 }
+function isCacheable(headers) {
+  const policy = String(headers["cache-control"] || "").toLowerCase();
+  return !headers["set-cookie"] && !/(?:private|no-store|no-cache)/.test(policy) && !String(headers.vary || "").includes("*");
+}
 
 export default async function handler(req, res) {
   if (!["GET", "HEAD"].includes(req.method)) {
@@ -45,10 +49,11 @@ export default async function handler(req, res) {
     }
 
     const rendered = optimizeHtml(upstream.body.toString("utf8"), upstream.finalUrl.toString());
-    cacheSet(key, rendered, 60000);
+    const cacheable = isCacheable(upstream.headers);
+    if (cacheable) cacheSet(key, rendered, 60000);
     securityHeaders(res);
-    res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
-    res.setHeader("X-Yehaw-Cache", "MISS");
+    res.setHeader("Cache-Control", cacheable ? "public, s-maxage=60, stale-while-revalidate=300" : "no-store");
+    res.setHeader("X-Yehaw-Cache", cacheable ? "MISS" : "BYPASS");
     res.setHeader("X-Yehaw-Original-Bytes", String(upstream.body.length));
     res.setHeader("X-Yehaw-Rendered-Bytes", String(Buffer.byteLength(rendered)));
     res.setHeader("X-Yehaw-Transform", "lite-html-v1");
