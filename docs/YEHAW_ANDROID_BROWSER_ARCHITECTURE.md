@@ -24,9 +24,12 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Website file chooser integration for upload forms.
 - DownloadManager-based downloads.
 - In-page text search.
-- Optional desktop user-agent mode.
-- Optional memory saver that pauses background tabs and suppresses automatic image loading.
+- Optional desktop user-agent mode, persisted across launches and applied to new tabs.
+- Optional memory saver that suppresses automatic image loading and pauses background tabs, persisted across launches.
 - Clear history, bookmarks, cookies, cache, and Web Storage.
+- User-controlled third-party-cookie compatibility toggle, persisted across launches.
+- User-initiated popup windows in tabs and immersive full-screen HTML5 video.
+- HTTPS-gated camera, microphone, and geolocation permission prompts backed by Android runtime permissions.
 - Default-browser role request on supported Android versions.
 
 ## Security and privacy boundaries
@@ -37,8 +40,8 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Third-party cookies are disabled by default.
 - TLS mixed content is blocked.
 - Android Safe Browsing is enabled where supported.
-- The current build does not implement an isolated private profile. Do not advertise private/incognito browsing until cookie, cache, DOM storage, service worker, download, and process isolation are implemented and tested.
-- Camera, microphone, geolocation, notifications, popup windows, passkeys, and advanced WebAuthn flows need explicit per-origin permission handling and device testing before being advertised as supported.
+- A separate `:private_browser` process uses an Android 9+ WebView data-directory suffix and does not write to normal history/bookmarks. It clears cookies, cache, and Web Storage at session start/end. This is an initial single-window private profile, not yet independently security-audited; service-worker/cache cleanup, crash-recovery verification, downloads, and permission parity remain release gates.
+- Notifications, passkeys, advanced WebAuthn, persistent per-origin permission management/revocation, and full private-mode permission parity are not implemented.
 
 ## Required release gates
 
