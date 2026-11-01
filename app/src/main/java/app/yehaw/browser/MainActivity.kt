@@ -418,6 +418,25 @@ class MainActivity : Activity() {
                 if (view === currentWebView()) statusText.text = "Ready"
             }
 
+            override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || view == null) return true
+                val index = tabs.indexOfFirst { it.webView === view }
+                if (index < 0) return true
+                pageContainer.removeView(view)
+                tabs.removeAt(index)
+                view.destroy()
+                if (tabs.isEmpty()) {
+                    activeTabIndex = -1
+                    createTab(HOME_URL)
+                } else {
+                    if (activeTabIndex > index) activeTabIndex--
+                    else if (activeTabIndex == index) activeTabIndex = -1
+                    showTab(if (activeTabIndex < 0) index.coerceAtMost(tabs.lastIndex) else activeTabIndex)
+                }
+                Toast.makeText(this@MainActivity, "A page used too much memory and was restarted.", Toast.LENGTH_LONG).show()
+                return true
+            }
+
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
