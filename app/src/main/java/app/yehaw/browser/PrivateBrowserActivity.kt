@@ -39,9 +39,17 @@ class PrivateBrowserActivity : Activity() {
     private var pendingWebResources: Array<String> = emptyArray()
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
     private var pendingGeoOrigin: String? = null
+    private var ownsPrivateSession = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (privateSessionActive) {
+            Toast.makeText(this, "A private window is already open.", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+        privateSessionActive = true
+        ownsPrivateSession = true
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             Toast.makeText(this, "Private profile isolation requires Android 9 or later.", Toast.LENGTH_LONG).show()
             finish()
@@ -264,8 +272,9 @@ class PrivateBrowserActivity : Activity() {
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
         android.webkit.WebStorage.getInstance().deleteAllData()
+        if (ownsPrivateSession) privateSessionActive = false
         super.onDestroy()
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    companion object { private const val FILE_REQUEST = 7201; private const val PRIVATE_SITE_PERMISSION = 7202; private const val PRIVATE_GEO_PERMISSION = 7203 }
+    companion object { private var privateSessionActive = false; private const val FILE_REQUEST = 7201; private const val PRIVATE_SITE_PERMISSION = 7202; private const val PRIVATE_GEO_PERMISSION = 7203 }
 }
