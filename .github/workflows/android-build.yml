@@ -8,13 +8,17 @@ on:
       - "gradle.properties"
       - ".github/workflows/android-build.yml"
   push:
-    branches: ["main", "feat/**"]
+    branches: ["main"]
     paths:
       - "app/**"
       - "*.gradle.kts"
       - "gradle.properties"
       - ".github/workflows/android-build.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
