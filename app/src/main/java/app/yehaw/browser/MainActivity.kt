@@ -62,6 +62,7 @@ class MainActivity : Activity() {
     private var uploadCallback: ValueCallback<Array<Uri>>? = null
     private var desktopMode = false
     private var thirdPartyCookiesEnabled = false
+    private var searchEngine = "Google"
     private var memorySaver = false
     private var pendingWebPermission: PermissionRequest? = null
     private var pendingWebResources: Array<String> = emptyArray()
@@ -86,6 +87,8 @@ class MainActivity : Activity() {
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
         memorySaver = browserPreferences.getBoolean("memory_saver", false)
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
+        searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
+        if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
         buildInterface()
         CookieManager.getInstance().setAcceptCookie(true)
         handleIncomingIntent(intent)
@@ -462,8 +465,8 @@ class MainActivity : Activity() {
     private fun navigateFromAddressBar() {
         val raw = addressBar.text?.toString()?.trim().orEmpty()
         if (raw.isBlank()) return
-        val destination = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http"))) {
-            "https://www.google.com/search?q=" + Uri.encode(raw)
+        val destination = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
+            SEARCH_ENGINES.getValue(searchEngine) + Uri.encode(raw)
         } else {
             val candidate = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "https://$raw"
             val parsed = Uri.parse(candidate)
@@ -714,7 +717,7 @@ class MainActivity : Activity() {
             if (desktopMode) "Use mobile website" else "Request desktop website",
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
-            "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window"
+            "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window", "Search engine"
         )
         AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
             when (which) {
@@ -771,6 +774,19 @@ class MainActivity : Activity() {
                     } else {
                         Toast.makeText(this, "Isolated private browsing requires Android 9 or later.", Toast.LENGTH_LONG).show()
                     }
+                }
+                7 -> {
+                    val engines = SEARCH_ENGINES.keys.toList()
+                    AlertDialog.Builder(this)
+                        .setTitle("Choose search engine")
+                        .setSingleChoiceItems(engines.toTypedArray(), engines.indexOf(searchEngine)) { dialog, which ->
+                            searchEngine = engines[which]
+                            browserPreferences.edit().putString("search_engine", searchEngine).apply()
+                            Toast.makeText(this, "Search engine: " + searchEngine, Toast.LENGTH_SHORT).show()
+                            dialog.dismiss()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
                 }
             }
         }.show()
@@ -831,5 +847,11 @@ class MainActivity : Activity() {
         private const val REQUEST_GEO_PERMISSION = 4105
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private const val HOME_URL = "https://yehawapp.vercel.app/"
+        private val SEARCH_ENGINES = linkedMapOf(
+            "Google" to "https://www.google.com/search?q=",
+            "DuckDuckGo" to "https://duckduckgo.com/?q=",
+            "Bing" to "https://www.bing.com/search?q=",
+            "Brave" to "https://search.brave.com/search?q="
+        )
     }
 }
