@@ -253,6 +253,13 @@ class MainActivity : Activity() {
                 }
             }
 
+            override fun onPermissionRequestCanceled(request: PermissionRequest) {
+                if (pendingWebPermission === request) {
+                    pendingWebPermission = null
+                    pendingWebResources = emptyArray()
+                }
+            }
+
             override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
                 if (origin.isNullOrBlank() || !origin.startsWith("https://") || callback == null) {
                     callback?.invoke(origin, false, false)
