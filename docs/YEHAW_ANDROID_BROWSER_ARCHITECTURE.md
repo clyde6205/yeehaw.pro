@@ -23,7 +23,8 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Persistent local bookmarks and bounded browsing history.
 - Website file chooser integration for upload forms.
 - DownloadManager-based downloads.
-- In-page text search.
+- In-page text search and a shortcut to the Android downloads manager.
+- Selectable Google, DuckDuckGo, Bing, and Brave Search providers, with the preference saved locally.
 - Optional desktop user-agent mode, persisted across launches and applied to new tabs.
 - Optional memory saver that suppresses automatic image loading and pauses background tabs, persisted across launches.
 - Clear history, bookmarks, cookies, cache, and Web Storage.
