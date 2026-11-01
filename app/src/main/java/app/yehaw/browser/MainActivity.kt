@@ -889,7 +889,7 @@ class MainActivity : Activity() {
                         browserStore.clearBookmarks()
                         CookieManager.getInstance().removeAllCookies(null)
                         CookieManager.getInstance().flush()
-                        tabs.forEach {
+                        tabs.filterNot { it.evicted }.forEach {
                             it.webView.clearCache(true)
                             it.webView.clearHistory()
                             it.webView.clearFormData()
