@@ -95,6 +95,7 @@ class MainActivity : Activity() {
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
         buildInterface()
         CookieManager.getInstance().setAcceptCookie(true)
+        restoreTabs(savedInstanceState)
         handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
     }
@@ -103,6 +104,57 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val savedUrls = ArrayList<String>()
+        val savedTitles = ArrayList<String>()
+        var savedActiveIndex = 0
+        tabs.forEachIndexed { index, tab ->
+            val url = if (tab.evicted) tab.currentUrl else tab.webView.url ?: tab.currentUrl
+            if (isWebUrl(url)) {
+                if (index == activeTabIndex) savedActiveIndex = savedUrls.size
+                savedUrls.add(url.take(4096))
+                savedTitles.add(tab.title.take(80))
+            }
+        }
+        outState.putStringArrayList(STATE_TAB_URLS, savedUrls)
+        outState.putStringArrayList(STATE_TAB_TITLES, savedTitles)
+        outState.putInt(STATE_ACTIVE_TAB, savedActiveIndex)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun restoreTabs(state: Bundle?) {
+        val savedUrls = state?.getStringArrayList(STATE_TAB_URLS) ?: return
+        val savedTitles = state.getStringArrayList(STATE_TAB_TITLES)
+        val urls = savedUrls.filter(::isWebUrl).take(maxTabs)
+        if (urls.isEmpty()) return
+        val activeIndex = state.getInt(STATE_ACTIVE_TAB, 0).coerceIn(0, urls.lastIndex)
+
+        urls.forEachIndexed { index, url ->
+            val restoredView = WebView(this)
+            configureWebView(restoredView)
+            val title = savedTitles?.getOrNull(index)?.take(80)?.ifBlank { "Restored tab" } ?: "Restored tab"
+            val tab = BrowserTab(webView = restoredView, title = title, currentUrl = url)
+            tabs.add(tab)
+            if (index == activeIndex) {
+                activeTabIndex = index
+                pageContainer.addView(restoredView)
+                restoredView.loadUrl(url)
+            } else {
+                restoredView.destroy()
+                tab.evicted = true
+            }
+        }
+        val active = tabs[activeTabIndex]
+        addressBar.setText(active.currentUrl)
+        addressBar.setSelection(addressBar.text.length)
+        statusText.text = "Restoring tab…"
+    }
+
+    private fun isWebUrl(value: String): Boolean {
+        val uri = Uri.parse(value)
+        return uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank()
     }
 
     private fun buildInterface() {
@@ -1003,6 +1055,9 @@ class MainActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        private const val STATE_TAB_URLS = "yehaw.saved_tab_urls"
+        private const val STATE_TAB_TITLES = "yehaw.saved_tab_titles"
+        private const val STATE_ACTIVE_TAB = "yehaw.saved_active_tab"
         private const val REQUEST_BROWSER_ROLE = 4102
         private const val REQUEST_FILE_CHOOSER = 4103
         private const val REQUEST_SITE_PERMISSION = 4104
