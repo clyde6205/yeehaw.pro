@@ -215,6 +215,56 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
 
         webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                runOnUiThread {
+                    val allowed = request.resources.filter {
+                        it == PermissionRequest.RESOURCE_VIDEO_CAPTURE || it == PermissionRequest.RESOURCE_AUDIO_CAPTURE
+                    }.toTypedArray()
+                    if (request.origin.scheme != "https" || allowed.isEmpty() || allowed.size != request.resources.size) {
+                        request.deny()
+                        return@runOnUiThread
+                    }
+                    val required = mutableListOf<String>()
+                    if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in allowed) required.add(Manifest.permission.CAMERA)
+                    if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in allowed) required.add(Manifest.permission.RECORD_AUDIO)
+                    val names = allowed.joinToString(" and ") {
+                        if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) "camera" else "microphone"
+                    }
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Site permission request")
+                        .setMessage(request.origin.host.toString() + " wants to use your " + names + ". Continue only if you trust this website.")
+                        .setPositiveButton("Continue") { _, _ ->
+                            pendingWebPermission = request
+                            pendingWebResources = allowed
+                            val missing = required.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                            if (missing.isEmpty()) grantPendingWebPermission()
+                            else requestPermissions(missing.toTypedArray(), REQUEST_SITE_PERMISSION)
+                        }
+                        .setNegativeButton("Block") { _, _ -> request.deny() }
+                        .show()
+                }
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+                if (origin.isNullOrBlank() || !origin.startsWith("https://") || callback == null) {
+                    callback?.invoke(origin, false, false)
+                    return
+                }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Location permission request")
+                    .setMessage(Uri.parse(origin).host.toString() + " wants access to your device location.")
+                    .setPositiveButton("Continue") { _, _ ->
+                        pendingGeoCallback = callback
+                        pendingGeoOrigin = origin
+                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            grantPendingGeoPermission(true)
+                        } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_GEO_PERMISSION)
+                    }
+                    .setNegativeButton("Block") { _, _ -> callback.invoke(origin, false, false) }
+                    .show()
+            }
+
+            override fun onShowFileChooser(
             override fun onShowFileChooser(
                 view: WebView?,
                 filePathCallback: ValueCallback<Array<Uri>>?,
