@@ -127,14 +127,18 @@ class MainActivity : Activity() {
     private fun restoreTabs(state: Bundle?) {
         val savedUrls = state?.getStringArrayList(STATE_TAB_URLS) ?: return
         val savedTitles = state.getStringArrayList(STATE_TAB_TITLES)
-        val urls = savedUrls.filter(::isWebUrl).take(maxTabs)
-        if (urls.isEmpty()) return
-        val activeIndex = state.getInt(STATE_ACTIVE_TAB, 0).coerceIn(0, urls.lastIndex)
+        val entries = savedUrls.mapIndexedNotNull { index, url ->
+            if (isWebUrl(url)) url to (savedTitles?.getOrNull(index)?.take(80)?.ifBlank { "Restored tab" } ?: "Restored tab")
+            else null
+        }.take(maxTabs)
+        if (entries.isEmpty()) return
+        val activeIndex = state.getInt(STATE_ACTIVE_TAB, 0).coerceIn(0, entries.lastIndex)
 
-        urls.forEachIndexed { index, url ->
+        entries.forEachIndexed { index, entry ->
+            val url = entry.first
+            val title = entry.second
             val restoredView = WebView(this)
             configureWebView(restoredView)
-            val title = savedTitles?.getOrNull(index)?.take(80)?.ifBlank { "Restored tab" } ?: "Restored tab"
             val tab = BrowserTab(webView = restoredView, title = title, currentUrl = url)
             tabs.add(tab)
             if (index == activeIndex) {
