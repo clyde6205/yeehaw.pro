@@ -110,7 +110,22 @@ class PrivateBrowserActivity : Activity() {
         })
         root.addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
-        view.loadUrl("https://duckduckgo.com/")
+        // Remove remnants left by an interrupted private session before navigation.
+        view.clearCache(true)
+        view.clearHistory()
+        android.webkit.WebStorage.getInstance().deleteAllData()
+        CookieManager.getInstance().removeAllCookies {
+            CookieManager.getInstance().flush()
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) view.loadUrl("https://duckduckgo.com/")
+            }
+        }
+    }
+
+    @Deprecated("Uses the private WebView navigation stack.")
+    override fun onBackPressed() {
+        val current = webView
+        if (current?.canGoBack() == true) current.goBack() else finish()
     }
 
     private fun navigate() {
