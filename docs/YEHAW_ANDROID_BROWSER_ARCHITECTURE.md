@@ -40,6 +40,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Direct local filesystem access is disabled. Content-provider access is enabled only to support Android's user-selected `content://` upload URIs.
 - HTTP/HTTPS navigation is handled internally. A small allowlist of external schemes (telephone, email, SMS, maps and app marketplace) requires explicit user confirmation. Android `intent:` links are parsed with components, packages, flags and extras stripped before user-approved resolution; a validated HTTP(S) fallback may be opened. Unsupported schemes are blocked.
 - WebView renderer-process termination is handled by discarding the failed tab and recovering the browser UI.
+- Open HTTP/HTTPS tab URLs, titles and the active-tab index are saved in Android instance state and restored after activity/process recreation; inactive restored tabs are recreated lazily to limit startup memory use.
 - Third-party cookies are disabled by default.
 - TLS mixed content is blocked, and certificate errors are explicitly canceled; there is no user-facing certificate bypass.
 - Android Safe Browsing is enabled where supported.
