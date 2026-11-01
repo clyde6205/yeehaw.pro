@@ -431,6 +431,111 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun saveBookmark() {
+        val tab = tabs.getOrNull(activeTabIndex) ?: return
+        if (!tab.currentUrl.startsWith("http")) return
+        browserStore.addBookmark(tab.currentUrl, tab.title)
+        Toast.makeText(this, "Bookmark saved.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showSavedItems(bookmarks: Boolean) {
+        val items = if (bookmarks) browserStore.bookmarks() else browserStore.history()
+        if (items.isEmpty()) {
+            Toast.makeText(this, if (bookmarks) "No bookmarks yet." else "No history yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = items.map { "${it.title}\n${it.url}" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(if (bookmarks) "Bookmarks" else "Recent history")
+            .setItems(labels) { _, index ->
+                val url = items[index].url
+                currentWebView()?.loadUrl(url) ?: createTab(url)
+            }
+            .setNeutralButton(if (bookmarks) "Clear bookmarks" else "Clear history") { _, _ ->
+                if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
+            }
+            .setNegativeButton("Close", null).show()
+    }
+
+    private fun findOnPage() {
+        val field = EditText(this).apply { hint = "Find text on this page"; isSingleLine = true }
+        AlertDialog.Builder(this).setTitle("Find in page").setView(field)
+            .setPositiveButton("Find") { _, _ -> currentWebView()?.findAllAsync(field.text.toString()) }
+            .setNeutralButton("Next") { _, _ -> currentWebView()?.findNext(true) }
+            .setNegativeButton("Close", null).show()
+    }
+
+    private fun showBrowserMenu() {
+        val choices = arrayOf(
+            if (desktopMode) "Use mobile website" else "Request desktop website",
+            if (memorySaver) "Disable memory saver" else "Enable memory saver",
+            "Clear browsing data", "Browser engine information", "Make Yehaw default browser"
+        )
+        AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
+            when (which) {
+                0 -> {
+                    desktopMode = !desktopMode
+                    currentWebView()?.settings?.userAgentString =
+                        if (desktopMode) DESKTOP_USER_AGENT else WebSettings.getDefaultUserAgent(this)
+                    currentWebView()?.reload()
+                }
+                1 -> {
+                    memorySaver = !memorySaver
+                    tabs.forEachIndexed { index, tab ->
+                        tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                        if (index != activeTabIndex) {
+                            tab.webView.onPause()
+                            tab.webView.pauseTimers()
+                        } else {
+                            tab.webView.onResume()
+                            tab.webView.resumeTimers()
+                        }
+                    }
+                    Toast.makeText(this, if (memorySaver) "Memory saver enabled." else "Memory saver disabled.", Toast.LENGTH_SHORT).show()
+                }
+                2 -> AlertDialog.Builder(this).setTitle("Clear browsing data?")
+                    .setMessage("This clears history, bookmarks, cookies, cached files and website storage. You may be signed out.")
+                    .setPositiveButton("Clear") { _, _ ->
+                        browserStore.clearHistory()
+                        browserStore.clearBookmarks()
+                        CookieManager.getInstance().removeAllCookies(null)
+                        CookieManager.getInstance().flush()
+                        tabs.forEach {
+                            it.webView.clearCache(true)
+                            it.webView.clearHistory()
+                            it.webView.clearFormData()
+                            it.webView.clearSslPreferences()
+                        }
+                        android.webkit.WebStorage.getInstance().deleteAllData()
+                        Toast.makeText(this, "Browsing data cleared.", Toast.LENGTH_SHORT).show()
+                    }.setNegativeButton("Cancel", null).show()
+                3 -> {
+                    val pkg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WebView.getCurrentWebViewPackage() else null
+                    val message = if (pkg == null) "Android System WebView provider details unavailable."
+                        else "Engine: Chromium-based Android System WebView\nProvider: ${pkg.packageName}\nVersion: ${pkg.versionName}\n\nKeep Android System WebView or Chrome updated."
+                    AlertDialog.Builder(this).setTitle("Browser engine").setMessage(message).setPositiveButton("OK", null).show()
+                }
+                4 -> requestDefaultBrowserRole()
+            }
+        }.show()
+    }
+
+    @Deprecated("Platform activity result API retained for Android 6+ compatibility.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_FILE_CHOOSER) {
+            val result = if (resultCode == RESULT_OK && data != null)
+                WebChromeClient.FileChooserParams.parseResult(resultCode, data) else null
+            uploadCallback?.onReceiveValue(result)
+            uploadCallback = null
+        }
+        if (requestCode == REQUEST_BROWSER_ROLE) {
+            val held = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_BROWSER)
+            Toast.makeText(this, if (held) "Yehaw is now the default browser." else "Default browser selection was not changed.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     @Deprecated("Uses WebView history before finishing.")
     override fun onBackPressed() {
         val webView = currentWebView()
@@ -446,6 +551,9 @@ class MainActivity : Activity() {
             it.webView.destroy()
         }
         tabs.clear()
+        uploadCallback?.onReceiveValue(null)
+        uploadCallback = null
+        browserStore.close()
         super.onDestroy()
     }
 
@@ -453,6 +561,8 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_BROWSER_ROLE = 4102
+        private const val REQUEST_FILE_CHOOSER = 4103
+        private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private const val HOME_URL = "https://yehawapp.vercel.app/"
     }
 }
