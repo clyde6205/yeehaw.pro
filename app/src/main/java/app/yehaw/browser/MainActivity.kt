@@ -47,6 +47,8 @@ class MainActivity : Activity() {
     private val tabs = mutableListOf<BrowserTab>()
     private var activeTabIndex = -1
     private val maxTabs = 4
+    private var liteModeEnabled = true
+    private lateinit var modeButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,7 +85,7 @@ class MainActivity : Activity() {
         }
         addressBar = EditText(this).apply {
             hint = "Search or enter website"
-            singleLine = true
+            isSingleLine = true
             textSize = 15f
             imeOptions = EditorInfo.IME_ACTION_GO
             setSelectAllOnFocus(false)
@@ -110,6 +112,8 @@ class MainActivity : Activity() {
         controls.addView(actionButton("Home") { loadHome() })
         controls.addView(actionButton("+") { createTab(HOME_URL) })
         controls.addView(actionButton("Tabs") { showTabPicker() })
+        modeButton = actionButton("Lite ON") { toggleLiteMode() }
+        controls.addView(modeButton)
         controls.addView(actionButton("Default") { requestDefaultBrowserRole() })
         root.addView(controls)
 
@@ -155,9 +159,10 @@ class MainActivity : Activity() {
         }
         val webView = WebView(this)
         configureWebView(webView)
-        tabs.add(BrowserTab(webView = webView, currentUrl = url))
+        val initialUrl = toBrowserUrl(url)
+        tabs.add(BrowserTab(webView = webView, currentUrl = initialUrl))
         showTab(tabs.lastIndex)
-        webView.loadUrl(url)
+        webView.loadUrl(initialUrl)
     }
 
     private fun configureWebView(webView: WebView) {
@@ -174,7 +179,7 @@ class MainActivity : Activity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
-            supportZoom = true
+            setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
             allowFileAccess = false
@@ -203,7 +208,12 @@ class MainActivity : Activity() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 return when (uri.scheme?.lowercase()) {
-                    "http", "https" -> false
+                    "http", "https" -> {
+                        if (liteModeEnabled && !isYehawServiceUrl(uri)) {
+                            view.loadUrl(toBrowserUrl(uri.toString()))
+                            true
+                        } else false
+                    }
                     else -> {
                         openExternalScheme(uri)
                         true
@@ -214,9 +224,9 @@ class MainActivity : Activity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 if (!url.isNullOrBlank()) {
-                    tab.currentUrl = url
+                    tab.currentUrl = displayUrl(url)
                     if (view === currentWebView()) {
-                        addressBar.setText(url)
+                        addressBar.setText(displayUrl(url))
                         addressBar.setSelection(addressBar.text.length)
                     }
                 }
@@ -257,14 +267,14 @@ class MainActivity : Activity() {
             }
             candidate
         }
-        currentWebView()?.loadUrl(destination) ?: createTab(destination)
+        currentWebView()?.loadUrl(toBrowserUrl(destination)) ?: createTab(destination)
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         if (uri.scheme == "http" || uri.scheme == "https") {
-            if (tabs.isEmpty()) createTab(uri.toString()) else currentWebView()?.loadUrl(uri.toString())
+            if (tabs.isEmpty()) createTab(uri.toString()) else currentWebView()?.loadUrl(toBrowserUrl(uri.toString()))
         }
     }
 
@@ -342,6 +352,37 @@ class MainActivity : Activity() {
 
     private fun currentWebView(): WebView? = tabs.getOrNull(activeTabIndex)?.webView
 
+
+    private fun isYehawServiceUrl(uri: Uri): Boolean =
+        uri.host.equals(SERVICE_HOST, ignoreCase = true)
+
+    private fun toBrowserUrl(destination: String): String {
+        val uri = Uri.parse(destination)
+        val isWeb = uri.scheme.equals("http", true) || uri.scheme.equals("https", true)
+        return if (liteModeEnabled && isWeb && !isYehawServiceUrl(uri)) {
+            "$SERVICE_ORIGIN/api/render?url=${Uri.encode(destination)}"
+        } else destination
+    }
+
+    private fun displayUrl(actualUrl: String): String {
+        val uri = Uri.parse(actualUrl)
+        return if (isYehawServiceUrl(uri) && uri.path == "/api/render") {
+            uri.getQueryParameter("url") ?: actualUrl
+        } else actualUrl
+    }
+
+    private fun toggleLiteMode() {
+        val current = currentWebView()?.url?.let { displayUrl(it) }
+        liteModeEnabled = !liteModeEnabled
+        modeButton.text = if (liteModeEnabled) "Lite ON" else "Direct"
+        Toast.makeText(
+            this,
+            if (liteModeEnabled) "Yehaw Lite mode enabled." else "Direct browsing enabled.",
+            Toast.LENGTH_SHORT
+        ).show()
+        if (!current.isNullOrBlank()) currentWebView()?.loadUrl(toBrowserUrl(current))
+    }
+
     private fun requestDefaultBrowserRole() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             Toast.makeText(this, "Use Android Settings → Apps → Default apps → Browser.", Toast.LENGTH_LONG).show()
@@ -407,6 +448,8 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_BROWSER_ROLE = 4102
+        private const val SERVICE_HOST = "yehawapp.vercel.app"
+        private const val SERVICE_ORIGIN = "https://yehawapp.vercel.app"
         private const val HOME_URL = "https://yehawapp.vercel.app/"
     }
 }

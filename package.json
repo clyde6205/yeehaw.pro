@@ -1,18 +1,25 @@
 {
-    "name":  "yehaw-app",
-    "version":  "1.0.0",
-    "private":  true,
-    "description":  "Yehaw - fast Filipino and OFW services launchpad",
-    "type":  "module",
-    "scripts":  {
-                    "build":  "node scripts/build-static.js",
-                    "check":  "node --check api/health.js"
-                },
-    "dependencies":  {
-                         "@neondatabase/serverless":  "^1.1.0",
-                         "dotenv":  "^18.0.5"
-                     },
-    "devDependencies":  {
-                            "vercel":  "^61.1.0"
-                        }
+  "name": "yehaw-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Yehaw - fast Filipino and OFW services launchpad",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-static.js",
+    "check": "node --check api/health.js && node --check api/render.js && node --check api/resource.js && node --check api/_browser/fetch.js && node --check api/_browser/transform.js && node --check api/rewards-health.js && node --check api/_rewards/policy.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "dotenv": "^18.0.5",
+    "cheerio": "1.1.2",
+    "ipaddr.js": "2.2.0",
+    "sharp": "0.34.5"
+  },
+  "devDependencies": {
+    "vercel": "^61.1.0"
+  },
+  "engines": {
+    "node": ">=20.18.1"
+  }
 }
