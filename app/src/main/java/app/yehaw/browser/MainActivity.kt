@@ -217,7 +217,7 @@ class MainActivity : Activity() {
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            setGeolocationEnabled(false)
+            setGeolocationEnabled(true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
