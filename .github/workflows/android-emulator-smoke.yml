@@ -7,12 +7,16 @@ on:
       - "*.gradle.kts"
       - ".github/workflows/android-emulator-smoke.yml"
   push:
-    branches: ["main", "feat/**"]
+    branches: ["main"]
     paths:
       - "app/**"
       - "*.gradle.kts"
       - ".github/workflows/android-emulator-smoke.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
