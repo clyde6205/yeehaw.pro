@@ -776,11 +776,43 @@ class MainActivity : Activity() {
     }
 
     private fun findOnPage() {
-        val field = EditText(this).apply { hint = "Find text on this page"; isSingleLine = true }
-        AlertDialog.Builder(this).setTitle("Find in page").setView(field)
-            .setPositiveButton("Find") { _, _ -> currentWebView()?.findAllAsync(field.text.toString()) }
-            .setNeutralButton("Next") { _, _ -> currentWebView()?.findNext(true) }
-            .setNegativeButton("Close", null).show()
+        val field = EditText(this).apply {
+            hint = "Find text on this page"
+            isSingleLine = true
+        }
+        var lastQuery: String? = null
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(actionButton("Previous") {
+                val query = field.text.toString()
+                val webView = currentWebView()
+                if (query.isNotBlank() && webView != null) {
+                    if (query != lastQuery) {
+                        lastQuery = query
+                        webView.findAllAsync(query)
+                    } else webView.findNext(false)
+                }
+            })
+            addView(actionButton("Next") {
+                val query = field.text.toString()
+                val webView = currentWebView()
+                if (query.isNotBlank() && webView != null) {
+                    if (query != lastQuery) {
+                        lastQuery = query
+                        webView.findAllAsync(query)
+                    } else webView.findNext(true)
+                }
+            })
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+            addView(field)
+            addView(controls)
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("Find in page").setView(content).create()
+        dialog.setOnDismissListener { currentWebView()?.clearMatches() }
+        dialog.show()
     }
 
     private fun showBrowserMenu() {
