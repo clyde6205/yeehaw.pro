@@ -466,7 +466,7 @@ class MainActivity : Activity() {
         val choices = arrayOf(
             if (desktopMode) "Use mobile website" else "Request desktop website",
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
-            "Clear browsing data", "Browser engine information", "Make Yehaw default browser"
+            "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window"
         )
         AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
             when (which) {
@@ -513,6 +513,13 @@ class MainActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("Browser engine").setMessage(message).setPositiveButton("OK", null).show()
                 }
                 4 -> requestDefaultBrowserRole()
+                5 -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        startActivity(Intent(this, PrivateBrowserActivity::class.java))
+                    } else {
+                        Toast.makeText(this, "Isolated private browsing requires Android 9 or later.", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }.show()
     }
