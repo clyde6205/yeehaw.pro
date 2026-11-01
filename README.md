@@ -1,4 +1,7 @@
-# Yehaw.app — Full Filipino Directory + Fast Tools (PWA)
+# Yehaw.app — Filipino Directory, PWA and Yehaw Android Browser
+
+> The Android browser is a separate native application in `app/`. It uses the device's Chromium-based Android System WebView engine; it does not bundle Chromium. See `docs/YEHAW_ANDROID_BROWSER_ARCHITECTURE.md` for engine boundaries, low-memory policy and release gates. The Android build is under active development and is not yet approved for production/global launch.
+
 
 Fast mobile-first page for Filipinos:
 - **Filipino recipes** (Adobo, Sinigang, Tinola, Tocino, Pancit, Kare-Kare) fully offline + links to top recipe sites
@@ -21,7 +24,7 @@ npx serve -p 3000
 
 Open http://localhost:3000  
 Admin: http://localhost:3000/admin/  
-Default password: `yehaw2026admin` (change immediately)
+**Security warning:** the current static admin interface is not production-grade authentication. Do not deploy it with real administrative data or expose it as a secure admin console. Replace it with server-side authentication, authorization, audit logging and protected storage before commercial launch.
 
 ## Deploy
 
@@ -57,4 +60,4 @@ For multi-device admin you will later want a tiny backend or a JSON file you edi
 5. Deploy and submit the site to AdSense.
 6. Give the `PROMPT_FOR_MISTRAL.md` file to Mistral (or any AI) if you want further polish, Tagalog, analytics, etc.
 
-Built for speed and launch, not perfection.
+This PWA and the native Android browser are separate deliverables. Neither should be described as globally enterprise-launch-ready until its security, accessibility, performance, privacy, operational and device release gates have passed.
