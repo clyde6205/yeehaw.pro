@@ -60,6 +60,42 @@ class BrowserSmokeTest {
     }
 
     @Test
+    fun browserStorePersistsSessionTabsAndOfflineReadingCopies() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val firstUrl = "https://example.com/yehaw-session-" + System.currentTimeMillis()
+        val secondUrl = "https://example.org/yehaw-session-" + System.currentTimeMillis()
+        val offlineUrl = "https://example.net/yehaw-offline-" + System.currentTimeMillis()
+        try {
+            store.saveSession(
+                listOf(
+                    BrowserStore.SessionTab(firstUrl, "First tab", 480),
+                    BrowserStore.SessionTab(secondUrl, "Second tab", 920)
+                ),
+                1
+            )
+            val session = store.loadSession()
+            assertTrue(session != null)
+            assertTrue(session!!.tabs.size == 2)
+            assertTrue(session.activeIndex == 1)
+            assertTrue(session.tabs[0].scrollY == 480)
+            assertTrue(session.tabs[1].url == secondUrl)
+
+            val offlineId = store.saveOfflinePage(offlineUrl, "Offline article", "Saved readable article text")
+            val offline = store.offlinePage(offlineId)
+            assertTrue(offline != null)
+            assertTrue(offline!!.title == "Offline article")
+            assertTrue(offline.content == "Saved readable article text")
+            store.deleteOfflinePage(offlineId)
+            assertTrue(store.offlinePage(offlineId) == null)
+        } finally {
+            store.clearSession()
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
+
+    @Test
     fun browserLaunchesWithCoreControlsVisible() {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withText("GO")).check(matches(isDisplayed()))
