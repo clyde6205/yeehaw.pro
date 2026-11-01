@@ -85,7 +85,7 @@ class MainActivity : Activity() {
         }
         addressBar = EditText(this).apply {
             hint = "Search or enter website"
-            singleLine = true
+            isSingleLine = true
             textSize = 15f
             imeOptions = EditorInfo.IME_ACTION_GO
             setSelectAllOnFocus(false)
@@ -179,7 +179,7 @@ class MainActivity : Activity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
-            supportZoom = true
+            setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
             allowFileAccess = false
