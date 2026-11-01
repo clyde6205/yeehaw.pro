@@ -1,6 +1,7 @@
 package app.yehaw.browser
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.DownloadManager
 import android.app.role.RoleManager
 import android.content.ComponentCallbacks2
@@ -22,6 +23,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.URLUtil
+import android.webkit.ValueCallback
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -45,11 +47,16 @@ class MainActivity : Activity() {
     private lateinit var pageContainer: LinearLayout
     private lateinit var statusText: TextView
     private val tabs = mutableListOf<BrowserTab>()
+    private lateinit var browserStore: BrowserStore
+    private var uploadCallback: ValueCallback<Array<Uri>>? = null
+    private var desktopMode = false
+    private var memorySaver = false
     private var activeTabIndex = -1
     private val maxTabs = 4
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        browserStore = BrowserStore(this)
         buildInterface()
         CookieManager.getInstance().setAcceptCookie(true)
         handleIncomingIntent(intent)
@@ -83,7 +90,7 @@ class MainActivity : Activity() {
         }
         addressBar = EditText(this).apply {
             hint = "Search or enter website"
-            singleLine = true
+            isSingleLine = true
             textSize = 15f
             imeOptions = EditorInfo.IME_ACTION_GO
             setSelectAllOnFocus(false)
@@ -112,6 +119,18 @@ class MainActivity : Activity() {
         controls.addView(actionButton("Tabs") { showTabPicker() })
         controls.addView(actionButton("Default") { requestDefaultBrowserRole() })
         root.addView(controls)
+
+        val libraryControls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(2), 0, dp(2), dp(4))
+        }
+        libraryControls.addView(actionButton("Save") { saveBookmark() })
+        libraryControls.addView(actionButton("Bookmarks") { showSavedItems(true) })
+        libraryControls.addView(actionButton("History") { showSavedItems(false) })
+        libraryControls.addView(actionButton("Find") { findOnPage() })
+        libraryControls.addView(actionButton("More") { showBrowserMenu() })
+        root.addView(libraryControls)
 
         statusText = TextView(this).apply {
             text = "Ready"
@@ -174,7 +193,7 @@ class MainActivity : Activity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
-            supportZoom = true
+            setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
             allowFileAccess = false
