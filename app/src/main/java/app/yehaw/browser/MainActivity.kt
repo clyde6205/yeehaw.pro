@@ -49,7 +49,8 @@ class MainActivity : Activity() {
     private data class BrowserTab(
         val webView: WebView,
         var title: String = "New tab",
-        var currentUrl: String = HOME_URL
+        var currentUrl: String = HOME_URL,
+        var failed: Boolean = false
     )
 
     private lateinit var addressBar: EditText
@@ -398,6 +399,8 @@ class MainActivity : Activity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
+                tab.failed = false
+                if (view === currentWebView() && pageContainer.indexOfChild(view) < 0) showTab(activeTabIndex)
                 if (!url.isNullOrBlank()) {
                     tab.currentUrl = url
                     if (view === currentWebView()) {
@@ -442,8 +445,11 @@ class MainActivity : Activity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
-                if (request?.isForMainFrame == true && view === currentWebView()) {
-                    statusText.text = "Page could not be loaded. Check your connection."
+                if (request?.isForMainFrame == true && view != null) {
+                    val tab = tabs.firstOrNull { it.webView === view } ?: return
+                    tab.failed = true
+                    if (view === currentWebView()) showTab(activeTabIndex)
+                    statusText.text = "Page could not be loaded."
                 }
             }
         }
