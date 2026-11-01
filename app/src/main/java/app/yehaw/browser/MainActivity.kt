@@ -114,6 +114,7 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         val savedUrls = ArrayList<String>()
         val savedTitles = ArrayList<String>()
+        val savedScrolls = ArrayList<Int>()
         var savedActiveIndex = 0
         tabs.forEachIndexed { index, tab ->
             val url = if (tab.evicted) tab.currentUrl else tab.webView.url ?: tab.currentUrl
@@ -121,11 +122,12 @@ class MainActivity : Activity() {
                 if (index == activeTabIndex) savedActiveIndex = savedUrls.size
                 savedUrls.add(url.take(4096))
                 savedTitles.add(tab.title.take(80))
+                savedScrolls.add(if (tab.evicted) tab.savedScrollY else tab.webView.scrollY)
             }
         }
         outState.putStringArrayList(STATE_TAB_URLS, savedUrls)
         outState.putStringArrayList(STATE_TAB_TITLES, savedTitles)
-        outState.putIntegerArrayList(STATE_TAB_SCROLLS, ArrayList(tabs.map { if (it.evicted) it.savedScrollY else it.webView.scrollY }))
+        outState.putIntegerArrayList(STATE_TAB_SCROLLS, savedScrolls)
         outState.putInt(STATE_ACTIVE_TAB, savedActiveIndex)
         persistSession()
         super.onSaveInstanceState(outState)
@@ -969,7 +971,7 @@ class MainActivity : Activity() {
             return
         }
         statusText.text = "Saving offline reading copy…"
-        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText:''});})()") { result ->
+        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText.slice(0,250000):''});})()") { result ->
             try {
                 val encoded = JSONTokener(result ?: "null").nextValue() as? String
                     ?: throw IllegalStateException("Page text was unavailable.")
