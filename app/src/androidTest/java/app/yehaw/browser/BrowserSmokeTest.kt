@@ -33,6 +33,33 @@ class BrowserSmokeTest {
     }
 
     @Test
+    fun browserStoreReplacesDuplicateBookmarksAndCapsHistory() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val bookmarkUrl = "https://example.com/yehaw-bookmark-" + System.currentTimeMillis()
+        try {
+            store.addBookmark(bookmarkUrl, "Original title")
+            store.addBookmark(bookmarkUrl, "Updated title")
+            val matchingBookmarks = store.bookmarks().filter { it.url == bookmarkUrl }
+            assertTrue(matchingBookmarks.size == 1)
+            assertTrue(matchingBookmarks.single().title == "Updated title")
+
+            repeat(1005) { index ->
+                store.addHistory("https://example.com/yehaw-history/$index", "History $index")
+            }
+            val historyCount = store.readableDatabase.rawQuery("SELECT COUNT(*) FROM history", null).use { cursor ->
+                cursor.moveToFirst()
+                cursor.getInt(0)
+            }
+            assertTrue("History must stay within the 1000-entry retention limit", historyCount <= 1000)
+        } finally {
+            store.clearBookmarks()
+            store.clearHistory()
+            store.close()
+        }
+    }
+
+    @Test
     fun browserLaunchesWithCoreControlsVisible() {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withText("GO")).check(matches(isDisplayed()))
