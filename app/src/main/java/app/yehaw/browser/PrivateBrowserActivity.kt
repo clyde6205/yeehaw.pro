@@ -55,8 +55,11 @@ class PrivateBrowserActivity : Activity() {
             finish()
             return
         }
-        // Must be called before this process creates its first WebView.
-        WebView.setDataDirectorySuffix("yehaw_private")
+        // The suffix is process-wide and must be configured only once before the first WebView.
+        if (!privateDataDirectoryConfigured) {
+            WebView.setDataDirectorySuffix("yehaw_private")
+            privateDataDirectoryConfigured = true
+        }
         CookieManager.getInstance().setAcceptCookie(true)
 
         val root = LinearLayout(this).apply {
@@ -293,5 +296,11 @@ class PrivateBrowserActivity : Activity() {
         super.onDestroy()
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    companion object { private var privateSessionActive = false; private const val FILE_REQUEST = 7201; private const val PRIVATE_SITE_PERMISSION = 7202; private const val PRIVATE_GEO_PERMISSION = 7203 }
+    companion object {
+        private var privateSessionActive = false
+        private var privateDataDirectoryConfigured = false
+        private const val FILE_REQUEST = 7201
+        private const val PRIVATE_SITE_PERMISSION = 7202
+        private const val PRIVATE_GEO_PERMISSION = 7203
+    }
 }
