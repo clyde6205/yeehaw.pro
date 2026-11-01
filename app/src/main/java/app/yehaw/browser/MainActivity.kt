@@ -38,6 +38,9 @@ import android.webkit.ValueCallback
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import org.json.JSONObject
+import org.json.JSONTokener
 import android.widget.HorizontalScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -122,31 +125,57 @@ class MainActivity : Activity() {
         }
         outState.putStringArrayList(STATE_TAB_URLS, savedUrls)
         outState.putStringArrayList(STATE_TAB_TITLES, savedTitles)
+        outState.putIntegerArrayList(STATE_TAB_SCROLLS, ArrayList(tabs.map { if (it.evicted) it.savedScrollY else it.webView.scrollY }))
         outState.putInt(STATE_ACTIVE_TAB, savedActiveIndex)
+        persistSession()
         super.onSaveInstanceState(outState)
     }
 
+    override fun onPause() {
+        persistSession()
+        tabs.filterNot { it.evicted }.forEach { it.webView.onPause() }
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        currentWebView()?.onResume()
+    }
+
+    override fun onStop() {
+        persistSession()
+        super.onStop()
+    }
+
     private fun restoreTabs(state: Bundle?): Boolean {
-        val savedUrls = state?.getStringArrayList(STATE_TAB_URLS) ?: return false
-        val savedTitles = state.getStringArrayList(STATE_TAB_TITLES)
-        val entries = savedUrls.mapIndexedNotNull { index, url ->
-            if (isWebUrl(url)) url to (savedTitles?.getOrNull(index)?.take(80)?.ifBlank { "Restored tab" } ?: "Restored tab")
-            else null
-        }.take(maxTabs)
+        val stateUrls = state?.getStringArrayList(STATE_TAB_URLS)
+        val stateTitles = state?.getStringArrayList(STATE_TAB_TITLES)
+        val stateScrolls = state?.getIntegerArrayList(STATE_TAB_SCROLLS)
+        val sessionEntries = if (stateUrls != null) {
+            stateUrls.mapIndexedNotNull { index, url ->
+                if (isWebUrl(url)) BrowserStore.SessionTab(
+                    url,
+                    stateTitles?.getOrNull(index)?.take(160)?.ifBlank { "Restored tab" } ?: "Restored tab",
+                    stateScrolls?.getOrNull(index)?.coerceAtLeast(0) ?: 0
+                ) else null
+            }
+        } else {
+            browserStore.loadSession()?.tabs.orEmpty()
+        }
+        val entries = sessionEntries.take(maxTabs)
         if (entries.isEmpty()) return false
-        val activeIndex = state.getInt(STATE_ACTIVE_TAB, 0).coerceIn(0, entries.lastIndex)
+        val savedActive = state?.getInt(STATE_ACTIVE_TAB, 0) ?: browserStore.loadSession()?.activeIndex ?: 0
+        val activeIndex = savedActive.coerceIn(0, entries.lastIndex)
 
         entries.forEachIndexed { index, entry ->
-            val url = entry.first
-            val title = entry.second
             val restoredView = WebView(this)
             configureWebView(restoredView)
-            val tab = BrowserTab(webView = restoredView, title = title, currentUrl = url)
+            val tab = BrowserTab(webView = restoredView, title = entry.title, currentUrl = entry.url, savedScrollY = entry.scrollY)
             tabs.add(tab)
             if (index == activeIndex) {
                 activeTabIndex = index
                 pageContainer.addView(restoredView)
-                restoredView.loadUrl(url)
+                restoredView.loadUrl(entry.url)
             } else {
                 restoredView.destroy()
                 tab.evicted = true
@@ -155,8 +184,20 @@ class MainActivity : Activity() {
         val active = tabs[activeTabIndex]
         addressBar.setText(active.currentUrl)
         addressBar.setSelection(addressBar.text.length)
-        statusText.text = "Restoring tab…"
+        statusText.text = "Restoring last session…"
         return true
+    }
+
+    private fun persistSession() {
+        if (!::browserStore.isInitialized || tabs.isEmpty()) return
+        val entries = tabs.map { tab ->
+            BrowserStore.SessionTab(
+                url = if (tab.evicted) tab.currentUrl else tab.webView.url ?: tab.currentUrl,
+                title = tab.title,
+                scrollY = if (tab.evicted) tab.savedScrollY else tab.webView.scrollY
+            )
+        }
+        browserStore.saveSession(entries, activeTabIndex)
     }
 
     private fun isWebUrl(value: String): Boolean {
@@ -230,6 +271,8 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("Save") { saveBookmark() })
         libraryControls.addView(actionButton("Bookmarks") { showSavedItems(true) })
         libraryControls.addView(actionButton("History") { showSavedItems(false) })
+        libraryControls.addView(actionButton("Save offline") { saveOfflinePage() })
+        libraryControls.addView(actionButton("Offline") { showOfflinePages() })
         libraryControls.addView(actionButton("Downloads") { openDownloads() })
         libraryControls.addView(actionButton("Find") { findOnPage() })
         libraryControls.addView(actionButton("Share") { shareCurrentPage() })
@@ -524,6 +567,7 @@ class MainActivity : Activity() {
                     browserStore.addHistory(url, tab.title)
                     tab.lastHistoryUrl = url
                 }
+                persistSession()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -541,7 +585,10 @@ class MainActivity : Activity() {
                         restoredView.post {
                             restoredView.scrollTo(0, savedY)
                             tab.savedScrollY = 0
+                            persistSession()
                         }
+                    } else {
+                        persistSession()
                     }
                 }
                 if (view === currentWebView()) statusText.text = "Ready"
@@ -796,6 +843,7 @@ class MainActivity : Activity() {
         } else {
             showTab((activeTabIndex - 1).coerceAtLeast(0))
         }
+        persistSession()
     }
 
     private fun loadHome() {
@@ -910,6 +958,82 @@ class MainActivity : Activity() {
                 if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
             }
             .setNegativeButton("Close", null).show()
+    }
+
+    private fun saveOfflinePage() {
+        val tab = tabs.getOrNull(activeTabIndex) ?: return
+        val webView = currentWebView() ?: return
+        val pageUrl = webView.url ?: tab.currentUrl
+        if (!isWebUrl(pageUrl)) {
+            Toast.makeText(this, "Only normal web pages can be saved.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        statusText.text = "Saving offline reading copy…"
+        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText:''});})()") { result ->
+            try {
+                val encoded = JSONTokener(result ?: "null").nextValue() as? String
+                    ?: throw IllegalStateException("Page text was unavailable.")
+                val snapshot = JSONObject(encoded)
+                val text = snapshot.optString("text").trim()
+                if (text.isBlank()) throw IllegalStateException("This page has no readable text.")
+                val title = snapshot.optString("title").ifBlank { tab.title }
+                browserStore.saveOfflinePage(pageUrl, title, text)
+                statusText.text = "Saved for offline reading"
+                Toast.makeText(this, "Offline reading copy saved on this device.", Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                statusText.text = "Ready"
+                Toast.makeText(this, error.message ?: "Could not save this page.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun showOfflinePages() {
+        val pages = browserStore.offlinePages()
+        if (pages.isEmpty()) {
+            Toast.makeText(this, "No offline pages saved yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = pages.map { "${it.title}\n${it.url}" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Offline reading library")
+            .setItems(labels) { _, index -> showOfflinePage(pages[index]) }
+            .setNeutralButton("Clear all") { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle("Delete all offline pages?")
+                    .setMessage("Saved offline reading copies will be permanently removed from this device.")
+                    .setPositiveButton("Delete all") { _, _ ->
+                        browserStore.clearOfflinePages()
+                        Toast.makeText(this, "Offline library cleared.", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showOfflinePage(page: BrowserStore.OfflinePage) {
+        val content = ScrollView(this).apply {
+            isFillViewport = true
+            addView(TextView(this@MainActivity).apply {
+                text = page.content
+                textSize = 16f
+                setTextIsSelectable(true)
+                setPadding(dp(18), dp(16), dp(18), dp(16))
+            })
+        }
+        AlertDialog.Builder(this)
+            .setTitle(page.title)
+            .setView(content)
+            .setNeutralButton("Delete") { _, _ ->
+                browserStore.deleteOfflinePage(page.id)
+                Toast.makeText(this, "Offline page deleted.", Toast.LENGTH_SHORT).show()
+            }
+            .setPositiveButton("Open website") { _, _ ->
+                currentWebView()?.loadUrl(page.url) ?: createTab(page.url)
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun findOnPage() {
@@ -1070,6 +1194,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        persistSession()
         tabs.filterNot { it.evicted }.forEach {
             it.webView.stopLoading()
             it.webView.loadUrl("about:blank")
@@ -1092,6 +1217,7 @@ class MainActivity : Activity() {
     companion object {
         private const val STATE_TAB_URLS = "yehaw.saved_tab_urls"
         private const val STATE_TAB_TITLES = "yehaw.saved_tab_titles"
+        private const val STATE_TAB_SCROLLS = "yehaw.saved_tab_scrolls"
         private const val STATE_ACTIVE_TAB = "yehaw.saved_active_tab"
         private const val REQUEST_BROWSER_ROLE = 4102
         private const val REQUEST_FILE_CHOOSER = 4103
