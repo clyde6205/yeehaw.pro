@@ -22,6 +22,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - HTTP/HTTPS navigation, back, forward, reload, home, and tabs.
 - Persistent local bookmarks and bounded browsing history, including SPA history API URL changes.
 - Website file chooser integration for upload forms.
+- Long-press link actions to open a link in the current tab, open it in a new tab, or copy its URL.
 - DownloadManager-based downloads.
 - In-page text search and a shortcut to the Android downloads manager.
 - Selectable Google, DuckDuckGo, Bing, and Brave Search providers, with the preference saved locally.
