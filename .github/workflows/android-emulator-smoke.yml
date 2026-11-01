@@ -25,6 +25,7 @@ jobs:
   emulator-smoke:
     name: API ${{ matrix.api-level }} browser smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
