@@ -509,6 +509,37 @@ class MainActivity : Activity() {
 
     private fun openExternalScheme(uri: Uri) {
         val scheme = uri.scheme?.lowercase()
+        if (scheme == "intent") {
+            val parsedIntent = try {
+                Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
+            } catch (_: Exception) {
+                Toast.makeText(this, "Invalid app link.", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val fallback = parsedIntent.getStringExtra("browser_fallback_url")
+            parsedIntent.component = null
+            parsedIntent.selector = null
+            parsedIntent.setPackage(null)
+            parsedIntent.action = Intent.ACTION_VIEW
+            parsedIntent.flags = 0
+            parsedIntent.replaceExtras(null)
+            parsedIntent.categories?.toList()?.forEach { parsedIntent.removeCategory(it) }
+            parsedIntent.addCategory(Intent.CATEGORY_BROWSABLE)
+            AlertDialog.Builder(this)
+                .setTitle("Open another app?")
+                .setMessage("This website wants to open an external application. Continue only if you trust the page.")
+                .setPositiveButton("Open") { _, _ ->
+                    try {
+                        if (parsedIntent.resolveActivity(packageManager) != null) startActivity(parsedIntent)
+                        else openHttpFallback(fallback)
+                    } catch (_: Exception) {
+                        openHttpFallback(fallback)
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
         if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market")) {
             Toast.makeText(this, "Blocked unsupported link type.", Toast.LENGTH_SHORT).show()
             return
@@ -525,6 +556,15 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun openHttpFallback(value: String?) {
+        val fallback = value?.let { Uri.parse(it) }
+        if (fallback != null && fallback.scheme in listOf("http", "https") && !fallback.host.isNullOrBlank()) {
+            currentWebView()?.loadUrl(fallback.toString())
+        } else {
+            Toast.makeText(this, "No compatible app or safe web fallback is available.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun downloadFile(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
