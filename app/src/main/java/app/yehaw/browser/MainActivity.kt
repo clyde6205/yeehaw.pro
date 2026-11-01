@@ -429,6 +429,13 @@ class MainActivity : Activity() {
                     (url.startsWith("https://") || url.startsWith("http://"))) {
                     tab.currentUrl = url
                     browserStore.addHistory(url, tab.title)
+                    if (tab.savedScrollY > 0) {
+                        val savedY = tab.savedScrollY
+                        view?.post {
+                            view.scrollTo(0, savedY)
+                            tab.savedScrollY = 0
+                        }
+                    }
                 }
                 if (view === currentWebView()) statusText.text = "Ready"
             }
