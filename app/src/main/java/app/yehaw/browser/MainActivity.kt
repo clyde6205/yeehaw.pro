@@ -480,7 +480,7 @@ class MainActivity : Activity() {
 
     private fun openExternalScheme(uri: Uri) {
         val scheme = uri.scheme?.lowercase()
-        if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market", "intent")) {
+        if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market")) {
             Toast.makeText(this, "Blocked unsupported link type.", Toast.LENGTH_SHORT).show()
             return
         }
