@@ -320,7 +320,6 @@ class MainActivity : Activity() {
             }
 
             override fun onShowFileChooser(
-            override fun onShowFileChooser(
                 view: WebView?,
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
