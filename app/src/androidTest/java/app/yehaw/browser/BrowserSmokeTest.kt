@@ -1,0 +1,107 @@
+package app.yehaw.browser
+
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
+import org.junit.Test
+import org.junit.Assert.assertTrue
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class BrowserSmokeTest {
+    @Test
+    fun browserStorePersistsBookmarksAndOnlyWebHistory() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val uniqueUrl = "https://example.com/yehaw-test-" + System.currentTimeMillis()
+        try {
+            store.addBookmark(uniqueUrl, "Yehaw test bookmark")
+            store.addHistory("file:///private/test", "Must not be recorded")
+            store.addHistory(uniqueUrl, "Yehaw test history")
+            assertTrue(store.bookmarks().any { it.url == uniqueUrl })
+            assertTrue(store.history().any { it.url == uniqueUrl })
+            assertTrue(store.history().none { it.url.startsWith("file:") })
+        } finally {
+            store.clearBookmarks()
+            store.clearHistory()
+            store.close()
+        }
+    }
+
+    @Test
+    fun browserStoreReplacesDuplicateBookmarksAndCapsHistory() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val bookmarkUrl = "https://example.com/yehaw-bookmark-" + System.currentTimeMillis()
+        try {
+            store.addBookmark(bookmarkUrl, "Original title")
+            store.addBookmark(bookmarkUrl, "Updated title")
+            val matchingBookmarks = store.bookmarks().filter { it.url == bookmarkUrl }
+            assertTrue(matchingBookmarks.size == 1)
+            assertTrue(matchingBookmarks.single().title == "Updated title")
+
+            repeat(1005) { index ->
+                store.addHistory("https://example.com/yehaw-history/$index", "History $index")
+            }
+            val historyCount = store.readableDatabase.rawQuery("SELECT COUNT(*) FROM history", null).use { cursor ->
+                cursor.moveToFirst()
+                cursor.getInt(0)
+            }
+            assertTrue("History must stay within the 1000-entry retention limit", historyCount <= 1000)
+        } finally {
+            store.clearBookmarks()
+            store.clearHistory()
+            store.close()
+        }
+    }
+
+    @Test
+    fun browserStorePersistsSessionTabsAndOfflineReadingCopies() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val firstUrl = "https://example.com/yehaw-session-" + System.currentTimeMillis()
+        val secondUrl = "https://example.org/yehaw-session-" + System.currentTimeMillis()
+        val offlineUrl = "https://example.net/yehaw-offline-" + System.currentTimeMillis()
+        try {
+            store.saveSession(
+                listOf(
+                    BrowserStore.SessionTab(firstUrl, "First tab", 480),
+                    BrowserStore.SessionTab(secondUrl, "Second tab", 920)
+                ),
+                1
+            )
+            val session = store.loadSession()
+            assertTrue(session != null)
+            assertTrue(session!!.tabs.size == 2)
+            assertTrue(session.activeIndex == 1)
+            assertTrue(session.tabs[0].scrollY == 480)
+            assertTrue(session.tabs[1].url == secondUrl)
+
+            val offlineId = store.saveOfflinePage(offlineUrl, "Offline article", "Saved readable article text")
+            val offline = store.offlinePage(offlineId)
+            assertTrue(offline != null)
+            assertTrue(offline!!.title == "Offline article")
+            assertTrue(offline.content == "Saved readable article text")
+            store.deleteOfflinePage(offlineId)
+            assertTrue(store.offlinePage(offlineId) == null)
+        } finally {
+            store.clearSession()
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
+
+    @Test
+    fun browserLaunchesWithCoreControlsVisible() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withText("GO")).check(matches(isDisplayed()))
+            onView(withText("Bookmarks")).check(matches(isDisplayed()))
+            onView(withText("History")).check(matches(isDisplayed()))
+            onView(withText("More")).check(matches(isDisplayed()))
+        }
+    }
+}

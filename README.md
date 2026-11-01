@@ -1,4 +1,7 @@
-# Yehaw.app — Full Filipino Directory + Fast Tools (PWA)
+# Yehaw.app — Filipino Directory, PWA and Yehaw Android Browser
+
+> The Android browser is a separate native application in `app/`. It uses the device's Chromium-based Android System WebView engine; it does not bundle Chromium. See `docs/YEHAW_ANDROID_BROWSER_ARCHITECTURE.md` for engine boundaries, low-memory policy and release gates. The Android build is under active development and is not yet approved for production/global launch.
+
 
 Fast mobile-first page for Filipinos:
 - **Filipino recipes** (Adobo, Sinigang, Tinola, Tocino, Pancit, Kare-Kare) fully offline + links to top recipe sites
@@ -7,7 +10,13 @@ Fast mobile-first page for Filipinos:
 - Persistent top bar + bottom nav so users always return home
 - AdSense-ready (food + utility content = strong engagement for ads)
 - Admin console at `/admin/`
-- Fully static — no backend required for launch
+- Static PWA prototype; production accounts, secure administration, analytics, and transactional services require a real backend before commercial launch
+
+## Android browser
+
+The native Android application lives in `app/`. It uses Android System WebView (Chromium-based) to keep the app layer small and use the web engine already maintained by Android/Chrome providers. The current debug build is below 1 MB at the tested revision. The browser branch includes direct web rendering, tabs, bookmarks, history, downloads, uploads, privacy controls and memory-aware tab limits.
+
+This does not bundle the full Chrome desktop product. Compatibility depends on the installed WebView provider and Android version. See `docs/YEHAW_ANDROID_BROWSER_ARCHITECTURE.md` and the open full-browser pull request for exact scope and validation status. Physical low-memory device testing and production security review are still required; do not call this a global production release yet.
 
 ## Quick start (local)
 
@@ -21,7 +30,7 @@ npx serve -p 3000
 
 Open http://localhost:3000  
 Admin: http://localhost:3000/admin/  
-Default password: `yehaw2026admin` (change immediately)
+**Security warning:** the current static admin interface is not production-grade authentication. Do not deploy it with real administrative data or expose it as a secure admin console. Replace it with server-side authentication, authorization, audit logging and protected storage before commercial launch.
 
 ## Deploy
 
@@ -57,4 +66,4 @@ For multi-device admin you will later want a tiny backend or a JSON file you edi
 5. Deploy and submit the site to AdSense.
 6. Give the `PROMPT_FOR_MISTRAL.md` file to Mistral (or any AI) if you want further polish, Tagalog, analytics, etc.
 
-Built for speed and launch, not perfection.
+This PWA and the native Android browser are separate deliverables. Neither should be described as globally enterprise-launch-ready until its security, accessibility, performance, privacy, operational and device release gates have passed.
