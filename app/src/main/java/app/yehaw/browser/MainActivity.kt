@@ -4,6 +4,7 @@ import android.app.Activity
 import android.Manifest
 import android.content.pm.PackageManager
 import android.app.AlertDialog
+import android.app.ActivityManager
 import android.app.DownloadManager
 import android.app.role.RoleManager
 import android.content.ComponentCallbacks2
@@ -61,7 +62,14 @@ class MainActivity : Activity() {
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
     private var pendingGeoOrigin: String? = null
     private var activeTabIndex = -1
-    private val maxTabs = 4
+    private val maxTabs: Int by lazy {
+        val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
+        when {
+            memoryClass <= 128 -> 2
+            memoryClass <= 192 -> 3
+            else -> 4
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -445,8 +453,11 @@ class MainActivity : Activity() {
 
     private fun showTab(index: Int) {
         if (index !in tabs.indices) return
+        val previous = currentWebView()
+        if (previous != null && previous !== tabs[index].webView) previous.onPause()
         pageContainer.removeAllViews()
         activeTabIndex = index
+        tabs[index].webView.onResume()
         pageContainer.addView(tabs[index].webView)
         addressBar.setText(tabs[index].currentUrl)
         addressBar.setSelection(addressBar.text.length)
@@ -497,7 +508,7 @@ class MainActivity : Activity() {
             val active = currentWebView()
             tabs.filter { it.webView !== active }.forEach {
                 it.webView.stopLoading()
-                it.webView.clearHistory()
+                it.webView.onPause()
                 it.webView.clearCache(false)
             }
         }
@@ -593,13 +604,8 @@ class MainActivity : Activity() {
                     memorySaver = !memorySaver
                     tabs.forEachIndexed { index, tab ->
                         tab.webView.settings.loadsImagesAutomatically = !memorySaver
-                        if (index != activeTabIndex) {
-                            tab.webView.onPause()
-                            tab.webView.pauseTimers()
-                        } else {
-                            tab.webView.onResume()
-                            tab.webView.resumeTimers()
-                        }
+                        if (index != activeTabIndex) tab.webView.onPause()
+                        else tab.webView.onResume()
                     }
                     Toast.makeText(this, if (memorySaver) "Memory saver enabled." else "Memory saver disabled.", Toast.LENGTH_SHORT).show()
                 }
