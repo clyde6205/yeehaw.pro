@@ -288,20 +288,12 @@ class MainActivity : Activity() {
 
             override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
                 if (!isUserGesture || tabs.size >= maxTabs) return false
+                val message = resultMsg ?: return false
+                val transport = message.obj as? WebView.WebViewTransport ?: return false
                 val popup = WebView(this@MainActivity)
                 configureWebView(popup)
                 tabs.add(BrowserTab(webView = popup))
                 showTab(tabs.lastIndex)
-                val message = resultMsg ?: run {
-                    tabs.removeAt(tabs.lastIndex)
-                    popup.destroy()
-                    return false
-                }
-                val transport = message.obj as? WebView.WebViewTransport ?: run {
-                    tabs.removeAt(tabs.lastIndex)
-                    popup.destroy()
-                    return false
-                }
                 transport.webView = popup
                 message.sendToTarget()
                 return true
