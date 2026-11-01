@@ -9,6 +9,8 @@ import android.app.DownloadManager
 import android.app.role.RoleManager
 import android.content.ComponentCallbacks2
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -309,6 +311,34 @@ class MainActivity : Activity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
         if (desktopMode) webView.settings.userAgentString = DESKTOP_USER_AGENT
+
+        webView.setOnLongClickListener {
+            val hit = webView.hitTestResult
+            val linkUrl = hit.extra
+            val isLink = hit.type == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
+                hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+            if (!isLink || linkUrl.isNullOrBlank() || !isWebUrl(linkUrl)) {
+                false
+            } else {
+                val actions = arrayOf("Open in new tab", "Open in this tab", "Copy link")
+                AlertDialog.Builder(this)
+                    .setTitle("Link options")
+                    .setItems(actions) { _, which ->
+                        when (which) {
+                            0 -> createTab(linkUrl)
+                            1 -> webView.loadUrl(linkUrl)
+                            2 -> {
+                                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Website link", linkUrl))
+                                Toast.makeText(this, "Link copied.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+                true
+            }
+        }
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
