@@ -405,20 +405,6 @@ class MainActivity : Activity() {
         startActivityForResult(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER), REQUEST_BROWSER_ROLE)
     }
 
-    @Deprecated("Uses the platform role chooser to remain dependency-free.")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_BROWSER_ROLE) {
-            val held = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_BROWSER)
-            Toast.makeText(
-                this,
-                if (held) "Yehaw is now your default browser." else "Yehaw was not selected as the default browser.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW && tabs.size > 1) {
