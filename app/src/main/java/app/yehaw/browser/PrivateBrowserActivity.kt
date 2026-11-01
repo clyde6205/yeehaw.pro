@@ -1,6 +1,7 @@
 package app.yehaw.browser
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.Manifest
 import android.content.pm.PackageManager
 import android.app.DownloadManager
