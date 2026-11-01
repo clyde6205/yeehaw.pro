@@ -184,6 +184,15 @@ class PrivateBrowserActivity : Activity() {
                 finish()
                 return true
             }
+            override fun onReceivedSslError(
+                v: WebView?,
+                handler: android.webkit.SslErrorHandler?,
+                error: android.net.http.SslError?
+            ) {
+                handler?.cancel()
+                Toast.makeText(this@PrivateBrowserActivity, "Secure connection blocked.", Toast.LENGTH_LONG).show()
+            }
+
             override fun onPageStarted(v: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 if (!url.isNullOrBlank()) address.setText(url)
             }
