@@ -545,11 +545,36 @@ class MainActivity : Activity() {
         if (previous != null && previous !== tabs[index].webView) previous.onPause()
         pageContainer.removeAllViews()
         activeTabIndex = index
-        tabs[index].webView.onResume()
-        pageContainer.addView(tabs[index].webView)
-        addressBar.setText(tabs[index].currentUrl)
+        val tab = tabs[index]
+        tab.webView.onResume()
+        if (tab.failed) {
+            val errorPanel = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(24), dp(24), dp(24), dp(24))
+            }
+            errorPanel.addView(TextView(this).apply {
+                text = "This page could not be loaded. Check your connection and try again."
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, dp(16))
+            })
+            errorPanel.addView(actionButton("Retry") {
+                tab.failed = false
+                pageContainer.removeAllViews()
+                pageContainer.addView(tab.webView)
+                tab.webView.reload()
+            })
+            pageContainer.addView(errorPanel, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+        } else {
+            pageContainer.addView(tab.webView)
+        }
+        addressBar.setText(tab.currentUrl)
         addressBar.setSelection(addressBar.text.length)
-        statusText.text = tabs[index].title
+        statusText.text = tab.title
     }
 
     private fun closeCurrentTab() {
