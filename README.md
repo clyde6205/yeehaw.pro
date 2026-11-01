@@ -10,7 +10,13 @@ Fast mobile-first page for Filipinos:
 - Persistent top bar + bottom nav so users always return home
 - AdSense-ready (food + utility content = strong engagement for ads)
 - Admin console at `/admin/`
-- Fully static — no backend required for launch
+- Static PWA prototype; production accounts, secure administration, analytics, and transactional services require a real backend before commercial launch
+
+## Android browser
+
+The native Android application lives in `app/`. It uses Android System WebView (Chromium-based) to keep the app layer small and use the web engine already maintained by Android/Chrome providers. The current debug build is below 1 MB at the tested revision. The browser branch includes direct web rendering, tabs, bookmarks, history, downloads, uploads, privacy controls and memory-aware tab limits.
+
+This does not bundle the full Chrome desktop product. Compatibility depends on the installed WebView provider and Android version. See `docs/YEHAW_ANDROID_BROWSER_ARCHITECTURE.md` and the open full-browser pull request for exact scope and validation status. Physical low-memory device testing and production security review are still required; do not call this a global production release yet.
 
 ## Quick start (local)
 
