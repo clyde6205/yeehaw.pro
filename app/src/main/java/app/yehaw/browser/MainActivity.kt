@@ -236,7 +236,7 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
 
         webView.webChromeClient = object : WebChromeClient() {
-            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+            override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
                 if (view == null || fullScreenView != null) {
                     callback?.onCustomViewHidden()
                     return
