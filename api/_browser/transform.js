@@ -43,7 +43,7 @@ export function optimizeHtml(html, baseUrl) {
         if (/^javascript:/i.test(value.trim()) || trackerUrl(value, baseUrl)) { node.removeAttr(attr); continue; }
         if (key === "href" && tag === "link" && (node.attr("rel") || "").toLowerCase() === "stylesheet") node.attr(attr, proxyUrl(value, baseUrl));
         else if (key === "href" && tag === "a") node.attr(attr, proxyUrl(value, baseUrl, "/api/render"));
-        else if (key === "action") node.attr(attr, proxyUrl(value, baseUrl, "/api/render"));
+        else if (key === "action") node.attr(attr, new URL(value, baseUrl).toString());
         else if (key === "src" || key === "poster") node.attr(attr, proxyUrl(value, baseUrl));
       } else if (key === "srcset") {
         node.attr(attr, value.split(",").map(part => {
