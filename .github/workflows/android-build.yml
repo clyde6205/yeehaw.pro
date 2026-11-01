@@ -48,7 +48,9 @@ jobs:
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: yehaw-android-debug-apk
-          path: |\n            app/build/outputs/apk/debug/app-debug.apk\n            app/build/outputs/apk/release/app-release-unsigned.apk
+          name: yehaw-android-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 14
