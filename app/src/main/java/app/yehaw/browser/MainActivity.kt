@@ -56,6 +56,7 @@ class MainActivity : Activity() {
     private lateinit var browserStore: BrowserStore
     private var uploadCallback: ValueCallback<Array<Uri>>? = null
     private var desktopMode = false
+    private var thirdPartyCookiesEnabled = false
     private var memorySaver = false
     private var pendingWebPermission: PermissionRequest? = null
     private var pendingWebResources: Array<String> = emptyArray()
@@ -220,7 +221,7 @@ class MainActivity : Activity() {
             setGeolocationEnabled(true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
@@ -597,6 +598,7 @@ class MainActivity : Activity() {
         val choices = arrayOf(
             if (desktopMode) "Use mobile website" else "Request desktop website",
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
+            if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
             "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window"
         )
         AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
@@ -616,7 +618,12 @@ class MainActivity : Activity() {
                     }
                     Toast.makeText(this, if (memorySaver) "Memory saver enabled." else "Memory saver disabled.", Toast.LENGTH_SHORT).show()
                 }
-                2 -> AlertDialog.Builder(this).setTitle("Clear browsing data?")
+                2 -> {
+                    thirdPartyCookiesEnabled = !thirdPartyCookiesEnabled
+                    tabs.forEach { CookieManager.getInstance().setAcceptThirdPartyCookies(it.webView, thirdPartyCookiesEnabled) }
+                    Toast.makeText(this, if (thirdPartyCookiesEnabled) "Third-party cookies allowed." else "Third-party cookies blocked.", Toast.LENGTH_SHORT).show()
+                }
+                3 -> AlertDialog.Builder(this).setTitle("Clear browsing data?")
                     .setMessage("This clears history, bookmarks, cookies, cached files and website storage. You may be signed out.")
                     .setPositiveButton("Clear") { _, _ ->
                         browserStore.clearHistory()
@@ -632,14 +639,14 @@ class MainActivity : Activity() {
                         android.webkit.WebStorage.getInstance().deleteAllData()
                         Toast.makeText(this, "Browsing data cleared.", Toast.LENGTH_SHORT).show()
                     }.setNegativeButton("Cancel", null).show()
-                3 -> {
+                4 -> {
                     val pkg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WebView.getCurrentWebViewPackage() else null
                     val message = if (pkg == null) "Android System WebView provider details unavailable."
                         else "Engine: Chromium-based Android System WebView\nProvider: ${pkg.packageName}\nVersion: ${pkg.versionName}\n\nKeep Android System WebView or Chrome updated."
                     AlertDialog.Builder(this).setTitle("Browser engine").setMessage(message).setPositiveButton("OK", null).show()
                 }
-                4 -> requestDefaultBrowserRole()
-                5 -> {
+                5 -> requestDefaultBrowserRole()
+                6 -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         startActivity(Intent(this, PrivateBrowserActivity::class.java))
                     } else {
