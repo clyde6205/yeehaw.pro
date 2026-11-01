@@ -43,3 +43,12 @@ jobs:
           gradle-version: "8.9"
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Report APK size
+        run: ls -lh app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: yehaw-android-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
