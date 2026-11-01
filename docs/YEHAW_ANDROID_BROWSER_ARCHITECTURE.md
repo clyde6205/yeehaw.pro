@@ -35,12 +35,13 @@ Engine capability is bounded by the installed provider version and Android OS. W
 ## Security and privacy boundaries
 
 - No JavaScript bridge is exposed to page content.
-- Local file access and content access are disabled in WebView settings.
-- Only HTTP/HTTPS navigation is handled internally; other schemes are handed to Android's app resolver.
+- Direct local filesystem access is disabled. Content-provider access is enabled only to support Android's user-selected `content://` upload URIs.
+- HTTP/HTTPS navigation is handled internally. A small allowlist of external schemes (telephone, email, SMS, maps and app marketplace) requires explicit user confirmation; unsupported schemes are blocked.
+- WebView renderer-process termination is handled by discarding the failed tab and recovering the browser UI.
 - Third-party cookies are disabled by default.
 - TLS mixed content is blocked.
 - Android Safe Browsing is enabled where supported.
-- A separate `:private_browser` process uses an Android 9+ WebView data-directory suffix and does not write to normal history/bookmarks. It clears cookies, cache, and Web Storage at session start/end. This is an initial single-window private profile, not yet independently security-audited; service-worker/cache cleanup, crash-recovery verification, downloads, and permission parity remain release gates.
+- A separate `:private_browser` process uses an Android 9+ WebView data-directory suffix and does not write to normal history/bookmarks. It clears cookies, cache, and Web Storage at session start/end. This is an initial single-window private profile, not yet independently security-audited; service-worker/cache cleanup, crash-recovery verification and independent privacy/security review remain release gates.
 - Notifications, passkeys, advanced WebAuthn, persistent per-origin permission management/revocation, and full private-mode permission parity are not implemented.
 
 ## Required release gates
