@@ -53,7 +53,8 @@ class MainActivity : Activity() {
         var currentUrl: String = HOME_URL,
         var failed: Boolean = false,
         var evicted: Boolean = false,
-        var savedScrollY: Int = 0
+        var savedScrollY: Int = 0,
+        var lastHistoryUrl: String? = null
     )
 
     private lateinit var addressBar: EditText
@@ -412,6 +413,7 @@ class MainActivity : Activity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 tab.failed = false
+                tab.lastHistoryUrl = null
                 if (view === currentWebView() && pageContainer.indexOfChild(view) < 0) showTab(activeTabIndex)
                 if (!url.isNullOrBlank()) {
                     tab.currentUrl = url
@@ -423,12 +425,29 @@ class MainActivity : Activity() {
                 if (view === currentWebView()) statusText.text = "Loading…"
             }
 
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                val tab = tabs.firstOrNull { it.webView === view } ?: return
+                if (url.isNullOrBlank() || (!url.startsWith("https://") && !url.startsWith("http://"))) return
+                tab.currentUrl = url
+                if (view === currentWebView()) {
+                    addressBar.setText(url)
+                    addressBar.setSelection(addressBar.text.length)
+                }
+                if (tab.lastHistoryUrl != url) {
+                    browserStore.addHistory(url, tab.title)
+                    tab.lastHistoryUrl = url
+                }
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 val tab = tabs.firstOrNull { it.webView === view }
                 if (tab != null && !url.isNullOrBlank() &&
                     (url.startsWith("https://") || url.startsWith("http://"))) {
                     tab.currentUrl = url
-                    browserStore.addHistory(url, tab.title)
+                    if (tab.lastHistoryUrl != url) {
+                        browserStore.addHistory(url, tab.title)
+                        tab.lastHistoryUrl = url
+                    }
                     if (tab.savedScrollY > 0 && view != null) {
                         val restoredView = view
                         val savedY = tab.savedScrollY
