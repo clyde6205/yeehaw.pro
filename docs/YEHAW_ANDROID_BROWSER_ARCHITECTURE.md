@@ -30,7 +30,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Clear history, bookmarks, cookies, cache, and Web Storage.
 - User-controlled third-party-cookie compatibility toggle, persisted across launches.
 - User-initiated popup windows in tabs and immersive full-screen HTML5 video.
-- HTTPS-gated camera, microphone, and geolocation permission prompts backed by Android runtime permissions.
+- HTTPS-gated camera, microphone, and geolocation permission prompts backed by Android runtime permissions, with a shortcut to Android app-permission settings and geolocation grant clearing when browsing data is cleared.
 - Default-browser role request on supported Android versions.
 
 ## Security and privacy boundaries
