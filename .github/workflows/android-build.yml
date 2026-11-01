@@ -26,6 +26,7 @@ permissions:
 jobs:
   debug-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Check out source
         uses: actions/checkout@v4
