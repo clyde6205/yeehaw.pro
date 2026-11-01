@@ -449,6 +449,20 @@ class MainActivity : Activity() {
                 return true
             }
 
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: android.webkit.SslErrorHandler?,
+                error: android.net.http.SslError?
+            ) {
+                handler?.cancel()
+                val tab = tabs.firstOrNull { it.webView === view } ?: return
+                tab.failed = true
+                if (view === currentWebView()) {
+                    showTab(activeTabIndex)
+                    statusText.text = "Secure connection blocked."
+                }
+            }
+
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
