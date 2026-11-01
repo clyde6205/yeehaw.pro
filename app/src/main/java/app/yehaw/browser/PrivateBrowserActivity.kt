@@ -1,6 +1,8 @@
 package app.yehaw.browser
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
@@ -13,6 +15,8 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.WebChromeClient
+import android.webkit.PermissionRequest
+import android.webkit.GeolocationPermissions
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -30,6 +34,10 @@ class PrivateBrowserActivity : Activity() {
     private var webView: WebView? = null
     private lateinit var address: EditText
     private var uploadCallback: android.webkit.ValueCallback<Array<Uri>>? = null
+    private var pendingWebPermission: PermissionRequest? = null
+    private var pendingWebResources: Array<String> = emptyArray()
+    private var pendingGeoCallback: GeolocationPermissions.Callback? = null
+    private var pendingGeoOrigin: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +76,7 @@ class PrivateBrowserActivity : Activity() {
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            setGeolocationEnabled(true)
             setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
@@ -75,6 +84,52 @@ class PrivateBrowserActivity : Activity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, false)
         view.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                runOnUiThread {
+                    val allowed = request.resources.filter {
+                        it == PermissionRequest.RESOURCE_VIDEO_CAPTURE || it == PermissionRequest.RESOURCE_AUDIO_CAPTURE
+                    }.toTypedArray()
+                    if (request.origin.scheme != "https" || allowed.isEmpty() || allowed.size != request.resources.size) {
+                        request.deny()
+                        return@runOnUiThread
+                    }
+                    val required = mutableListOf<String>()
+                    if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in allowed) required.add(Manifest.permission.CAMERA)
+                    if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in allowed) required.add(Manifest.permission.RECORD_AUDIO)
+                    AlertDialog.Builder(this@PrivateBrowserActivity)
+                        .setTitle("Private site permission")
+                        .setMessage(request.origin.host.toString() + " requests camera or microphone access.")
+                        .setPositiveButton("Continue") { _, _ ->
+                            pendingWebPermission = request
+                            pendingWebResources = allowed
+                            val missing = required.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+                            if (missing.isEmpty()) grantPendingWebPermission()
+                            else requestPermissions(missing.toTypedArray(), PRIVATE_SITE_PERMISSION)
+                        }
+                        .setNegativeButton("Block") { _, _ -> request.deny() }
+                        .show()
+                }
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+                if (origin.isNullOrBlank() || !origin.startsWith("https://") || callback == null) {
+                    callback?.invoke(origin, false, false)
+                    return
+                }
+                AlertDialog.Builder(this@PrivateBrowserActivity)
+                    .setTitle("Private location permission")
+                    .setMessage(Uri.parse(origin).host.toString() + " requests device location.")
+                    .setPositiveButton("Continue") { _, _ ->
+                        pendingGeoCallback = callback
+                        pendingGeoOrigin = origin
+                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            grantPendingGeoPermission(true)
+                        } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), PRIVATE_GEO_PERMISSION)
+                    }
+                    .setNegativeButton("Block") { _, _ -> callback.invoke(origin, false, false) }
+                    .show()
+            }
+
             override fun onShowFileChooser(v: WebView?, callback: android.webkit.ValueCallback<Array<Uri>>?, params: FileChooserParams?): Boolean {
                 uploadCallback?.onReceiveValue(null)
                 uploadCallback = callback
@@ -122,6 +177,32 @@ class PrivateBrowserActivity : Activity() {
         }
     }
 
+    private fun grantPendingWebPermission() {
+        val request = pendingWebPermission ?: return
+        request.grant(pendingWebResources)
+        pendingWebPermission = null
+        pendingWebResources = emptyArray()
+    }
+
+    private fun grantPendingGeoPermission(granted: Boolean) {
+        pendingGeoCallback?.invoke(pendingGeoOrigin, granted, false)
+        pendingGeoCallback = null
+        pendingGeoOrigin = null
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+        when (requestCode) {
+            PRIVATE_SITE_PERMISSION -> if (granted) grantPendingWebPermission() else {
+                pendingWebPermission?.deny()
+                pendingWebPermission = null
+                pendingWebResources = emptyArray()
+            }
+            PRIVATE_GEO_PERMISSION -> grantPendingGeoPermission(granted)
+        }
+    }
+
     @Deprecated("Uses the private WebView navigation stack.")
     override fun onBackPressed() {
         val current = webView
@@ -152,6 +233,10 @@ class PrivateBrowserActivity : Activity() {
     }
     override fun onDestroy() {
         uploadCallback?.onReceiveValue(null)
+        pendingWebPermission?.deny()
+        pendingWebPermission = null
+        pendingGeoCallback?.invoke(pendingGeoOrigin, false, false)
+        pendingGeoCallback = null
         webView?.apply { stopLoading(); loadUrl("about:blank"); clearCache(true); clearHistory(); destroy() }
         webView = null
         CookieManager.getInstance().removeAllCookies(null)
@@ -160,5 +245,5 @@ class PrivateBrowserActivity : Activity() {
         super.onDestroy()
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    companion object { private const val FILE_REQUEST = 7201 }
+    companion object { private const val FILE_REQUEST = 7201; private const val PRIVATE_SITE_PERMISSION = 7202; private const val PRIVATE_GEO_PERMISSION = 7203 }
 }
