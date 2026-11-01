@@ -59,7 +59,13 @@ class PrivateBrowserActivity : Activity() {
         WebView.setDataDirectorySuffix("yehaw_private")
         CookieManager.getInstance().setAcceptCookie(true)
 
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setOnApplyWindowInsetsListener { view, insets ->
+                view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+                insets
+            }
+        }
         address = EditText(this).apply {
             hint = "Private search or website"
             isSingleLine = true
