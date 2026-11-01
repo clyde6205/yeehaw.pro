@@ -73,6 +73,7 @@ class MainActivity : Activity() {
     private var thirdPartyCookiesEnabled = false
     private var searchEngine = "Google"
     private var memorySaver = false
+    private var preferOfflineCache = false
     private var pendingWebPermission: PermissionRequest? = null
     private var pendingWebResources: Array<String> = emptyArray()
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
@@ -95,6 +96,7 @@ class MainActivity : Activity() {
         browserStore = BrowserStore(this)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
         memorySaver = browserPreferences.getBoolean("memory_saver", false)
+        preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
@@ -275,6 +277,7 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("History") { showSavedItems(false) })
         libraryControls.addView(actionButton("Save offline") { saveOfflinePage() })
         libraryControls.addView(actionButton("Offline") { showOfflinePages() })
+        libraryControls.addView(actionButton(if (preferOfflineCache) "Cache first: ON" else "Cache first") { toggleOfflineCachePreference() })
         libraryControls.addView(actionButton("Downloads") { openDownloads() })
         libraryControls.addView(actionButton("Find") { findOnPage() })
         libraryControls.addView(actionButton("Share") { shareCurrentPage() })
@@ -343,7 +346,7 @@ class MainActivity : Activity() {
             databaseEnabled = false
             loadsImagesAutomatically = !memorySaver
             blockNetworkImage = false
-            cacheMode = WebSettings.LOAD_DEFAULT
+            cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
             setSupportZoom(true)
@@ -960,6 +963,20 @@ class MainActivity : Activity() {
                 if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
             }
             .setNegativeButton("Close", null).show()
+    }
+
+    private fun toggleOfflineCachePreference() {
+        preferOfflineCache = !preferOfflineCache
+        browserPreferences.edit().putBoolean("prefer_offline_cache", preferOfflineCache).apply()
+        tabs.filterNot { it.evicted }.forEach { tab ->
+            tab.webView.settings.cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
+        }
+        val message = if (preferOfflineCache) {
+            "Cached resources are preferred. Only content allowed by the website to be cached may work offline."
+        } else {
+            "Normal online cache behavior restored."
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     private fun saveOfflinePage() {
