@@ -48,8 +48,8 @@ Engine capability is bounded by the installed provider version and Android OS. W
 
 ## Required release gates
 
-1. Build and lint on CI with a pinned Android Gradle Plugin, Gradle, JDK, SDK and Kotlin toolchain.
-2. Run emulator tests on API 23, API 26, API 29, API 33 and current Android.
+1. Build and lint on CI with a pinned Android Gradle Plugin, Gradle, JDK, SDK and Kotlin toolchain; the debug and unsigned release APK build is automated.
+2. Run the browser launch smoke test on API 23, API 29 and API 35 emulators; expand the matrix to API 26 and API 33 after baseline stability.
 3. Test at least one physical 1 GB, 2 GB and 3 GB RAM device.
 4. Verify representative sites using JavaScript modules, SPA routing, local storage, cookies, OAuth redirects, file upload, downloads, video/audio, WebAssembly and responsive layouts.
 5. Verify tab lifecycle, memory trim, process death/recreation, offline/error pages, accessibility and touch target sizing.
