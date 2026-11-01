@@ -57,6 +57,7 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private val tabs = mutableListOf<BrowserTab>()
     private lateinit var browserStore: BrowserStore
+    private val browserPreferences by lazy { getSharedPreferences("browser_settings", Context.MODE_PRIVATE) }
     private var uploadCallback: ValueCallback<Array<Uri>>? = null
     private var desktopMode = false
     private var thirdPartyCookiesEnabled = false
@@ -81,6 +82,9 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         browserStore = BrowserStore(this)
+        desktopMode = browserPreferences.getBoolean("desktop_mode", false)
+        memorySaver = browserPreferences.getBoolean("memory_saver", false)
+        thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         buildInterface()
         CookieManager.getInstance().setAcceptCookie(true)
         handleIncomingIntent(intent)
@@ -219,7 +223,7 @@ class MainActivity : Activity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = false
-            loadsImagesAutomatically = true
+            loadsImagesAutomatically = !memorySaver
             blockNetworkImage = false
             cacheMode = WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
@@ -234,6 +238,7 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
+        if (desktopMode) webView.settings.userAgentString = DESKTOP_USER_AGENT
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
@@ -653,12 +658,15 @@ class MainActivity : Activity() {
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
-                    currentWebView()?.settings?.userAgentString =
-                        if (desktopMode) DESKTOP_USER_AGENT else WebSettings.getDefaultUserAgent(this)
-                    currentWebView()?.reload()
+                    browserPreferences.edit().putBoolean("desktop_mode", desktopMode).apply()
+                    tabs.forEach { tab ->
+                        tab.webView.settings.userAgentString = if (desktopMode) DESKTOP_USER_AGENT else WebSettings.getDefaultUserAgent(this)
+                        tab.webView.reload()
+                    }
                 }
                 1 -> {
                     memorySaver = !memorySaver
+                    browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
                     tabs.forEachIndexed { index, tab ->
                         tab.webView.settings.loadsImagesAutomatically = !memorySaver
                         if (index != activeTabIndex) tab.webView.onPause()
@@ -668,6 +676,7 @@ class MainActivity : Activity() {
                 }
                 2 -> {
                     thirdPartyCookiesEnabled = !thirdPartyCookiesEnabled
+                    browserPreferences.edit().putBoolean("third_party_cookies", thirdPartyCookiesEnabled).apply()
                     tabs.forEach { CookieManager.getInstance().setAcceptThirdPartyCookies(it.webView, thirdPartyCookiesEnabled) }
                     Toast.makeText(this, if (thirdPartyCookiesEnabled) "Third-party cookies allowed." else "Third-party cookies blocked.", Toast.LENGTH_SHORT).show()
                 }
