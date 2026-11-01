@@ -18,6 +18,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.os.Message
+import android.provider.Settings
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
@@ -726,7 +727,7 @@ class MainActivity : Activity() {
             if (desktopMode) "Use mobile website" else "Request desktop website",
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
-            "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window", "Search engine"
+            "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window", "Search engine", "App permissions"
         )
         AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
             when (which) {
@@ -768,6 +769,7 @@ class MainActivity : Activity() {
                             it.webView.clearSslPreferences()
                         }
                         android.webkit.WebStorage.getInstance().deleteAllData()
+                        android.webkit.GeolocationPermissions.getInstance().clearAll()
                         Toast.makeText(this, "Browsing data cleared.", Toast.LENGTH_SHORT).show()
                     }.setNegativeButton("Cancel", null).show()
                 4 -> {
@@ -796,6 +798,12 @@ class MainActivity : Activity() {
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
+                }
+                8 -> {
+                    val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", packageName, null)
+                    }
+                    startActivity(settingsIntent)
                 }
             }
         }.show()
