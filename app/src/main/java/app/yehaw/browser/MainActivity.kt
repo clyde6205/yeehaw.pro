@@ -429,10 +429,11 @@ class MainActivity : Activity() {
                     (url.startsWith("https://") || url.startsWith("http://"))) {
                     tab.currentUrl = url
                     browserStore.addHistory(url, tab.title)
-                    if (tab.savedScrollY > 0) {
+                    if (tab.savedScrollY > 0 && view != null) {
+                        val restoredView = view
                         val savedY = tab.savedScrollY
-                        view?.post {
-                            view.scrollTo(0, savedY)
+                        restoredView.post {
+                            restoredView.scrollTo(0, savedY)
                             tab.savedScrollY = 0
                         }
                     }
