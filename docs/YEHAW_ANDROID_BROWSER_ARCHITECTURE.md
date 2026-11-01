@@ -32,7 +32,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - User-initiated popup windows in tabs and immersive full-screen HTML5 video.
 - HTTPS-gated camera, microphone, and geolocation permission prompts backed by Android runtime permissions, with a shortcut to Android app-permission settings and geolocation grant clearing when browsing data is cleared.
 - Default-browser role request on supported Android versions.
-- Edge-to-edge system-bar inset handling for current Android target SDKs.
+- Edge-to-edge system-bar inset handling for current Android target SDKs and minimum 48 dp touch targets on browser controls.
 
 ## Security and privacy boundaries
 
