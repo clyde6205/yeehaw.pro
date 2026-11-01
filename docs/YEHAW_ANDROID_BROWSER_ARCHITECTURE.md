@@ -23,6 +23,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Persistent local bookmarks and bounded browsing history, including SPA history API URL changes.
 - Durable local session continuity: up to four normal-browser tabs, active tab, page URL/title and approximate vertical scroll position are saved to SQLite when the app pauses/stops and restored after process death or device restart. This does not capture passwords, payment data, live form values or every website's in-memory application state.
 - User-triggered offline reading snapshots: capture up to 250,000 characters of readable page text per page, stored locally with a bounded 100-page library and controls to open, delete one or clear all. These are text-only reading copies, not full offline clones; images, scripts, embedded media, interactive forms and server-dependent features are not guaranteed offline.
+- Optional cache-first browsing preference uses WebView's local HTTP cache before network access. It is best-effort only: server cache headers, site design, storage eviction and Android's WebView provider determine what is available without connectivity.
 - Website file chooser integration for upload forms.
 - Long-press link actions to open a link in the current tab, open it in a new tab, or copy its URL.
 - DownloadManager-based downloads.
