@@ -11,6 +11,10 @@ function getTarget(req) {
   const value = req.query?.url ?? new URL(req.url, "https://yehaw.app").searchParams.get("url");
   return typeof value === "string" && value.length <= 2048 ? value : null;
 }
+function isCacheable(headers) {
+  const policy = String(headers["cache-control"] || "").toLowerCase();
+  return !headers["set-cookie"] && !/(?:private|no-store|no-cache)/.test(policy) && !String(headers.vary || "").includes("*");
+}
 
 export default async function handler(req, res) {
   if (!["GET", "HEAD"].includes(req.method)) {
@@ -57,11 +61,12 @@ export default async function handler(req, res) {
       return res.status(415).json({ error: "Resource type is not supported by Yehaw Lite." });
     }
 
+    const cacheable = isCacheable(upstream.headers);
     const value = { body, type: outputType };
-    cacheSet(key, value, 3600000);
+    if (cacheable) cacheSet(key, value, 3600000);
     res.setHeader("Content-Type", outputType);
-    res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
-    res.setHeader("X-Yehaw-Cache", "MISS");
+    res.setHeader("Cache-Control", cacheable ? "public, s-maxage=3600, stale-while-revalidate=86400" : "no-store");
+    res.setHeader("X-Yehaw-Cache", cacheable ? "MISS" : "BYPASS");
     res.setHeader("X-Yehaw-Original-Bytes", String(upstream.body.length));
     res.setHeader("X-Yehaw-Optimized-Bytes", String(body.length));
     res.setHeader("X-Content-Type-Options", "nosniff");
