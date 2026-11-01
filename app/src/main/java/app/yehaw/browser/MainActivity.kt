@@ -48,10 +48,12 @@ import android.widget.Toast
  */
 class MainActivity : Activity() {
     private data class BrowserTab(
-        val webView: WebView,
+        var webView: WebView,
         var title: String = "New tab",
         var currentUrl: String = HOME_URL,
-        var failed: Boolean = false
+        var failed: Boolean = false,
+        var evicted: Boolean = false,
+        var savedScrollY: Int = 0
     )
 
     private lateinit var addressBar: EditText
@@ -613,6 +615,14 @@ class MainActivity : Activity() {
         pageContainer.removeAllViews()
         activeTabIndex = index
         val tab = tabs[index]
+        var restoreUrl: String? = null
+        if (tab.evicted) {
+            restoreUrl = tab.currentUrl
+            val restoredWebView = WebView(this)
+            configureWebView(restoredWebView)
+            tab.webView = restoredWebView
+            tab.evicted = false
+        }
         tab.webView.onResume()
         if (tab.failed) {
             val errorPanel = LinearLayout(this).apply {
@@ -638,19 +648,35 @@ class MainActivity : Activity() {
             ))
         } else {
             pageContainer.addView(tab.webView)
+            if (restoreUrl != null) tab.webView.loadUrl(restoreUrl)
         }
         addressBar.setText(tab.currentUrl)
         addressBar.setSelection(addressBar.text.length)
         statusText.text = tab.title
     }
 
+    private fun discardTabForMemory(tab: BrowserTab) {
+        if (tab.evicted) return
+        tab.currentUrl = tab.webView.url ?: tab.currentUrl
+        tab.savedScrollY = tab.webView.scrollY
+        pageContainer.removeView(tab.webView)
+        tab.webView.stopLoading()
+        tab.webView.onPause()
+        tab.webView.clearCache(false)
+        tab.webView.loadUrl("about:blank")
+        tab.webView.destroy()
+        tab.evicted = true
+    }
+
     private fun closeCurrentTab() {
         if (tabs.isEmpty() || activeTabIndex !in tabs.indices) return
         val removed = tabs.removeAt(activeTabIndex)
         pageContainer.removeView(removed.webView)
-        removed.webView.stopLoading()
-        removed.webView.loadUrl("about:blank")
-        removed.webView.destroy()
+        if (!removed.evicted) {
+            removed.webView.stopLoading()
+            removed.webView.loadUrl("about:blank")
+            removed.webView.destroy()
+        }
         if (tabs.isEmpty()) {
             activeTabIndex = -1
             createTab(HOME_URL)
@@ -685,11 +711,8 @@ class MainActivity : Activity() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW && tabs.size > 1) {
-            val active = currentWebView()
-            tabs.filter { it.webView !== active }.forEach {
-                it.webView.stopLoading()
-                it.webView.onPause()
-                it.webView.clearCache(false)
+            tabs.forEachIndexed { index, tab ->
+                if (index != activeTabIndex) discardTabForMemory(tab)
             }
         }
     }
@@ -828,7 +851,7 @@ class MainActivity : Activity() {
                 0 -> {
                     desktopMode = !desktopMode
                     browserPreferences.edit().putBoolean("desktop_mode", desktopMode).apply()
-                    tabs.forEach { tab ->
+                    tabs.filterNot { it.evicted }.forEach { tab ->
                         tab.webView.settings.userAgentString = if (desktopMode) DESKTOP_USER_AGENT else WebSettings.getDefaultUserAgent(this)
                         tab.webView.reload()
                     }
@@ -837,16 +860,18 @@ class MainActivity : Activity() {
                     memorySaver = !memorySaver
                     browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
                     tabs.forEachIndexed { index, tab ->
-                        tab.webView.settings.loadsImagesAutomatically = !memorySaver
-                        if (index != activeTabIndex) tab.webView.onPause()
-                        else tab.webView.onResume()
+                        if (!tab.evicted) {
+                            tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                            if (index != activeTabIndex) tab.webView.onPause()
+                            else tab.webView.onResume()
+                        }
                     }
                     Toast.makeText(this, if (memorySaver) "Memory saver enabled." else "Memory saver disabled.", Toast.LENGTH_SHORT).show()
                 }
                 2 -> {
                     thirdPartyCookiesEnabled = !thirdPartyCookiesEnabled
                     browserPreferences.edit().putBoolean("third_party_cookies", thirdPartyCookiesEnabled).apply()
-                    tabs.forEach { CookieManager.getInstance().setAcceptThirdPartyCookies(it.webView, thirdPartyCookiesEnabled) }
+                    tabs.filterNot { it.evicted }.forEach { CookieManager.getInstance().setAcceptThirdPartyCookies(it.webView, thirdPartyCookiesEnabled) }
                     Toast.makeText(this, if (thirdPartyCookiesEnabled) "Third-party cookies allowed." else "Third-party cookies blocked.", Toast.LENGTH_SHORT).show()
                 }
                 3 -> AlertDialog.Builder(this).setTitle("Clear browsing data?")
@@ -932,7 +957,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        tabs.forEach {
+        tabs.filterNot { it.evicted }.forEach {
             it.webView.stopLoading()
             it.webView.loadUrl("about:blank")
             it.webView.destroy()
