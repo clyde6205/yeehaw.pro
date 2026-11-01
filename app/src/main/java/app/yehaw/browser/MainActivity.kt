@@ -1,6 +1,8 @@
 package app.yehaw.browser
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.app.role.RoleManager
@@ -17,6 +19,8 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -52,6 +56,10 @@ class MainActivity : Activity() {
     private var uploadCallback: ValueCallback<Array<Uri>>? = null
     private var desktopMode = false
     private var memorySaver = false
+    private var pendingWebPermission: PermissionRequest? = null
+    private var pendingWebResources: Array<String> = emptyArray()
+    private var pendingGeoCallback: GeolocationPermissions.Callback? = null
+    private var pendingGeoOrigin: String? = null
     private var activeTabIndex = -1
     private val maxTabs = 4
 
