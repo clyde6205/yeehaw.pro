@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.view.Gravity
+import android.os.Message
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
@@ -196,7 +197,7 @@ class MainActivity : Activity() {
             displayZoomControls = false
             setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
+            setSupportMultipleWindows(true)
             allowFileAccess = false
             allowContentAccess = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -224,6 +225,35 @@ class MainActivity : Activity() {
                 } catch (_: Exception) {
                     uploadCallback = null
                     false
+                }
+            }
+
+            override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message?): Boolean {
+                if (!isUserGesture || tabs.size >= maxTabs) return false
+                val popup = WebView(this@MainActivity)
+                configureWebView(popup)
+                tabs.add(BrowserTab(webView = popup))
+                showTab(tabs.lastIndex)
+                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: run {
+                    tabs.removeAt(tabs.lastIndex)
+                    popup.destroy()
+                    return false
+                }
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                return true
+            }
+
+            override fun onCloseWindow(window: WebView?) {
+                val index = tabs.indexOfFirst { it.webView === window }
+                if (index >= 0) {
+                    if (index == activeTabIndex) closeCurrentTab()
+                    else {
+                        val removed = tabs.removeAt(index)
+                        removed.webView.stopLoading()
+                        removed.webView.destroy()
+                        if (activeTabIndex > index) activeTabIndex--
+                    }
                 }
             }
 
