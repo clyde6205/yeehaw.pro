@@ -20,7 +20,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 ## Implemented browser features
 
 - HTTP/HTTPS navigation, back, forward, reload, home, and tabs.
-- Persistent local bookmarks and bounded browsing history.
+- Persistent local bookmarks and bounded browsing history, including SPA history API URL changes.
 - Website file chooser integration for upload forms.
 - DownloadManager-based downloads.
 - In-page text search and a shortcut to the Android downloads manager.
