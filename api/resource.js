@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import { optimizeImage } from "./_browser/image.js";
 import { cacheGet, cacheSet } from "./_browser/cache.js";
 import { safeFetch } from "./_browser/fetch.js";
 import { rewriteCss } from "./_browser/transform.js";
@@ -45,11 +45,7 @@ export default async function handler(req, res) {
     let outputType;
 
     if (IMAGE_TYPES.has(type)) {
-      body = await sharp(upstream.body, { limitInputPixels: 40000000, animated: false })
-        .rotate()
-        .resize({ width: 1280, height: 1280, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 72, effort: 4 })
-        .toBuffer();
+      body = await optimizeImage(upstream.body);
       outputType = "image/webp";
     } else if (type === "text/css") {
       body = Buffer.from(rewriteCss(upstream.body.toString("utf8"), upstream.finalUrl.toString()));
