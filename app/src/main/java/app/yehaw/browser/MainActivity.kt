@@ -97,8 +97,8 @@ class MainActivity : Activity() {
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
         buildInterface()
         CookieManager.getInstance().setAcceptCookie(true)
-        restoreTabs(savedInstanceState)
-        handleIncomingIntent(intent)
+        val restoredTabs = restoreTabs(savedInstanceState)
+        if (!restoredTabs) handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
     }
 
@@ -126,14 +126,14 @@ class MainActivity : Activity() {
         super.onSaveInstanceState(outState)
     }
 
-    private fun restoreTabs(state: Bundle?) {
-        val savedUrls = state?.getStringArrayList(STATE_TAB_URLS) ?: return
+    private fun restoreTabs(state: Bundle?): Boolean {
+        val savedUrls = state?.getStringArrayList(STATE_TAB_URLS) ?: return false
         val savedTitles = state.getStringArrayList(STATE_TAB_TITLES)
         val entries = savedUrls.mapIndexedNotNull { index, url ->
             if (isWebUrl(url)) url to (savedTitles?.getOrNull(index)?.take(80)?.ifBlank { "Restored tab" } ?: "Restored tab")
             else null
         }.take(maxTabs)
-        if (entries.isEmpty()) return
+        if (entries.isEmpty()) return false
         val activeIndex = state.getInt(STATE_ACTIVE_TAB, 0).coerceIn(0, entries.lastIndex)
 
         entries.forEachIndexed { index, entry ->
@@ -156,6 +156,7 @@ class MainActivity : Activity() {
         addressBar.setText(active.currentUrl)
         addressBar.setSelection(addressBar.text.length)
         statusText.text = "Restoring tab…"
+        return true
     }
 
     private fun isWebUrl(value: String): Boolean {
