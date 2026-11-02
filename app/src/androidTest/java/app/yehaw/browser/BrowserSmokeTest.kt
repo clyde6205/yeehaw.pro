@@ -152,10 +152,11 @@ class BrowserSmokeTest {
                     BrowserStore.SessionTab("$prefix/4", "Tab 4", 40),
                     BrowserStore.SessionTab("$prefix/5", "Tab 5", 50)
                 ),
-                5
+                2
             )
             val restored = store.loadSession()
-            assertTrue("Only four session tabs may be stored", restored!!.tabs.size <= 4)
+            assertTrue("Four valid tabs should be retained even when an invalid URL appears before them", restored!!.tabs.size == 4)
+            assertTrue("The active tab index must be remapped after invalid URLs are filtered", restored.activeIndex == 1)
             assertTrue("Local file URLs must never enter browser session storage", restored.tabs.none { it.url.startsWith("file:") })
         } finally {
             store.clearSession()
