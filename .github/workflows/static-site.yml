@@ -1,0 +1,40 @@
+name: Static product site checks
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "manifest.json"
+      - "sw.js"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/static-site.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "index.html"
+      - "manifest.json"
+      - "sw.js"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/static-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check
