@@ -2,6 +2,7 @@ package app.yehaw.browser
 
 import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
@@ -146,8 +147,11 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
     fun clearHistory() { writableDatabase.delete("history", null, null) }
     fun clearBookmarks() { writableDatabase.delete("bookmarks", null, null) }
 
-    private fun isWebUrl(url: String): Boolean =
-        url.startsWith("https://", true) || url.startsWith("http://", true)
+    private fun isWebUrl(url: String): Boolean {
+        val uri = Uri.parse(url)
+        return (uri.scheme.equals("https", ignoreCase = true) ||
+            uri.scheme.equals("http", ignoreCase = true)) && !uri.host.isNullOrBlank()
+    }
 
     companion object {
         const val MAX_OFFLINE_PAGES = 100
