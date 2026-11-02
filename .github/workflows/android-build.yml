@@ -46,16 +46,35 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - name: Assemble debug APK
+      - name: Prepare production signing key
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/yehaw-production.jks"
+          chmod 600 "$RUNNER_TEMP/yehaw-production.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/yehaw-production.jks" >> "$GITHUB_ENV"
+      - name: Assemble debug and release APKs
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleDebug :app:assembleRelease
-      - name: Report APK size
-        run: ls -lh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release-unsigned.apk
-      - name: Upload installable debug APK
+      - name: Report APK outputs
+        run: |
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -exec ls -lh {} \;
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          else
+            echo "Production signing secrets are not configured; release APK is unsigned."
+          fi
+      - name: Upload installable debug and release APKs
         uses: actions/upload-artifact@v4
         with:
           name: yehaw-android-apks
           path: |
             app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
