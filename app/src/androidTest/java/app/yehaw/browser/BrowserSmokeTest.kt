@@ -116,6 +116,31 @@ class BrowserSmokeTest {
     }
 
     @Test
+    fun browserStoreRejectsWebUrlsWithoutHosts() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        try {
+            store.addHistory("https://", "Malformed history")
+            store.addBookmark("http://", "Malformed bookmark")
+            assertTrue("Malformed URLs must not enter history", store.history().none { it.url == "https://" })
+            assertTrue("Malformed URLs must not enter bookmarks", store.bookmarks().none { it.url == "http://" })
+
+            var rejectedOfflineUrl = false
+            try {
+                store.saveOfflinePage("https://", "Malformed offline page", "Readable text")
+            } catch (_: IllegalArgumentException) {
+                rejectedOfflineUrl = true
+            }
+            assertTrue("Offline reading must reject web URLs without a host", rejectedOfflineUrl)
+        } finally {
+            store.clearHistory()
+            store.clearBookmarks()
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
+
+    @Test
     fun browserLaunchesWithCoreControlsInViewHierarchy() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
