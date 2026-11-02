@@ -746,7 +746,7 @@ class MainActivity : Activity() {
             return
         }
         try {
-            val filename = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val filename = safeDownloadFilename(URLUtil.guessFileName(url, contentDisposition, mimeType))
             val request = DownloadManager.Request(uri)
                 .setTitle(filename)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -759,6 +759,11 @@ class MainActivity : Activity() {
         } catch (_: Exception) {
             Toast.makeText(this, "Could not start this download.", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun safeDownloadFilename(value: String): String {
+        val cleaned = value.replace(Regex("[\\\\/:*?\"<>|\\r\\n]"), "_").trim().trim('.')
+        return cleaned.take(180).ifBlank { "download" }
     }
 
     private fun showTabPicker() {
