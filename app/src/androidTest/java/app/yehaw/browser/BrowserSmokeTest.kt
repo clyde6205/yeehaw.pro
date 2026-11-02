@@ -95,6 +95,27 @@ class BrowserSmokeTest {
     }
 
     @Test
+    fun offlineReadingCopiesAreBoundedAndCanAllBeCleared() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val prefix = "https://example.com/yehaw-offline-limit-" + System.currentTimeMillis()
+        try {
+            repeat(105) { index ->
+                store.saveOfflinePage("$prefix/$index", "Offline $index", "Readable text $index")
+            }
+            assertTrue(
+                "Offline reading storage must stay within the 100-page retention limit",
+                store.offlinePages().size <= BrowserStore.MAX_OFFLINE_PAGES
+            )
+            store.clearOfflinePages()
+            assertTrue("Clear browsing data must remove saved offline pages", store.offlinePages().isEmpty())
+        } finally {
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
+
+    @Test
     fun browserLaunchesWithCoreControlsInViewHierarchy() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
