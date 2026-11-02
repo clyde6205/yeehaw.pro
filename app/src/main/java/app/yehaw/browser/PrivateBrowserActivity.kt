@@ -237,15 +237,29 @@ class PrivateBrowserActivity : Activity() {
             }
         }
         view.setDownloadListener(DownloadListener { url, agent, disposition, mime, _ ->
-            try {
-                val name = URLUtil.guessFileName(url, disposition, mime)
-                val request = DownloadManager.Request(Uri.parse(url)).setTitle(name)
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-                if (!agent.isNullOrBlank()) request.addRequestHeader("User-Agent", agent)
-                CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
-                (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
-            } catch (_: Exception) { Toast.makeText(this, "Download failed.", Toast.LENGTH_SHORT).show() }
+            val uri = Uri.parse(url)
+            if (uri.scheme !in listOf("http", "https")) {
+                Toast.makeText(this, "Blocked unsupported download URL.", Toast.LENGTH_SHORT).show()
+            } else {
+                val name = safeDownloadFilename(URLUtil.guessFileName(url, disposition, mime))
+                AlertDialog.Builder(this)
+                    .setTitle("Save outside private browsing?")
+                    .setMessage("\"$name\" will be saved to the device's shared Downloads folder. The file and Android download record can remain after this private window is closed.")
+                    .setPositiveButton("Download") { _, _ ->
+                        try {
+                            val request = DownloadManager.Request(uri).setTitle(name)
+                                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+                            if (!agent.isNullOrBlank()) request.addRequestHeader("User-Agent", agent)
+                            CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
+                            (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+                        } catch (_: Exception) {
+                            Toast.makeText(this, "Download failed.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
         })
         root.addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         browserRoot = root
@@ -260,6 +274,11 @@ class PrivateBrowserActivity : Activity() {
                 if (!isFinishing && !isDestroyed) view.loadUrl("https://duckduckgo.com/")
             }
         }
+    }
+
+    private fun safeDownloadFilename(value: String): String {
+        val cleaned = value.replace(Regex("[\\\\/:*?\"<>|\\r\\n]"), "_").trim().trim('.')
+        return cleaned.take(180).ifBlank { "download" }
     }
 
     private fun hideFullScreenView() {
