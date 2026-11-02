@@ -1138,10 +1138,11 @@ class MainActivity : Activity() {
                     Toast.makeText(this, if (thirdPartyCookiesEnabled) "Third-party cookies allowed." else "Third-party cookies blocked.", Toast.LENGTH_SHORT).show()
                 }
                 3 -> AlertDialog.Builder(this).setTitle("Clear browsing data?")
-                    .setMessage("This clears history, bookmarks, cookies, cached files and website storage. You may be signed out.")
+                    .setMessage("This clears history, bookmarks, saved offline reading pages, cookies, cached files and website storage. You may be signed out.")
                     .setPositiveButton("Clear") { _, _ ->
                         browserStore.clearHistory()
                         browserStore.clearBookmarks()
+                        browserStore.clearOfflinePages()
                         CookieManager.getInstance().removeAllCookies(null)
                         CookieManager.getInstance().flush()
                         tabs.filterNot { it.evicted }.forEach {
