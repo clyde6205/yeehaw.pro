@@ -6,12 +6,14 @@ on:
       - "app/**"
       - "*.gradle.kts"
       - ".github/workflows/android-emulator-smoke.yml"
+      - ".github/scripts/**"
   push:
     branches: ["main"]
     paths:
       - "app/**"
       - "*.gradle.kts"
       - ".github/workflows/android-emulator-smoke.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -24,8 +26,7 @@ jobs:
     timeout-minutes: 35
     strategy:
       fail-fast: false
-      # Emulator VMs compete heavily for RAM/CPU on hosted runners. Serial execution
-      # makes the API 35 run reliable and preserves the full API coverage.
+      # Hosted emulator instances are resource-intensive; serialize API coverage.
       max-parallel: 1
       matrix:
         api-level: [23, 29, 35]
@@ -50,17 +51,7 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            adb wait-for-device
-            adb shell getprop sys.boot_completed | grep -q 1
-            set +e
-            gradle --no-daemon :app:connectedDebugAndroidTest
-            test_result=$?
-            if [ "$test_result" -ne 0 ]; then
-              adb logcat -d -v time > /tmp/yehaw-emulator-logcat.txt
-              adb shell dumpsys meminfo > /tmp/yehaw-emulator-meminfo.txt
-            fi
-            exit "$test_result"
+          script: bash .github/scripts/android-emulator-smoke.sh
       - name: Upload emulator diagnostics
         if: always()
         uses: actions/upload-artifact@v4
