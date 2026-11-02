@@ -1,74 +1,27 @@
-# Deploy Yehaw on Vercel (recommended)
+# Vercel deployment — Yehaw browser website
 
-## Why Vercel over Netlify for this project
-- Excellent static + PWA support
-- Instant previews on every push
-- Easy custom domain + automatic HTTPS
-- Edge network (fast for users in PH and OFW countries)
-- Simple headers control via `vercel.json`
+The Vercel project serves the Yehaw Android browser product website. The Android application itself is built separately by GitHub Actions from the `app/` Gradle module.
 
-## Steps
+## Current site build
 
-1. **Push to GitHub**
-   ```bash
-   git init
-   git add .
-   git commit -m "Yehaw Tools & Fast Browser"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/yehaw.git
-   git push -u origin main
-   ```
+- Repository: `clyde6205/yehaw.app`
+- Browser development branch: `feat/yehaw-full-browser`
+- Build command: `npm run build`
+- Output directory: `public`
+- Node.js: 24.x
 
-2. **Import to Vercel**
-   - Go to https://vercel.com → Add New Project
-   - Import the GitHub repo
-   - Framework Preset: Other (or leave blank)
-   - Build Command: leave empty
-   - Output Directory: leave empty / `.`
-   - Install Command: leave empty
-   - Click Deploy
+The build script copies the website assets into `public/`. The root page is the Yehaw Android browser product site. The former Filipino directory website is retired.
 
-3. **Custom domain**
-   - Project → Settings → Domains
-   - Add `yehaw.app` (and `www.yehaw.app` if desired)
-   - Follow the DNS instructions at your registrar
-   - Vercel auto-provisions HTTPS
+## Deployment workflow
 
-4. **After deploy**
-   - Open the live URL on a real Android phone
-   - Test: Home, Recipes, Currency, Remittance taps, Install prompt
-   - Go to `/admin/` and change the default password immediately
-   - When AdSense is approved, paste real publisher ID + slot IDs
+1. Push reviewed changes to the browser development branch to create a preview.
+2. Open the preview and verify the page, links, responsive layout and browser messaging.
+3. Run the Android build and emulator checks separately.
+4. Merge the reviewed browser branch into the Vercel production branch only after the required checks pass.
+5. Verify the production domain after deployment.
 
-## Optional vercel.json (recommended)
+Do not promote an untested preview or claim that the Android application is globally launch-ready based only on a successful website deployment.
 
-Create this file at the project root if Tabby has not already:
+## Android release
 
-```json
-{
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
-    },
-    {
-      "source": "/sw.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/manifest.json",
-      "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" }
-      ]
-    }
-  ]
-}
-```
-
-That is all. No serverless functions required for launch.
+APK/AAB generation is handled by the Android GitHub Actions workflow, not by Vercel. A public release requires a protected signing key, release build validation, distribution channel, privacy disclosures and a support/incident process. Signing secrets must never be committed to Git.
