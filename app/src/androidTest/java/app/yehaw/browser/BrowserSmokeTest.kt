@@ -136,4 +136,73 @@ class BrowserSmokeTest {
             }
         }
     }
+
+    @Test
+    fun sessionStorageRejectsNonWebUrlsAndCapsRestoredTabs() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val prefix = "https://example.com/yehaw-session-cap-" + System.currentTimeMillis()
+        try {
+            store.saveSession(
+                listOf(
+                    BrowserStore.SessionTab("$prefix/0", "Tab 0", 0),
+                    BrowserStore.SessionTab("file:///private/local", "Must reject", 0),
+                    BrowserStore.SessionTab("$prefix/2", "Tab 2", 20),
+                    BrowserStore.SessionTab("$prefix/3", "Tab 3", 30),
+                    BrowserStore.SessionTab("$prefix/4", "Tab 4", 40),
+                    BrowserStore.SessionTab("$prefix/5", "Tab 5", 50)
+                ),
+                5
+            )
+            val restored = store.loadSession()
+            assertTrue("Only four session tabs may be stored", restored!!.tabs.size <= 4)
+            assertTrue("Local file URLs must never enter browser session storage", restored.tabs.none { it.url.startsWith("file:") })
+        } finally {
+            store.clearSession()
+            store.close()
+        }
+    }
+
+    @Test
+    fun offlineReadingTextIsClippedToTheDocumentedMaximum() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val url = "https://example.com/yehaw-offline-size-" + System.currentTimeMillis()
+        try {
+            val content = "x".repeat(BrowserStore.MAX_OFFLINE_TEXT_CHARS + 500)
+            val id = store.saveOfflinePage(url, "Large article", content)
+            val saved = store.offlinePage(id)
+            assertTrue(saved != null)
+            assertTrue("Offline reading text must be bounded", saved!!.content.length == BrowserStore.MAX_OFFLINE_TEXT_CHARS)
+        } finally {
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
+
+    @Test
+    fun offlineReadingRejectsNonWebUrlsAndBlankText() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        try {
+            var rejectedFileUrl = false
+            try {
+                store.saveOfflinePage("file:///sdcard/private.html", "Local file", "text")
+            } catch (_: IllegalArgumentException) {
+                rejectedFileUrl = true
+            }
+            assertTrue("Offline library must accept only HTTP and HTTPS URLs", rejectedFileUrl)
+
+            var rejectedBlankText = false
+            try {
+                store.saveOfflinePage("https://example.com/blank", "Blank", "   ")
+            } catch (_: IllegalArgumentException) {
+                rejectedBlankText = true
+            }
+            assertTrue("Offline library must reject empty reading copies", rejectedBlankText)
+        } finally {
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
 }
