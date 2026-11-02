@@ -880,6 +880,8 @@ class MainActivity : Activity() {
             tabs.forEachIndexed { index, tab ->
                 if (index != activeTabIndex) discardTabForMemory(tab)
             }
+            // Persist the final URL and scroll offsets before the OS can kill this process.
+            persistSession()
         }
     }
 

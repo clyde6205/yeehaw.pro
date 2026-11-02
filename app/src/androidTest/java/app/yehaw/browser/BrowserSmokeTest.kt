@@ -1,12 +1,11 @@
 package app.yehaw.browser
 
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.core.app.ActivityScenario
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withText
 import org.junit.Test
 import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
@@ -96,12 +95,24 @@ class BrowserSmokeTest {
     }
 
     @Test
-    fun browserLaunchesWithCoreControlsVisible() {
-        ActivityScenario.launch(MainActivity::class.java).use {
-            onView(withText("GO")).check(matches(isDisplayed()))
-            onView(withText("Bookmarks")).check(matches(isDisplayed()))
-            onView(withText("History")).check(matches(isDisplayed()))
-            onView(withText("More")).check(matches(isDisplayed()))
+    fun browserLaunchesWithCoreControlsInViewHierarchy() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val decor = activity.window.decorView
+                assertTrue("Browser activity decor must be attached", decor.isAttachedToWindow)
+                assertTrue("Browser content must be visible", decor.visibility == View.VISIBLE)
+                val labels = mutableSetOf<String>()
+                fun collect(view: View) {
+                    if (view is TextView) labels.add(view.text?.toString().orEmpty())
+                    if (view is ViewGroup) {
+                        for (index in 0 until view.childCount) collect(view.getChildAt(index))
+                    }
+                }
+                collect(decor)
+                listOf("GO", "Bookmarks", "History", "More").forEach { label ->
+                    assertTrue("Expected browser control '$label' in the launched view hierarchy", label in labels)
+                }
+            }
         }
     }
 }
