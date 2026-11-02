@@ -1,69 +1,54 @@
-# Yehaw.app — Filipino Directory, PWA and Yehaw Android Browser
+# Yehaw — Lightweight Android Browser
 
-> The Android browser is a separate native application in `app/`. It uses the device's Chromium-based Android System WebView engine; it does not bundle Chromium. See `docs/YEHAW_ANDROID_BROWSER_ARCHITECTURE.md` for engine boundaries, low-memory policy and release gates. The Android build is under active development and is not yet approved for production/global launch.
+Yehaw is an Android-first web browser project. The former Filipino directory, service launcher and recipes website has been retired as the product direction. The public website is now the browser product and development information site.
 
+## Android application
 
-Fast mobile-first page for Filipinos:
-- **Filipino recipes** (Adobo, Sinigang, Tinola, Tocino, Pancit, Kare-Kare) fully offline + links to top recipe sites
-- 10 other offline tools (calculator, PHP rates, tip, BMI, loan, unit, %, age/days, password, text)
-- Full directory / one-tap launcher: GCash, Maya, Grab, Foodpanda, Jollibee, Shopee, Lazada, banks, Pag-IBIG…
-- Persistent top bar + bottom nav so users always return home
-- AdSense-ready (food + utility content = strong engagement for ads)
-- Admin console at `/admin/`
-- Static PWA prototype; production accounts, secure administration, analytics, and transactional services require a real backend before commercial launch
+The native Android app lives in `app/` and is written in Kotlin. It renders web pages using Android System WebView, a Chromium-based engine supplied and updated by the device. Yehaw does **not** bundle the full Chromium engine.
 
-## Android browser
+The active browser implementation includes:
+- Direct HTTP/HTTPS web browsing, JavaScript and DOM storage
+- Tab management with memory-aware background WebView eviction
+- SQLite-backed bookmarks, bounded history and session restoration
+- Downloads through Android DownloadManager and website file uploads
+- Find-in-page, sharing, desktop-site mode and selectable search engines
+- Private browsing profile and permission prompts
+- User-triggered text-only offline reading snapshots
 
-The native Android application lives in `app/`. It uses Android System WebView (Chromium-based) to keep the app layer small and use the web engine already maintained by Android/Chrome providers. The current debug build is below 1 MB at the tested revision. The browser branch includes direct web rendering, tabs, bookmarks, history, downloads, uploads, privacy controls and memory-aware tab limits.
+Compatibility and memory use depend on Android version, the installed WebView provider, device resources and the websites being visited. The project must not be described as production-ready until automated checks, physical-device tests, security/privacy review, accessibility checks, release signing and operational readiness are complete.
 
-This does not bundle the full Chrome desktop product. Compatibility depends on the installed WebView provider and Android version. See `docs/YEHAW_ANDROID_BROWSER_ARCHITECTURE.md` and the open full-browser pull request for exact scope and validation status. Physical low-memory device testing and production security review are still required; do not call this a global production release yet.
+## Website
 
-## Quick start (local)
+The Vercel website is a lightweight, responsive product page for the Yehaw Android browser. It is not a browser running inside the website and it does not provide an APK download until a signed public release has been published.
 
-Any static server:
+## Build and test Android
+
+The repository includes GitHub Actions workflows for Android builds and emulator smoke tests. View them at:
+
+https://github.com/clyde6205/yehaw.app/actions
+
+Open the project in Android Studio and run the Gradle Android application configuration. A debug build can be produced with:
 
 ```bash
-cd yehaw
-npx serve -p 3000
-# or python3 -m http.server 3000
+./gradlew :app:assembleDebug
 ```
 
-Open http://localhost:3000  
-Admin: http://localhost:3000/admin/  
-**Security warning:** the current static admin interface is not production-grade authentication. Do not deploy it with real administrative data or expose it as a secure admin console. Replace it with server-side authentication, authorization, audit logging and protected storage before commercial launch.
+For release distribution, configure a user-owned signing key and secrets outside source control. Never commit signing keys or production credentials.
 
-## Deploy
+## Vercel
 
-1. Upload the whole `yehaw` folder to Cloudflare Pages, Vercel, Netlify, or any static host.
-2. Point `yehaw.app` DNS to the host.
-3. Force HTTPS.
-4. Test “Add to Home Screen” on a real phone.
+The Vercel project is linked to this GitHub repository. The static product site is built with:
 
-## Monetization
+```bash
+npm ci
+npm run build
+```
 
-1. Create Google AdSense account and add `yehaw.app`.
-2. After approval, create ad units and paste the publisher ID + slot IDs into Admin → AdSense, **and** update the two script tags in `index.html`.
-3. Traffic monetizes via display ads. Later you can add affiliate parameters on service links if the programs allow it.
+The build output is `public/`. Vercel serves the static browser product page; Android APKs are built separately through the Android CI workflow.
 
-## “Don’t let them drift”
+## Release principles
 
-- Services open in a new tab → Yehaw stays in the browser history / task switcher.
-- Fixed Home button and bottom nav always available.
-- When installed as PWA, the icon always opens Yehaw (not the external service).
-- True “set as default browser” is not possible for a web app without OS-level permission; the sticky chrome is the practical solution that works today.
-
-## Admin
-
-All config overrides are stored in the browser’s localStorage.  
-For multi-device admin you will later want a tiny backend or a JSON file you edit and redeploy. For first launch the local admin is enough.
-
-## Next steps for you
-
-1. Change the admin password.
-2. Update the static currency rates with current approximate values.
-3. Replace the green placeholder icons with a real logo (192 + 512 PNG).
-4. Add your real AdSense IDs when ready.
-5. Deploy and submit the site to AdSense.
-6. Give the `PROMPT_FOR_MISTRAL.md` file to Mistral (or any AI) if you want further polish, Tagalog, analytics, etc.
-
-This PWA and the native Android browser are separate deliverables. Neither should be described as globally enterprise-launch-ready until its security, accessibility, performance, privacy, operational and device release gates have passed.
+- Do not claim that a release is available until a signed APK/AAB is actually published.
+- Do not claim support for every Android device or website; test across representative Android and WebView versions.
+- Do not enable production analytics, ads, accounts, payments or data collection without their security, privacy and legal requirements being implemented and reviewed.
+- Keep user data and signing credentials out of source control.
