@@ -49,16 +49,20 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
         db.beginTransaction()
         try {
             db.delete("session_tabs", null, null)
-            tabs.take(4).forEachIndexed { index, tab ->
-                if (isWebUrl(tab.url)) {
-                    db.insert("session_tabs", null, ContentValues().apply {
-                        put("position", index)
-                        put("url", tab.url.take(4096))
-                        put("title", tab.title.take(160))
-                        put("scroll_y", tab.scrollY.coerceAtLeast(0))
-                        put("is_active", if (index == activeIndex) 1 else 0)
-                    })
-                }
+            // Filter invalid entries before applying the four-tab limit. Otherwise a rejected
+            // file:// tab near the front could consume a slot and silently discard a real tab.
+            val validTabs = tabs.mapIndexedNotNull { originalIndex, tab ->
+                if (isWebUrl(tab.url)) originalIndex to tab else null
+            }.take(4)
+            val activeStoredIndex = validTabs.indexOfFirst { it.first == activeIndex }
+            validTabs.forEachIndexed { storedIndex, (_, tab) ->
+                db.insert("session_tabs", null, ContentValues().apply {
+                    put("position", storedIndex)
+                    put("url", tab.url.take(4096))
+                    put("title", tab.title.take(160))
+                    put("scroll_y", tab.scrollY.coerceAtLeast(0))
+                    put("is_active", if (storedIndex == activeStoredIndex) 1 else 0)
+                })
             }
             db.setTransactionSuccessful()
         } finally {
