@@ -12,12 +12,12 @@ val hasReleaseSigning = listOf(releaseKeystorePath, releaseKeystorePassword, rel
 
 android {
     namespace = "app.yehaw.browser"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.yehaw.browser"
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 2
         versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
