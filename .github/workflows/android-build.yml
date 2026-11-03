@@ -71,7 +71,7 @@ jobs:
       - name: Report APK outputs
         run: |
           ls -lh app/build/outputs/apk/debug/app-debug.apk
-          find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -exec ls -lh {} \\;
+          find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -exec ls -lh {} +
           if [ "$HAS_RELEASE_SIGNING" = "true" ]; then
             "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
           else
