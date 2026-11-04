@@ -23,13 +23,12 @@ jobs:
   emulator-smoke:
     name: API ${{ matrix.api-level }} browser smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     strategy:
       fail-fast: false
-      # Hosted emulator instances are resource-intensive; serialize API coverage.
       max-parallel: 1
       matrix:
-        api-level: [23, 29, 35]
+        api-level: [23, 29, 35, 36]
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -41,7 +40,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
       - name: Run browser smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
