@@ -1,0 +1,60 @@
+name: Import uploaded Yehaw Android project
+
+on:
+  push:
+    paths:
+      - ".github/workflows/import-yehaw-zip.yml"
+      - "yehaw_app_android (1).zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-yehaw-zip
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Extract uploaded project archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "yehaw_app_android (1).zip"
+          unzip -t "yehaw_app_android (1).zip"
+          unzip -oq "yehaw_app_android (1).zip" -d .
+          test -f yehaw_app/package.json
+          test -f yehaw_app/android/gradlew
+          echo "Extracted project files:"
+          find yehaw_app -type f | sort | tee /tmp/yehaw-files.txt
+          echo "Count: $(wc -l < /tmp/yehaw-files.txt)"
+
+      - name: Commit extracted source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yehaw_app/
+          if git diff --cached --quiet; then
+            echo "No extracted project changes to commit."
+            exit 0
+          fi
+          git commit -m "Import complete Yehaw Android browser project"
+          git push origin HEAD:main
+
+      - name: Verify imported files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-tree -r --name-only HEAD -- yehaw_app/ | tee /tmp/imported-files.txt
+          test -s /tmp/imported-files.txt
+          echo "Committed $(wc -l < /tmp/imported-files.txt) project files.";
