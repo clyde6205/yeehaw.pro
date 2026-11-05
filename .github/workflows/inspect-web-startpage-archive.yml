@@ -1,0 +1,37 @@
+name: Inspect Claude Yehaw web start-page archive
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Validate and inventory the exact Claude archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="yehaw_web_startpage.zip"
+          test -s "$archive"
+          unzip -t "$archive"
+          echo "===== ARCHIVE FILE LIST ====="
+          unzip -Z1 "$archive"
+          mkdir -p /tmp/yehaw-web-review
+          unzip -oq "$archive" -d /tmp/yehaw-web-review
+          echo "===== EXTRACTED TREE ====="
+          find /tmp/yehaw-web-review -type f -printf '%P (%s bytes)\n' | sort
+          echo "===== TEXT FILE PREVIEWS ====="
+          while IFS= read -r file; do
+            case "$file" in
+              *.html|*.css|*.js|*.json|*.md|*.txt|*.yml|*.yaml)
+                echo "----- ${file#/tmp/yehaw-web-review/} -----"
+                sed -n '1,240p' "$file"
+                ;;
+            esac
+          done < <(find /tmp/yehaw-web-review -type f | sort)
