@@ -1,6 +1,11 @@
 name: Inspect Claude Yehaw web start-page archive
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-web-startpage-archive.yml"
+      - "yehaw_web_startpage.zip"
   workflow_dispatch:
 
 permissions:
