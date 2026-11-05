@@ -30,6 +30,7 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -50,6 +51,7 @@ import android.widget.Toast
  *
  * WebView uses the Android System WebView engine; the engine is not bundled into this APK.
  * JavaScript is enabled for modern-site compatibility. No JavaScript interfaces are exposed.
+ * The start page is a local in-APK asset served through request interception: it needs no network.
  */
 class MainActivity : Activity() {
     private data class BrowserTab(
@@ -185,8 +187,8 @@ class MainActivity : Activity() {
                 tab.evicted = true
             }
         }
-        val active = tabs[activeTabIndex]
-        addressBar.setText(active.currentUrl)
+        val active = tabs[activeIndex]
+        addressBar.setText(displayUrl(active.currentUrl))
         addressBar.setSelection(addressBar.text.length)
         statusText.text = "Restoring last session…"
         return true
@@ -209,6 +211,16 @@ class MainActivity : Activity() {
         return uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank()
     }
 
+    private fun isStartPageUrl(value: String?): Boolean {
+        if (value.isNullOrBlank()) return false
+        return Uri.parse(value).host == START_HOST
+    }
+
+    private fun displayUrl(url: String?): String {
+        if (url.isNullOrBlank()) return ""
+        return if (isStartPageUrl(url)) "" else url
+    }
+
     private fun buildInterface() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -220,7 +232,7 @@ class MainActivity : Activity() {
         }
 
         val brand = TextView(this).apply {
-            text = "YEHAW  ·  LIGHTWEIGHT BROWSER"
+            text = "YEEHAW  ·  LIGHTWEIGHT BROWSER"
             textSize = 12f
             setTextColor(0xFF475569.toInt())
             setPadding(dp(14), dp(10), dp(14), dp(4))
@@ -534,8 +546,29 @@ class MainActivity : Activity() {
         }
 
         webView.webViewClient = object : WebViewClient() {
+            // The start page is an in-APK asset: it is served locally and never touches the network.
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val uri = request?.url ?: return null
+                if (uri.host == START_HOST) {
+                    return try {
+                        WebResourceResponse("text/html", "utf-8", assets.open("startpage.html"))
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                return null
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
+                if (uri.host == START_HOST) {
+                    // Actions from the start page map directly to real browser functions.
+                    if (uri.getQueryParameter("a") != null) {
+                        handleStartPageAction(uri)
+                        return true
+                    }
+                    return false
+                }
                 return when (uri.scheme?.lowercase()) {
                     "http", "https" -> false
                     else -> {
@@ -553,7 +586,7 @@ class MainActivity : Activity() {
                 if (!url.isNullOrBlank()) {
                     tab.currentUrl = url
                     if (view === currentWebView()) {
-                        addressBar.setText(url)
+                        addressBar.setText(displayUrl(url))
                         addressBar.setSelection(addressBar.text.length)
                     }
                 }
@@ -562,10 +595,10 @@ class MainActivity : Activity() {
 
             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
-                if (url.isNullOrBlank() || (!url.startsWith("https://") && !url.startsWith("http://"))) return
+                if (url.isNullOrBlank() || isStartPageUrl(url)) return
                 tab.currentUrl = url
                 if (view === currentWebView()) {
-                    addressBar.setText(url)
+                    addressBar.setText(displayUrl(url))
                     addressBar.setSelection(addressBar.text.length)
                 }
                 if (tab.lastHistoryUrl != url) {
@@ -577,7 +610,7 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 val tab = tabs.firstOrNull { it.webView === view }
-                if (tab != null && !url.isNullOrBlank() &&
+                if (tab != null && !url.isNullOrBlank() && !isStartPageUrl(url) &&
                     (url.startsWith("https://") || url.startsWith("http://"))) {
                     tab.currentUrl = url
                     if (tab.lastHistoryUrl != url) {
@@ -653,6 +686,38 @@ class MainActivity : Activity() {
         webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             downloadFile(url, userAgent, contentDisposition, mimeType)
         })
+    }
+
+    /** Every start page tile is wired to a real browser function. No placeholders. */
+    private fun handleStartPageAction(uri: Uri) {
+        when (uri.getQueryParameter("a")) {
+            "search" -> {
+                val query = uri.getQueryParameter("q").orEmpty().trim()
+                if (query.isNotEmpty()) {
+                    addressBar.setText(query)
+                    navigateFromAddressBar()
+                }
+            }
+            "home" -> loadHome()
+            "saved" -> showSavedItems(true)
+            "history" -> showSavedItems(false)
+            "downloads" -> openDownloads()
+            "tabs" -> showTabPicker()
+            "find" -> findOnPage()
+            "newtab" -> createTab(HOME_URL)
+            "privacy" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    startActivity(Intent(this, PrivateBrowserActivity::class.java))
+                } else {
+                    Toast.makeText(this, "Isolated private browsing requires Android 9 or later.", Toast.LENGTH_LONG).show()
+                }
+            }
+            "share" -> shareCurrentPage()
+            "save" -> saveBookmark()
+            "offline" -> showOfflinePages()
+            "more" -> showBrowserMenu()
+            else -> loadHome()
+        }
     }
 
     private fun navigateFromAddressBar() {
@@ -762,14 +827,15 @@ class MainActivity : Activity() {
     }
 
     private fun safeDownloadFilename(value: String): String {
-        val cleaned = value.replace(Regex("[\\\\/:*?\"<>|\\r\\n]"), "_").trim().trim('.')
+        val cleaned = value.replace(Regex("[\\/:*?\"<>|\r\n]"), "_").trim().trim('.')
         return cleaned.take(180).ifBlank { "download" }
     }
 
     private fun showTabPicker() {
         if (tabs.isEmpty()) return
         val labels = tabs.mapIndexed { index, tab ->
-            "${index + 1}. ${tab.title}  ·  ${Uri.parse(tab.currentUrl).host ?: "New tab"}"
+            val host = if (isStartPageUrl(tab.currentUrl)) "Start page" else Uri.parse(tab.currentUrl).host ?: "New tab"
+            "${index + 1}. ${tab.title}  ·  $host"
         }.toTypedArray()
         android.app.AlertDialog.Builder(this)
             .setTitle("Open tabs")
@@ -821,7 +887,7 @@ class MainActivity : Activity() {
             pageContainer.addView(tab.webView)
             if (restoreUrl != null) tab.webView.loadUrl(restoreUrl)
         }
-        addressBar.setText(tab.currentUrl)
+        addressBar.setText(displayUrl(tab.currentUrl))
         addressBar.setSelection(addressBar.text.length)
         statusText.text = tab.title
     }
@@ -873,7 +939,7 @@ class MainActivity : Activity() {
             return
         }
         if (roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
-            Toast.makeText(this, "Yehaw is already the default browser.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "YeeHaw is already the default browser.", Toast.LENGTH_SHORT).show()
             return
         }
         startActivityForResult(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER), REQUEST_BROWSER_ROLE)
@@ -948,7 +1014,7 @@ class MainActivity : Activity() {
 
     private fun saveBookmark() {
         val tab = tabs.getOrNull(activeTabIndex) ?: return
-        if (!tab.currentUrl.startsWith("http")) return
+        if (!tab.currentUrl.startsWith("http") || isStartPageUrl(tab.currentUrl)) return
         browserStore.addBookmark(tab.currentUrl, tab.title)
         Toast.makeText(this, "Bookmark saved.", Toast.LENGTH_SHORT).show()
     }
@@ -990,7 +1056,7 @@ class MainActivity : Activity() {
         val tab = tabs.getOrNull(activeTabIndex) ?: return
         val webView = currentWebView() ?: return
         val pageUrl = webView.url ?: tab.currentUrl
-        if (!isWebUrl(pageUrl)) {
+        if (!isWebUrl(pageUrl) || isStartPageUrl(pageUrl)) {
             Toast.makeText(this, "Only normal web pages can be saved.", Toast.LENGTH_SHORT).show()
             return
         }
@@ -1107,7 +1173,7 @@ class MainActivity : Activity() {
             if (desktopMode) "Use mobile website" else "Request desktop website",
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
-            "Clear browsing data", "Browser engine information", "Make Yehaw default browser", "New private window", "Search engine", "App permissions"
+            "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions"
         )
         AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
             when (which) {
@@ -1204,7 +1270,7 @@ class MainActivity : Activity() {
         if (requestCode == REQUEST_BROWSER_ROLE) {
             val held = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                 getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_BROWSER)
-            Toast.makeText(this, if (held) "Yehaw is now the default browser." else "Default browser selection was not changed.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, if (held) "YeeHaw is now the default browser." else "Default browser selection was not changed.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1251,7 +1317,9 @@ class MainActivity : Activity() {
         private const val REQUEST_SITE_PERMISSION = 4104
         private const val REQUEST_GEO_PERMISSION = 4105
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        private const val HOME_URL = "https://yehawapp.vercel.app/"
+        // The start page is bundled in the APK and served from memory: no network, instant on any device.
+        private const val START_HOST = "start.yeehaw.internal"
+        private const val HOME_URL = "https://start.yeehaw.internal/"
         private val SEARCH_ENGINES = linkedMapOf(
             "Google" to "https://www.google.com/search?q=",
             "DuckDuckGo" to "https://duckduckgo.com/?q=",
