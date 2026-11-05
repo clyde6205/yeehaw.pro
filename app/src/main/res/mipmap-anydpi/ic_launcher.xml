@@ -1,0 +1,24 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Legacy square launcher icon (API 23-25): sunset + cowboy hat -->
+    <path android:fillColor="#FB923C" android:pathData="M0,0h108v48H0z" />
+    <path android:fillColor="#F97316" android:pathData="M0,48h108v28H0z" />
+    <path android:fillColor="#EA580C" android:pathData="M0,76h108v16H0z" />
+    <path android:fillColor="#FDE68A" android:pathData="M42,62a12,12 0 1,0 24,0a12,12 0 1,0 -24,0z" />
+    <path android:fillColor="#7C2D12" android:pathData="M0,92h108v16H0z" />
+    <path
+        android:fillColor="#432818"
+        android:pathData="M26,60 H82 C88,60 92,63 92,67 C92,71 88,73 82,73 H26 C20,73 16,71 16,67 C16,63 20,60 26,60 Z" />
+    <path
+        android:fillColor="#432818"
+        android:pathData="M40,60 V46 C40,39 45,34 54,34 C63,34 68,39 68,46 V60 Z" />
+    <path
+        android:fillColor="#8B5A2B"
+        android:pathData="M40,54 h28 v6 H40 Z" />
+    <path
+        android:fillColor="#FFF3C4"
+        android:pathData="M54,52.4 l1.3,2.6 2.9,0.4 -2.1,2.1 0.5,2.9 -2.6,-1.4 -2.6,1.4 0.5,-2.9 -2.1,-2.1 2.9,-0.4 z" />
+</vector>
