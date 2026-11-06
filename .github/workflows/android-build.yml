@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   debug-build:
@@ -46,6 +46,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
+      - name: Ensure pinned debug keystore (stable signatures for clean updates)
+        run: |
+          if [ ! -f app/debug.keystore ]; then
+            keytool -genkeypair -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=YeeHaw Debug, O=YeeHaw, C=US"
+            git config user.name "yeehaw-ci"
+            git config user.email "ci@yeehaw.pro"
+            git add app/debug.keystore
+            git commit -m "Pin stable debug signing keystore for clean over-the-top updates"
+            git push
+          fi
       - name: Prepare production signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

@@ -24,6 +24,14 @@ android {
     }
 
     signingConfigs {
+        create("debugPinned") {
+            if (file("debug.keystore").exists()) {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("production") {
             if (hasReleaseSigning) {
                 storeFile = file(releaseKeystorePath!!)
@@ -47,6 +55,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            if (file("debug.keystore").exists()) signingConfig = signingConfigs.getByName("debugPinned")
         }
     }
 
