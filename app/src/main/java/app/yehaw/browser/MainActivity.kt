@@ -81,6 +81,7 @@ class MainActivity : Activity() {
     private var searchEngine = "Google"
     private var memorySaver = false
     private var preferOfflineCache = false
+    private var turboMode = true
     private var pendingWebPermission: PermissionRequest? = null
     private var pendingWebResources: Array<String> = emptyArray()
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
@@ -109,6 +110,7 @@ class MainActivity : Activity() {
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
         memorySaver = browserPreferences.getBoolean("memory_saver", false)
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
+        turboMode = browserPreferences.getBoolean("turbo_mode", true)
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
@@ -410,6 +412,8 @@ class MainActivity : Activity() {
             displayZoomControls = false
             setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
+            mediaPlaybackRequiresUserGesture = true
+            offscreenPreRaster = true
             setSupportMultipleWindows(true)
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
@@ -601,6 +605,17 @@ class MainActivity : Activity() {
                         WebResourceResponse("text/html", "utf-8", assets.open("startpage.html"))
                     } catch (_: Exception) {
                         null
+                    }
+                }
+                if (turboMode) {
+                    val path = (uri.path ?: "").lowercase()
+                    val heavy = path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
+                        path.endsWith(".gif") || path.endsWith(".webp") || path.endsWith(".svg") ||
+                        path.endsWith(".ico") || path.endsWith(".mp4") || path.endsWith(".webm") ||
+                        path.endsWith(".woff") || path.endsWith(".woff2") || path.endsWith(".ttf") ||
+                        path.endsWith(".otf")
+                    if (heavy) {
+                        return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                     }
                 }
                 return null
@@ -1372,9 +1387,10 @@ class MainActivity : Activity() {
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
             "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
-            if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever"
+            if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
+            if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.4").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.5").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
@@ -1454,6 +1470,12 @@ class MainActivity : Activity() {
                     startActivity(settingsIntent)
                 }
                 9 -> openProUpgrade()
+                10 -> {
+                    turboMode = !turboMode
+                    browserPreferences.edit().putBoolean("turbo_mode", turboMode).apply()
+                    currentWebView()?.reload()
+                    Toast.makeText(this, if (turboMode) "Turbo: images and video blocked for the fastest loads." else "Turbo off: full sites with images.", Toast.LENGTH_LONG).show()
+                }
             }
         }.show()
     }
