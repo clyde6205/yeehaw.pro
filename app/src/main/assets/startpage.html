@@ -26,20 +26,20 @@
   .tile{display:flex;flex-direction:column;align-items:center;gap:7px;text-decoration:none;color:#f3f7ff}
   .icon{width:56px;height:56px;border-radius:14px;background:#17263b;border:1px solid #26364d;
     display:grid;place-items:center;color:#b8f36b}
-  .icon svg{width:26px;height:26px}
+  .icon svg{width:36px;height:36px}
   .icon:nth-child(3n){color:#82b7ff}
   .tile:active .icon{background:#213a55}
-  .label{font-size:.72rem;color:#a5b4ca;text-align:center}
+  .label{font-size:.84rem;color:#a5b4ca;text-align:center}
   .tagline{padding:4px 22px 6px;color:#a5b4ca;font-size:.88rem;text-align:center}
   .tagline b{color:#f3f7ff;display:block;font-size:1.02rem;margin-bottom:5px}
   .version{color:#5a6b84;font-size:.68rem;text-align:center;padding-bottom:6px}
   .legal{color:#4a5a74;font-size:.62rem;text-align:center;padding:0 16px 14px;line-height:1.6}
-  nav{margin-top:auto;display:flex;justify-content:space-around;padding:10px 6px calc(12px + env(safe-area-inset-bottom));
+  nav{margin-top:auto;display:flex;justify-content:space-around;padding:12px 4px calc(14px + env(safe-area-inset-bottom));
     border-top:1px solid #1a2637;background:#0d1523}
-  nav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:#a9b9ce;padding:4px 8px;text-decoration:none}
-  nav a svg{width:19px;height:19px}
+  nav a{display:flex;flex-direction:column;align-items:center;gap:6px;color:#dce8f7;padding:10px 4px;text-decoration:none;flex:1}
+  nav a svg{width:64px;height:64px}
   nav a:active{color:#b8f36b}
-  nav a small{font-size:.58rem;color:#8ea0ba}
+  nav a small{font-size:1rem;font-weight:800;color:#f3f7ff}
 </style>
 </head>
 <body>
@@ -60,24 +60,24 @@
   </form>
   <div class="stats">Data used: <b id="dataUsed">0 B</b> &nbsp;·&nbsp; Saved offline: <b id="offlineSaved">0 B</b></div>
   <div class="tiles">
-    <a class="tile" href="?a=saved"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.7 5.5 6 .9-4.3 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.3 9.9l6-.9z"/></svg></span><span class="label">Saved</span></a>
-    <a class="tile" href="?a=history"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3.5 2.2"/></svg></span><span class="label">History</span></a>
-    <a class="tile" href="?a=downloads"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 11 4.5 4.5 4.5-4.5"/><path d="M4.5 19.5h15"/></svg></span><span class="label">Files</span></a>
-    <a class="tile" href="?a=tabs"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="12.5" height="12.5" rx="2"/><path d="M4.5 8.5H17a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8.5z"/></svg></span><span class="label">Tabs</span></a>
-    <a class="tile" href="?a=privacy"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5v6c0 4.6-3 7.6-7 9.5-4-1.9-7-4.9-7-9.5v-6z"/><path d="m9 11.8 2.2 2.2 4-4.5"/></svg></span><span class="label">Privacy</span></a>
-    <a class="tile" href="?a=find"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><span class="label">Find</span></a>
-    <a class="tile" href="?a=apps"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="label">Apps</span></a>
-    <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label">Share</span></a>
+    <a class="tile" href="?a=saved"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.7 5.5 6 .9-4.3 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.3 9.9l6-.9z"/></svg></span><span class="label">Saved</span></a>
+    <a class="tile" href="?a=history"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3.5 2.2"/></svg></span><span class="label">History</span></a>
+    <a class="tile" href="?a=downloads"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 11 4.5 4.5 4.5-4.5"/><path d="M4.5 19.5h15"/></svg></span><span class="label">Files</span></a>
+    <a class="tile" href="?a=tabs"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="12.5" height="12.5" rx="2"/><path d="M4.5 8.5H17a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8.5z"/></svg></span><span class="label">Tabs</span></a>
+    <a class="tile" href="?a=privacy"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5v6c0 4.6-3 7.6-7 9.5-4-1.9-7-4.9-7-9.5v-6z"/><path d="m9 11.8 2.2 2.2 4-4.5"/></svg></span><span class="label">Privacy</span></a>
+    <a class="tile" href="?a=find"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><span class="label">Find</span></a>
+    <a class="tile" href="?a=apps"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="label">Apps</span></a>
+    <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label">Share</span></a>
   </div>
   <div class="tagline"><b>Your web, without the clutter.</b>A simple browser surface for the pages you need.</div>
-  <div class="version">YeeHaw™ Browser v0.4.5</div>
+  <div class="version">YeeHaw™ Browser v0.4.6</div>
   <div class="legal">YeeHaw™ · Free tier for ages 13+ · Pro is optional · No financial advice · Independent browser, not affiliated with Google</div>
   <nav>
-    <a href="?a=home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><small>Home</small></a>
-    <a href="javascript:history.back()" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><small>Back</small></a>
-    <a href="javascript:history.forward()" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg><small>Next</small></a>
-    <a href="?a=newtab" aria-label="New tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><small>New</small></a>
-    <a href="?a=more" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg><small>Menu</small></a>
+    <a href="?a=home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><small>Home</small></a>
+    <a href="?a=back" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><small>Back</small></a>
+    <a href="?a=forward" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg><small>Next</small></a>
+    <a href="?a=newtab" aria-label="New tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><small>New</small></a>
+    <a href="?a=more" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg><small>Menu</small></a>
   </nav>
   <script>
     window.yeehawStats=function(used,saved){var a=document.getElementById('dataUsed');var b=document.getElementById('offlineSaved');if(a){a.textContent=used;}if(b){b.textContent=saved;}};

@@ -769,6 +769,8 @@ class MainActivity : Activity() {
                 }
             }
             "home" -> loadHome()
+            "back" -> currentWebView()?.let { if (it.canGoBack()) it.goBack() }
+            "forward" -> currentWebView()?.let { if (it.canGoForward()) it.goForward() }
             "saved" -> showSavedItems(true)
             "history" -> showSavedItems(false)
             "downloads" -> openDownloads()
@@ -1390,7 +1392,7 @@ class MainActivity : Activity() {
             if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
             if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.5").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.6").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
