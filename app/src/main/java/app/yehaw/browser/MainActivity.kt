@@ -64,6 +64,10 @@ class MainActivity : Activity() {
         var lastHistoryUrl: String? = null
     )
 
+    private lateinit var brandText: TextView
+    private lateinit var addressRow: LinearLayout
+    private lateinit var controlsScroll: HorizontalScrollView
+    private lateinit var libraryControlsScroll: HorizontalScrollView
     private lateinit var addressBar: EditText
     private lateinit var pageContainer: LinearLayout
     private lateinit var statusText: TextView
@@ -190,6 +194,7 @@ class MainActivity : Activity() {
         val active = tabs[activeIndex]
         addressBar.setText(displayUrl(active.currentUrl))
         addressBar.setSelection(addressBar.text.length)
+        updateChromeVisibility(active.currentUrl)
         statusText.text = "Restoring last session…"
         return true
     }
@@ -216,6 +221,17 @@ class MainActivity : Activity() {
         return Uri.parse(value).host == START_HOST
     }
 
+    /** On the start page the native chrome is fully hidden: exactly one search bar exists. */
+    private fun updateChromeVisibility(url: String?) {
+        val onHomePage = url.isNullOrBlank() || isStartPageUrl(url)
+        val visibility = if (onHomePage) View.GONE else View.VISIBLE
+        brandText.visibility = visibility
+        addressRow.visibility = visibility
+        controlsScroll.visibility = visibility
+        libraryControlsScroll.visibility = visibility
+        statusText.visibility = visibility
+    }
+
     private fun displayUrl(url: String?): String {
         if (url.isNullOrBlank()) return ""
         return if (isStartPageUrl(url)) "" else url
@@ -224,20 +240,20 @@ class MainActivity : Activity() {
     private fun buildInterface() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFFF7F8FA.toInt())
+            setBackgroundColor(0xFF080D18.toInt())
             setOnApplyWindowInsetsListener { view, insets ->
                 view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
                 insets
             }
         }
 
-        val brand = TextView(this).apply {
+        brandText = TextView(this).apply {
             text = "YEEHAW  ·  LIGHTWEIGHT BROWSER"
             textSize = 12f
-            setTextColor(0xFF475569.toInt())
+            setTextColor(0xFFB8F36B.toInt())
             setPadding(dp(14), dp(10), dp(14), dp(4))
         }
-        root.addView(brand)
+        root.addView(brandText)
 
         val addressRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -274,10 +290,11 @@ class MainActivity : Activity() {
         controls.addView(actionButton("+") { createTab(HOME_URL) })
         controls.addView(actionButton("Tabs") { showTabPicker() })
         controls.addView(actionButton("Default") { requestDefaultBrowserRole() })
-        root.addView(HorizontalScrollView(this).apply {
+        controlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(controls)
-        })
+        }
+        root.addView(controlsScroll)
 
         val libraryControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -294,15 +311,16 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("Find") { findOnPage() })
         libraryControls.addView(actionButton("Share") { shareCurrentPage() })
         libraryControls.addView(actionButton("More") { showBrowserMenu() })
-        root.addView(HorizontalScrollView(this).apply {
+        libraryControlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(libraryControls)
-        })
+        }
+        root.addView(libraryControlsScroll)
 
         statusText = TextView(this).apply {
             text = "Ready"
             textSize = 11f
-            setTextColor(0xFF64748B.toInt())
+            setTextColor(0xFFA5B4CA.toInt())
             setPadding(dp(12), dp(2), dp(12), dp(4))
             maxLines = 1
         }
@@ -320,6 +338,7 @@ class MainActivity : Activity() {
                 1f
             )
         )
+        updateChromeVisibility(HOME_URL)
         setContentView(root)
     }
 
@@ -590,7 +609,10 @@ class MainActivity : Activity() {
                         addressBar.setSelection(addressBar.text.length)
                     }
                 }
-                if (view === currentWebView()) statusText.text = "Loading…"
+                if (view === currentWebView()) {
+                    updateChromeVisibility(url)
+                    statusText.text = "Loading…"
+                }
             }
 
             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
@@ -600,6 +622,7 @@ class MainActivity : Activity() {
                 if (view === currentWebView()) {
                     addressBar.setText(displayUrl(url))
                     addressBar.setSelection(addressBar.text.length)
+                    updateChromeVisibility(url)
                 }
                 if (tab.lastHistoryUrl != url) {
                     browserStore.addHistory(url, tab.title)
@@ -889,6 +912,7 @@ class MainActivity : Activity() {
         }
         addressBar.setText(displayUrl(tab.currentUrl))
         addressBar.setSelection(addressBar.text.length)
+        updateChromeVisibility(tab.currentUrl)
         statusText.text = tab.title
     }
 

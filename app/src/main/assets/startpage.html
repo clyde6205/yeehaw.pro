@@ -10,8 +10,9 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;background:#080d18;color:#f3f7ff;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
     display:flex;flex-direction:column;min-height:100vh}
-  header{padding:22px 18px 6px}
-  .brand{font-weight:900;letter-spacing:-.05em;font-size:1.25rem;color:#b8f36b}
+  header{padding:26px 18px 8px;text-align:center}
+  .hat{display:block;margin:0 auto 8px}
+  .brand{font-weight:900;letter-spacing:-.05em;font-size:1.3rem;color:#b8f36b}
   .brand span{color:#f3f7ff}
   form{padding:10px 18px 4px}
   .search{display:flex;gap:8px}
@@ -35,7 +36,15 @@
 </style>
 </head>
 <body>
-  <header><div class="brand">yee<span>Haw</span> · browser</div></header>
+  <header>
+    <svg class="hat" width="64" height="52" viewBox="0 0 72 52" aria-hidden="true">
+      <path fill="#b8f36b" d="M4,40 C10,47 28,50 40,50 C52,50 64,47 68,40 C69,37 66,35 62,36 C50,40 22,40 10,36 C6,35 3,37 4,40 Z"/>
+      <path fill="#b8f36b" d="M17,37 C15,24 19,10 25,10 C29,10 31,15 36,15 C41,15 43,10 47,10 C53,10 57,24 55,37 Z"/>
+      <path fill="#82b7ff" d="M18,31 C24,34 48,34 54,31 L53,37 C46,40 26,40 19,37 Z"/>
+      <path fill="#080d18" d="M36,29 l1.3,2.6 2.8,.3 -2,1.9 .5,2.8 -2.6,-1.4 -2.6,1.4 .5,-2.8 -2,-1.9 2.8,-.3 z"/>
+    </svg>
+    <div class="brand">yee<span>Haw</span> · browser</div>
+  </header>
   <form onsubmit="event.preventDefault();var q=document.getElementById('q').value.trim();if(q){location.href='?a=search&q='+encodeURIComponent(q);}return false;">
     <div class="search">
       <input id="q" type="search" placeholder="Search or enter website address" autocomplete="off" autocapitalize="off">
