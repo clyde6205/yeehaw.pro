@@ -1093,7 +1093,7 @@ class MainActivity : Activity() {
         }
         val product = proProductDetails
         if (product != null && billingClient?.isReady == true) {
-            val offerToken = product.oneTimePurchaseOfferDetails?.offerToken ?: ""
+            val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken ?: ""
             val flowParams = com.android.billingclient.api.BillingFlowParams.newBuilder()
                 .setProductDetailsParamsList(listOf(
                     com.android.billingclient.api.BillingFlowParams.ProductDetailsParams.newBuilder()
@@ -1107,7 +1107,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("YeeHaw Pro")
-            .setMessage("Pro removes ads forever and funds free development. The free tier keeps every tool working forever — nothing is paywalled.\n\nPayments follow your Google Play account: UPI and netbanking in India, M-Pesa and carrier billing in Africa, cards and local wallets worldwide.\n\nPro activates automatically once the store listing is live.")
+            .setMessage("Pro removes all ads forever and funds free development. The free tier keeps every tool working forever — nothing is paywalled.\n\nA small monthly subscription, automatically priced for your country by Google Play: UPI in India, M-Pesa in Africa, cards and local wallets worldwide. Cancel anytime in Play Store settings.\n\nPro activates automatically once the store listing is live.")
             .setPositiveButton("OK", null)
             .show()
     }
@@ -1143,7 +1143,7 @@ class MainActivity : Activity() {
             .setProductList(listOf(
                 com.android.billingclient.api.QueryProductDetailsParams.Product.newBuilder()
                     .setProductId(PRODUCT_ID_PRO)
-                    .setProductType(com.android.billingclient.api.BillingClient.ProductType.INAPP)
+                    .setProductType(com.android.billingclient.api.BillingClient.ProductType.SUBS)
                     .build()
             ))
             .build()
