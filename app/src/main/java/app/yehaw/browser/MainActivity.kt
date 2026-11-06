@@ -1374,7 +1374,7 @@ class MainActivity : Activity() {
             "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
             if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.4").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
