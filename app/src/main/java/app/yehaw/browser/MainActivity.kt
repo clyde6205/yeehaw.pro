@@ -390,7 +390,7 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
-        if (desktopMode) webView.settings.userAgentString = DESKTOP_USER_AGENT
+        webView.settings.userAgentString = if (desktopMode) DESKTOP_USER_AGENT else CHROME_USER_AGENT
 
         webView.setOnLongClickListener {
             val hit = webView.hitTestResult
@@ -1205,7 +1205,7 @@ class MainActivity : Activity() {
                     desktopMode = !desktopMode
                     browserPreferences.edit().putBoolean("desktop_mode", desktopMode).apply()
                     tabs.filterNot { it.evicted }.forEach { tab ->
-                        tab.webView.settings.userAgentString = if (desktopMode) DESKTOP_USER_AGENT else WebSettings.getDefaultUserAgent(this)
+                        tab.webView.settings.userAgentString = if (desktopMode) DESKTOP_USER_AGENT else CHROME_USER_AGENT
                         tab.webView.reload()
                     }
                 }
@@ -1340,6 +1340,7 @@ class MainActivity : Activity() {
         private const val REQUEST_FILE_CHOOSER = 4103
         private const val REQUEST_SITE_PERMISSION = 4104
         private const val REQUEST_GEO_PERMISSION = 4105
+        private const val CHROME_USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.
         private const val START_HOST = "start.yeehaw.internal"
