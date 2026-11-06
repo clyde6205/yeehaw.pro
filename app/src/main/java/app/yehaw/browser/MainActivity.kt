@@ -88,6 +88,9 @@ class MainActivity : Activity() {
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
     private var previousSystemUiVisibility = 0
     private var activeTabIndex = -1
+    private var lastRxSample = -1L
+    private var sessionDataUsed = 0L
+    private var sessionOfflineSaved = 0L
     private val maxTabs: Int by lazy {
         val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
         when {
@@ -614,6 +617,7 @@ class MainActivity : Activity() {
                 }
                 if (view === currentWebView()) {
                     updateChromeVisibility(url)
+                    sampleDataUsage()
                     statusText.text = "Loading…"
                 }
             }
@@ -655,7 +659,10 @@ class MainActivity : Activity() {
                         persistSession()
                     }
                 }
-                if (view === currentWebView()) statusText.text = "Ready"
+                if (view === currentWebView()) {
+                    statusText.text = "Ready"
+                    sampleDataUsage()
+                }
             }
 
             override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
@@ -742,6 +749,8 @@ class MainActivity : Activity() {
             "save" -> saveBookmark()
             "offline" -> showOfflinePages()
             "more" -> showBrowserMenu()
+            "apps" -> showSisterApps()
+            "shareapp" -> shareYeeHaw()
             else -> loadHome()
         }
     }
@@ -917,6 +926,7 @@ class MainActivity : Activity() {
         addressBar.setSelection(addressBar.text.length)
         updateChromeVisibility(tab.currentUrl)
         statusText.text = tab.title
+        sampleDataUsage()
     }
 
     private fun discardTabForMemory(tab: BrowserTab) {
@@ -1059,6 +1069,43 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Real, measured data accounting: network bytes received by this app, plus bytes served from offline storage. */
+    private fun sampleDataUsage() {
+        try {
+            val rx = android.net.TrafficStats.getUidRxBytes(applicationInfo.uid)
+            if (rx >= 0) {
+                if (lastRxSample >= 0 && rx > lastRxSample) sessionDataUsed += rx - lastRxSample
+                lastRxSample = rx
+            }
+        } catch (_: Exception) {
+        }
+        updateDataStatsDisplay()
+    }
+
+    private fun updateDataStatsDisplay() {
+        val view = currentWebView() ?: return
+        if (!isStartPageUrl(view.url)) return
+        view.evaluateJavascript(
+            "window.yeehawStats && window.yeehawStats('" + formatDataBytes(sessionDataUsed) + "','" + formatDataBytes(sessionOfflineSaved) + "')",
+            null
+        )
+    }
+
+    private fun formatDataBytes(bytes: Long): String = when {
+        bytes >= 1048576 -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
+        bytes >= 1024 -> (bytes / 1024).toString() + " KB"
+        else -> bytes.toString() + " B"
+    }
+
+    /** One-tap WhatsApp-ready share of the browser itself with a real download link. */
+    private fun shareYeeHaw() {
+        val share = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "YeeHaw Browser — fast, light, and it saves your data. Works great on any Android. Get it free: https://github.com/clyde6205/yeehaw.pro")
+        }
+        startActivity(Intent.createChooser(share, "Share YeeHaw"))
+    }
+
     private fun shareCurrentPage() {
         val tab = tabs.getOrNull(activeTabIndex) ?: return
         val share = Intent(Intent.ACTION_SEND).apply {
@@ -1162,6 +1209,7 @@ class MainActivity : Activity() {
     }
 
     private fun showOfflinePage(page: BrowserStore.OfflinePage) {
+        sessionOfflineSaved += page.content.toByteArray().size
         val content = ScrollView(this).apply {
             isFillViewport = true
             addView(TextView(this@MainActivity).apply {
