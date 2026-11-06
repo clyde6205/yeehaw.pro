@@ -1081,15 +1081,18 @@ class MainActivity : Activity() {
             }
             .distinctBy { it.second }
             .sortedBy { it.first.lowercase() }
-        if (apps.isEmpty()) {
-            Toast.makeText(this, "No other apps found on this device.", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val options = mutableListOf("ChatMe — Tap to Chat (private or groups)")
+        options.addAll(apps.map { it.first })
         AlertDialog.Builder(this)
-            .setTitle("Open app")
-            .setItems(apps.map { it.first }.toTypedArray()) { _, which ->
+            .setTitle("YeeHaw family apps")
+            .setItems(options.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    openChatMe()
+                    return@setItems
+                }
+                val app = apps.getOrNull(which - 1) ?: return@setItems
                 try {
-                    val launch = packageManager.getLaunchIntentForPackage(apps[which].second)
+                    val launch = packageManager.getLaunchIntentForPackage(app.second)
                     if (launch != null) startActivity(launch)
                     else Toast.makeText(this, "This app cannot be opened.", Toast.LENGTH_SHORT).show()
                 } catch (_: Exception) {
@@ -1098,6 +1101,21 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    /** ChatMe is the sister messenger: launch it if installed, otherwise open its page. */
+    private fun openChatMe() {
+        val launch = try {
+            packageManager.getLaunchIntentForPackage(CHATME_PACKAGE)
+        } catch (_: Exception) {
+            null
+        }
+        if (launch != null) {
+            startActivity(launch)
+            return
+        }
+        currentWebView()?.loadUrl(CHATME_URL) ?: createTab(CHATME_URL)
+        Toast.makeText(this, "ChatMe is not installed yet — opening chatme.pro to get it.", Toast.LENGTH_LONG).show()
     }
 
     private fun isProMode(): Boolean = browserPreferences.getBoolean("pro_mode", false)
@@ -1392,7 +1410,7 @@ class MainActivity : Activity() {
             if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
             if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.6").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.7").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
@@ -1546,6 +1564,8 @@ class MainActivity : Activity() {
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.
         private const val START_HOST = "start.yeehaw.internal"
+        private const val CHATME_PACKAGE = "com.clyde6205.chatmepro"
+        private const val CHATME_URL = "https://chatme.pro"
         private const val HOME_URL = "https://start.yeehaw.internal/"
         private val SEARCH_ENGINES = linkedMapOf(
             "Google" to "https://www.google.com/search?q=",
