@@ -50,4 +50,4 @@ If this policy changes, the updated version will appear here with a new date.
 
 ## Contact
 
-Questions? Contact us via GitHub: https://github.com/clyde6205/yeehaw.pro
+Questions? Email us at **ceo@yeehaw.pro** or via GitHub: https://github.com/clyde6205/yeehaw.pro
