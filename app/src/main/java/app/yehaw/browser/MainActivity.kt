@@ -266,6 +266,9 @@ class MainActivity : Activity() {
             textSize = 15f
             imeOptions = EditorInfo.IME_ACTION_GO
             setSelectAllOnFocus(false)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF18263A.toInt())
+            setTextColor(0xFFDCE8F7.toInt())
+            setHintTextColor(0xFF7B8BA3.toInt())
             setPadding(dp(12), dp(8), dp(12), dp(8))
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -289,7 +292,6 @@ class MainActivity : Activity() {
         controls.addView(actionButton("Home") { loadHome() })
         controls.addView(actionButton("+") { createTab(HOME_URL) })
         controls.addView(actionButton("Tabs") { showTabPicker() })
-        controls.addView(actionButton("Default") { requestDefaultBrowserRole() })
         controlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(controls)
@@ -302,14 +304,12 @@ class MainActivity : Activity() {
             setPadding(dp(2), 0, dp(2), dp(4))
         }
         libraryControls.addView(actionButton("Save") { saveBookmark() })
-        libraryControls.addView(actionButton("Bookmarks") { showSavedItems(true) })
-        libraryControls.addView(actionButton("History") { showSavedItems(false) })
-        libraryControls.addView(actionButton("Save offline") { saveOfflinePage() })
-        libraryControls.addView(actionButton("Offline") { showOfflinePages() })
-        libraryControls.addView(actionButton(if (preferOfflineCache) "Cache first: ON" else "Cache first") { toggleOfflineCachePreference() })
-        libraryControls.addView(actionButton("Downloads") { openDownloads() })
         libraryControls.addView(actionButton("Find") { findOnPage() })
         libraryControls.addView(actionButton("Share") { shareCurrentPage() })
+        libraryControls.addView(actionButton("Save offline") { saveOfflinePage() })
+        libraryControls.addView(actionButton("Offline") { showOfflinePages() })
+        libraryControls.addView(actionButton("Downloads") { openDownloads() })
+        libraryControls.addView(actionButton("Apps") { showSisterApps() })
         libraryControls.addView(actionButton("More") { showBrowserMenu() })
         libraryControlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -349,7 +349,10 @@ class MainActivity : Activity() {
             isAllCaps = false
             minWidth = dp(48)
             minHeight = dp(48)
-            setPadding(dp(4), 0, dp(4), 0)
+            setPadding(dp(10), 0, dp(10), 0)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF17263B.toInt())
+            setTextColor(0xFFDCE8F7.toInt())
+            stateListAnimator = null
             setOnClickListener { action() }
         }
     }
@@ -1016,6 +1019,36 @@ class MainActivity : Activity() {
             }
             REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(granted)
         }
+    }
+
+    /** One-tap launcher for the user's other apps — sister-app ecosystem straight from the toolbar. */
+    private fun showSisterApps() {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = packageManager.queryIntentActivities(intent, 0)
+            .mapNotNull { info ->
+                val activity = info.activityInfo
+                if (activity == null || !activity.enabled || activity.packageName == packageName) null
+                else activity.loadLabel(packageManager).toString() to activity.packageName
+            }
+            .distinctBy { it.second }
+            .sortedBy { it.first.lowercase() }
+        if (apps.isEmpty()) {
+            Toast.makeText(this, "No other apps found on this device.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Open app")
+            .setItems(apps.map { it.first }.toTypedArray()) { _, which ->
+                try {
+                    val launch = packageManager.getLaunchIntentForPackage(apps[which].second)
+                    if (launch != null) startActivity(launch)
+                    else Toast.makeText(this, "This app cannot be opened.", Toast.LENGTH_SHORT).show()
+                } catch (_: Exception) {
+                    Toast.makeText(this, "This app cannot be opened.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
     }
 
     private fun openDownloads() {
