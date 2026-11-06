@@ -34,10 +34,12 @@
   .tagline b{color:#f3f7ff;display:block;font-size:1.02rem;margin-bottom:5px}
   .version{color:#5a6b84;font-size:.68rem;text-align:center;padding-bottom:6px}
   .legal{color:#4a5a74;font-size:.62rem;text-align:center;padding:0 16px 14px;line-height:1.6}
-  nav{margin-top:auto;display:flex;justify-content:space-around;padding:12px 10px calc(14px + env(safe-area-inset-bottom));
+  nav{margin-top:auto;display:flex;justify-content:space-around;padding:10px 6px calc(12px + env(safe-area-inset-bottom));
     border-top:1px solid #1a2637;background:#0d1523}
-  nav a{color:#a9b9ce;font-size:19px;padding:10px 14px;text-decoration:none}
+  nav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:#a9b9ce;padding:4px 8px;text-decoration:none}
+  nav a svg{width:19px;height:19px}
   nav a:active{color:#b8f36b}
+  nav a small{font-size:.58rem;color:#8ea0ba}
 </style>
 </head>
 <body>
@@ -68,14 +70,14 @@
     <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label">Share</span></a>
   </div>
   <div class="tagline"><b>Your web, without the clutter.</b>A simple browser surface for the pages you need.</div>
-  <div class="version">YeeHaw™ Browser v0.4.2</div>
+  <div class="version">YeeHaw™ Browser v0.4.3</div>
   <div class="legal">YeeHaw™ · Free tier for ages 13+ · Pro is optional · No financial advice · Independent browser, not affiliated with Google</div>
   <nav>
-    <a href="?a=home" aria-label="Home">⌂</a>
-    <a href="javascript:history.back()" aria-label="Back">&#8249;</a>
-    <a href="javascript:history.forward()" aria-label="Forward">&#8250;</a>
-    <a href="?a=newtab" aria-label="New tab">&#65291;</a>
-    <a href="?a=more" aria-label="Menu">&#8942;</a>
+    <a href="?a=home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><small>Home</small></a>
+    <a href="javascript:history.back()" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><small>Back</small></a>
+    <a href="javascript:history.forward()" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg><small>Next</small></a>
+    <a href="?a=newtab" aria-label="New tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><small>New</small></a>
+    <a href="?a=more" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg><small>Menu</small></a>
   </nav>
   <script>
     window.yeehawStats=function(used,saved){var a=document.getElementById('dataUsed');var b=document.getElementById('offlineSaved');if(a){a.textContent=used;}if(b){b.textContent=saved;}};
