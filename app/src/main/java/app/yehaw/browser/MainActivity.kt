@@ -172,7 +172,7 @@ class MainActivity : Activity() {
         } else {
             browserStore.loadSession()?.tabs.orEmpty()
         }
-        val entries = sessionEntries.take(maxTabs)
+        val entries = sessionEntries.filter { Uri.parse(it.url).host != "yehawapp.vercel.app" }.take(maxTabs)
         if (entries.isEmpty()) return false
         val savedActive = state?.getInt(STATE_ACTIVE_TAB, 0) ?: browserStore.loadSession()?.activeIndex ?: 0
         val activeIndex = savedActive.coerceIn(0, entries.lastIndex)
