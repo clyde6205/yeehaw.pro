@@ -255,7 +255,7 @@ class MainActivity : Activity() {
         }
         root.addView(brandText)
 
-        val addressRow = LinearLayout(this).apply {
+        addressRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), dp(4), dp(8), dp(6))
