@@ -32,7 +32,8 @@
   .label{font-size:.72rem;color:#a5b4ca;text-align:center}
   .tagline{padding:4px 22px 6px;color:#a5b4ca;font-size:.88rem;text-align:center}
   .tagline b{color:#f3f7ff;display:block;font-size:1.02rem;margin-bottom:5px}
-  .version{color:#5a6b84;font-size:.68rem;text-align:center;padding-bottom:10px}
+  .version{color:#5a6b84;font-size:.68rem;text-align:center;padding-bottom:6px}
+  .legal{color:#4a5a74;font-size:.62rem;text-align:center;padding:0 16px 14px;line-height:1.6}
   nav{margin-top:auto;display:flex;justify-content:space-around;padding:12px 10px calc(14px + env(safe-area-inset-bottom));
     border-top:1px solid #1a2637;background:#0d1523}
   nav a{color:#a9b9ce;font-size:19px;padding:10px 14px;text-decoration:none}
@@ -42,12 +43,12 @@
 <body>
   <header>
     <svg class="hat" width="64" height="52" viewBox="0 0 72 52" aria-hidden="true">
-      <path fill="#b8f36b" d="M4,40 C10,47 28,50 40,50 C52,50 64,47 68,40 C69,37 66,35 62,36 C50,40 22,40 10,36 C6,35 3,37 4,40 Z"/>
-      <path fill="#b8f36b" d="M17,37 C15,24 19,10 25,10 C29,10 31,15 36,15 C41,15 43,10 47,10 C53,10 57,24 55,37 Z"/>
-      <path fill="#82b7ff" d="M18,31 C24,34 48,34 54,31 L53,37 C46,40 26,40 19,37 Z"/>
-      <path fill="#080d18" d="M36,29 l1.3,2.6 2.8,.3 -2,1.9 .5,2.8 -2.6,-1.4 -2.6,1.4 .5,-2.8 -2,-1.9 2.8,-.3 z"/>
+      <path fill="#b8f36b" d="M4,40 C10,47 28,50 40,50 C52,50 64,47 68,40 C69,37 66,35 62,36 C50,40 22,40 10,36 C6,35 3,37 4,40 Z" fill="#fb923c"/>
+      <path fill="#b8f36b" d="M17,37 C15,24 19,10 25,10 C29,10 31,15 36,15 C41,15 43,10 47,10 C53,10 57,24 55,37 Z" fill="#b8f36b"/>
+      <path fill="#82b7ff" d="M18,31 C24,34 48,34 54,31 L53,37 C46,40 26,40 19,37 Z" fill="#ef4444"/>
+      <path fill="#080d18" d="M36,29 l1.3,2.6 2.8,.3 -2,1.9 .5,2.8 -2.6,-1.4 -2.6,1.4 .5,-2.8 -2,-1.9 2.8,-.3 z" fill="#ffffff"/>
     </svg>
-    <div class="brand">yee<span>Haw</span> · browser</div>
+    <div class="brand">yee<span>Haw™</span> · browser</div>
   </header>
   <form onsubmit="event.preventDefault();var q=document.getElementById('q').value.trim();if(q){location.href='?a=search&q='+encodeURIComponent(q);}return false;">
     <div class="search">
@@ -67,7 +68,8 @@
     <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label">Share</span></a>
   </div>
   <div class="tagline"><b>Your web, without the clutter.</b>A simple browser surface for the pages you need.</div>
-  <div class="version">YeeHaw Browser v0.4.0</div>
+  <div class="version">YeeHaw™ Browser v0.4.1</div>
+  <div class="legal">YeeHaw™ · Free tier for ages 13+ · Pro is optional · No financial advice · Independent browser, not affiliated with Google</div>
   <nav>
     <a href="?a=home" aria-label="Home">⌂</a>
     <a href="javascript:history.back()" aria-label="Back">&#8249;</a>
