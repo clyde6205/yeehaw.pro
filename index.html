@@ -83,5 +83,50 @@
   <script>
     window.yeehawStats=function(used,saved){var a=document.getElementById('dataUsed');var b=document.getElementById('offlineSaved');if(a){a.textContent=used;}if(b){b.textContent=saved;}};
   </script>
+<!-- yeehaw.pro web build: startpage + front-door behavior -->
+<style>
+#fd-banner{position:sticky;top:0;z-index:99;background:#0d1626;border-bottom:1px solid #26364d;padding:10px 14px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+#fd-banner span{color:#f3f7ff;font-size:.95rem;font-weight:600}
+#fd-btn{display:inline-block;background:#b8f36b;color:#080d18;font-weight:800;border:0;border-radius:10px;padding:10px 16px;font-size:.95rem;text-decoration:none}
+#fd-toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#142238;color:#f3f7ff;border:1px solid #26364d;border-radius:12px;padding:12px 16px;font-size:.9rem;z-index:98;display:none;max-width:86vw;text-align:center}
+#fd-toast a{color:#b8f36b;font-weight:700}
+</style>
+<div id="fd-banner"><span>🤠 YeeHaw Browser for Android</span><a id="fd-btn" href="https://github.com/clyde6205/yeehaw.pro/releases/latest">⬇ Install free</a></div>
+<div id="fd-toast"></div>
+<script>
+(function(){
+  var toast=document.getElementById('fd-toast');
+  function say(msg){toast.innerHTML=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(function(){toast.style.display='none'},3500);}
+  var APP='https://github.com/clyde6205/yeehaw.pro/releases/latest';
+  var INAPP='This works inside the <b>YeeHaw app</b> — install it free: <a href="'+APP+'">Download APK</a>';
+  var map={
+    saved:INAPP,history:INAPP,tabs:INAPP,find:INAPP,newtab:INAPP,back:INAPP,forward:INAPP,more:INAPP,home:INAPP,
+    downloads:APP,apps:'https://github.com/clyde6205/ChatMe',
+    privacy:'https://github.com/clyde6205/yeehaw.pro/blob/main/PRIVACY.md'
+  };
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('a');if(!a)return;
+    var m=(a.getAttribute('href')||'').match(/\?a=(\w+)/);if(!m)return;
+    e.preventDefault();var act=m[1],dest=map[act];
+    if(!dest){say(INAPP);return;}
+    if(dest===APP){location.href=APP;return;}
+    if(String(dest).indexOf('http')===0){location.href=dest;return;}
+    say(dest);
+  },true);
+  document.addEventListener('submit',function(e){
+    var f=e.target;if(!f||f.tagName!=='FORM')return;
+    var q='';try{var el=f.querySelector('input[type=text],input[type=search],input:not([type])');if(el)q=el.value.trim();}catch(_){}
+    if(!q)return;
+    e.preventDefault();
+    location.href='https://duckduckgo.com/?q='+encodeURIComponent(q);
+  },true);
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-act=share]');if(!b)return;
+    if(navigator.share){navigator.share({title:'YeeHaw Browser',text:'Your web, without the clutter.',url:location.origin}).catch(function(){});}
+    else{try{navigator.clipboard.writeText(location.origin);say('Link copied 📋');}catch(_){say(location.origin);}}
+  },true);
+  var sh=document.querySelector('a[href="?a=shareapp"]');if(sh){sh.setAttribute('data-act','share');}
+})();
+</script>
 </body>
 </html>
