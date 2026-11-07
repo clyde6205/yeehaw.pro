@@ -1,125 +1,97 @@
-<style>
-#fd-banner{background:#0d1626;border-bottom:1px solid #26364d;padding:10px 14px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
-#fd-banner span{color:#f3f7ff;font-size:.95rem;font-weight:600}
-#fd-btn{display:inline-block;background:#b8f36b;color:#080d18;font-weight:800;border:0;border-radius:10px;padding:10px 16px;font-size:.95rem;text-decoration:none}
-#fd-toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#142238;color:#f3f7ff;border:1px solid #26364d;border-radius:12px;padding:12px 16px;font-size:.9rem;z-index:98;display:none;max-width:86vw;text-align:center}
-#fd-toast a{color:#b8f36b;font-weight:700}
-</style>
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#080d18">
-<title>YeeHaw — Start</title>
-<meta name="description" content="YeeHaw Browser — a lightweight Android web browser with Turbo mode, privacy controls and data savings. Your web, without the clutter.">
-<style>
-  :root{color-scheme:dark}
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;background:#080d18;color:#f3f7ff;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
-    display:flex;flex-direction:column;min-height:100vh}
-  header{padding:22px 18px 8px;text-align:center}
-  .hat{display:block;margin:0 auto 8px}
-  .brand{font-weight:900;letter-spacing:-.05em;font-size:1.3rem;color:#b8f36b}
-  .brand span{color:#f3f7ff}
-  form{padding:10px 18px 2px}
-  .search{display:flex;gap:8px}
-  input{flex:1;min-height:46px;border:1px solid #344761;border-radius:12px;background:#18263a;
-    color:#dce8f7;font-size:15px;padding:10px 14px;outline:none}
-  input:focus{border-color:#b8f36b}
-  button{border:0;border-radius:12px;background:#b8f36b;color:#101b0b;font-weight:800;font-size:14px;padding:0 18px;min-height:46px}
-  .stats{text-align:center;color:#7b8ba3;font-size:.8rem;padding:8px 0 0}
-  .stats b{color:#b8f36b;font-weight:700}
-  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px}
-  .tile{display:flex;flex-direction:column;align-items:center;gap:7px;text-decoration:none;color:#f3f7ff}
-  .icon{width:56px;height:56px;border-radius:14px;background:#17263b;border:1px solid #26364d;
-    display:grid;place-items:center;color:#b8f36b}
-  .icon svg{width:36px;height:36px}
-  .icon:nth-child(3n){color:#82b7ff}
-  .tile:active .icon{background:#213a55}
-  .label{font-size:.84rem;color:#a5b4ca;text-align:center}
-  .tagline{padding:4px 22px 6px;color:#a5b4ca;font-size:.88rem;text-align:center}
-  .tagline b{color:#f3f7ff;display:block;font-size:1.02rem;margin-bottom:5px}
-  .version{color:#5a6b84;font-size:.68rem;text-align:center;padding-bottom:6px}
-  .legal{color:#4a5a74;font-size:.62rem;text-align:center;padding:0 16px 14px;line-height:1.6}
-  nav{margin-top:auto;display:flex;justify-content:space-around;padding:12px 4px calc(14px + env(safe-area-inset-bottom));
-    border-top:1px solid #1a2637;background:#0d1523}
-  nav a{display:flex;flex-direction:column;align-items:center;gap:6px;color:#dce8f7;padding:10px 4px;text-decoration:none;flex:1}
-  nav a svg{width:64px;height:64px}
-  nav a:active{color:#b8f36b}
-  nav a small{font-size:1rem;font-weight:800;color:#f3f7ff}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080d18">
+  <link rel="canonical" href="https://yeehaw.pro/">
+  <meta name="description" content="Yehaw is a lightweight Android web browser designed to make everyday browsing practical on memory-constrained phones.">
+  <meta property="og:title" content="Yehaw — Browse more. Carry less.">
+  <meta property="og:description" content="A lightweight Android browser focused on useful controls, session recovery and low-memory devices.">
+  <title>Yehaw — Lightweight Android Browser</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/icon-192.png">
+  <style>
+    :root{color-scheme:dark;--bg:#080d18;--panel:#101a2a;--panel2:#142238;--line:#26364d;--ink:#f3f7ff;--muted:#a5b4ca;--lime:#b8f36b;--blue:#82b7ff;--max:1160px}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 80% 5%,#172d3d 0,transparent 34%),var(--bg);color:var(--ink);font:16px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}a{color:inherit}button,a{ -webkit-tap-highlight-color:transparent}.wrap{width:min(var(--max),calc(100% - 40px));margin:auto}
+    .top{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff12}.brand{display:flex;align-items:center;gap:12px;text-decoration:none;font-size:1.3rem;font-weight:850;letter-spacing:-.06em}.mark{width:36px;height:36px;border-radius:12px;background:var(--lime);color:#101b0b;display:grid;place-items:center;font-weight:950}.nav{display:flex;gap:28px;align-items:center}.nav a{color:var(--muted);font-size:.92rem;text-decoration:none}.nav a:hover{color:var(--ink)}.nav .nav-cta{padding:9px 15px;border:1px solid #ffffff35;border-radius:999px;color:var(--ink)}
+    .hero{padding:92px 0 78px;display:grid;grid-template-columns:1.12fr .88fr;gap:54px;align-items:center}.eyebrow{display:inline-flex;align-items:center;gap:9px;color:var(--lime);font-size:.76rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.eyebrow:before{content:"";width:24px;height:1px;background:var(--lime)}h1{font-size:clamp(3rem,6.8vw,5.7rem);line-height:.99;letter-spacing:-.075em;margin:22px 0 24px;max-width:760px}h1 em{font-style:normal;color:var(--lime)}.lead{max-width:600px;color:var(--muted);font-size:1.13rem}.actions{display:flex;gap:13px;flex-wrap:wrap;margin-top:32px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:13px 19px;border-radius:12px;text-decoration:none;font-weight:800;border:1px solid #ffffff30;min-height:48px}.btn-primary{background:var(--lime);color:#101b0b;border-color:var(--lime)}.btn-secondary{background:#ffffff08}.fine{font-size:.78rem;color:#8798b1;margin-top:16px}
+    .device-stage{min-height:480px;display:grid;place-items:center;position:relative}.glow{position:absolute;width:340px;height:340px;border-radius:50%;background:#a9ef6040;filter:blur(75px)}.phone{position:relative;width:255px;height:480px;border:7px solid #35445a;border-radius:38px;background:#0d1523;box-shadow:0 35px 90px #0009,0 0 0 1px #ffffff20;overflow:hidden;padding:12px}.notch{width:76px;height:17px;border-radius:0 0 12px 12px;background:#35445a;margin:-12px auto 15px}.screen-top{display:flex;justify-content:space-between;font-size:.67rem;color:#c8d5e8;padding:0 3px}.search{margin-top:18px;padding:11px 12px;border:1px solid #344761;border-radius:12px;background:#18263a;color:#dce8f7;font-size:.72rem}.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:22px}.tile{height:48px;border-radius:12px;background:#17263b;display:grid;place-items:center;color:var(--lime);font-size:1rem}.tile:nth-child(3n){color:var(--blue)}.tile-labels{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;text-align:center;color:#aab8cb;font-size:.53rem;margin-top:5px}.webpage{margin-top:22px;border-radius:13px;background:#17263b;padding:13px}.webpage b{display:block;font-size:.78rem}.webpage span{display:block;color:#9fb0c8;font-size:.61rem;margin-top:5px}.web-lines{height:7px;border-radius:6px;background:#354760;margin-top:9px}.web-lines.short{width:65%}.phone-bottom{position:absolute;bottom:14px;left:20px;right:20px;display:flex;justify-content:space-around;color:#a9b9ce;font-size:.8rem}
+    .trust{border-top:1px solid #ffffff15;border-bottom:1px solid #ffffff15;padding:23px 0}.trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.trust-item{display:flex;gap:12px;align-items:center}.trust-icon{width:38px;height:38px;border-radius:11px;background:#c0f77b18;color:var(--lime);display:grid;place-items:center;font-weight:900}.trust-item strong{display:block;font-size:.9rem}.trust-item span{display:block;color:var(--muted);font-size:.75rem}
+    section.content{padding:88px 0}.section-head{max-width:690px;margin-bottom:34px}.kicker{color:var(--lime);font-size:.75rem;font-weight:850;letter-spacing:.14em;text-transform:uppercase}.section-head h2{font-size:clamp(2rem,4vw,3.4rem);letter-spacing:-.06em;line-height:1.06;margin:12px 0}.section-head p{color:var(--muted);margin:0}.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.feature{background:linear-gradient(145deg,#142238,#0e1726);border:1px solid var(--line);border-radius:18px;padding:24px;min-height:205px}.feature-icon{width:42px;height:42px;border-radius:13px;background:#b8f36b18;color:var(--lime);display:grid;place-items:center;font-size:1.2rem;font-weight:900}.feature h3{margin:17px 0 7px;font-size:1.06rem}.feature p{margin:0;color:var(--muted);font-size:.88rem}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:45px;align-items:center}.panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:28px}.list{padding:0;margin:18px 0 0;list-style:none}.list li{padding:12px 0;border-bottom:1px solid #ffffff12;color:var(--muted);font-size:.92rem}.list li:last-child{border:0}.list li:before{content:"✓";color:var(--lime);font-weight:900;margin-right:11px}.status{display:inline-flex;padding:6px 10px;border:1px solid #b8f36b55;color:var(--lime);border-radius:99px;font-size:.73rem;font-weight:800}.callout{background:linear-gradient(120deg,#172b39,#132238);border:1px solid #46604a;border-radius:22px;padding:36px;display:flex;align-items:center;justify-content:space-between;gap:28px}.callout h2{font-size:clamp(1.8rem,3vw,2.6rem);line-height:1.08;letter-spacing:-.05em;margin:8px 0}.callout p{color:var(--muted);margin:0;max-width:620px}.footer{border-top:1px solid #ffffff18;padding:30px 0 44px;color:#8999b0;font-size:.8rem}.footer-inner{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.footer a{color:#c9d6e8;text-decoration:none}.menu{display:none;background:none;border:1px solid #ffffff35;color:var(--ink);padding:8px 11px;border-radius:9px}
+    @media(max-width:800px){.hero{grid-template-columns:1fr;padding:64px 0 45px;gap:20px}.device-stage{min-height:420px}.phone{transform:scale(.88)}.trust-grid{grid-template-columns:1fr}.feature-grid{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}.callout{display:block}.callout .btn{margin-top:22px}.nav{gap:14px}}@media(max-width:560px){.wrap{width:min(var(--max),calc(100% - 30px))}.top{height:66px}.menu{display:block}.nav{display:none;position:absolute;top:65px;left:0;right:0;background:#101a2a;padding:18px 22px;z-index:5;border-bottom:1px solid var(--line)}.nav.open{display:grid;gap:13px}.hero{padding-top:48px}h1{font-size:3.35rem}.lead{font-size:1rem}.feature-grid{grid-template-columns:1fr}.device-stage{min-height:390px}.phone{transform:scale(.78)}section.content{padding:62px 0}.callout{padding:25px}.actions .btn{width:100%}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+  </style>
 </head>
 <body>
-<div id="fd-banner"><span>🤠 YeeHaw Browser for Android</span><a id="fd-btn" href="https://github.com/clyde6205/yeehaw.pro/releases/latest">⬇ Install free</a></div>
-
-  <header>
-    <svg class="hat" width="64" height="52" viewBox="0 0 72 52" aria-hidden="true">
-      <path fill="#b8f36b" d="M4,40 C10,47 28,50 40,50 C52,50 64,47 68,40 C69,37 66,35 62,36 C50,40 22,40 10,36 C6,35 3,37 4,40 Z" fill="#fb923c"/>
-      <path fill="#b8f36b" d="M17,37 C15,24 19,10 25,10 C29,10 31,15 36,15 C41,15 43,10 47,10 C53,10 57,24 55,37 Z" fill="#b8f36b"/>
-      <path fill="#82b7ff" d="M18,31 C24,34 48,34 54,31 L53,37 C46,40 26,40 19,37 Z" fill="#ef4444"/>
-      <path fill="#080d18" d="M36,29 l1.3,2.6 2.8,.3 -2,1.9 .5,2.8 -2.6,-1.4 -2.6,1.4 .5,-2.8 -2,-1.9 2.8,-.3 z" fill="#ffffff"/>
-    </svg>
-    <div class="brand">yee<span>Haw™</span> · browser</div>
+  <header class="top wrap">
+    <a class="brand" href="/" aria-label="Yehaw home"><span class="mark">Y</span><span>yehaw</span></a>
+    <button class="menu" id="menu" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav class="nav" id="nav" aria-label="Main navigation">
+      <a href="#features">Features</a><a href="#lightweight">Why Yehaw</a><a href="#status">Development</a>
+      <a class="nav-cta" href="https://github.com/clyde6205/yeehaw.pro" target="_blank" rel="noopener">Source repository ↗</a>
+    </nav>
   </header>
-  <form>
-    <div class="search">
-      <input id="q" type="search" placeholder="Search or enter website address" autocomplete="off" autocapitalize="off">
-      <button type="submit" aria-label="Go">Go</button>
+  <main>
+    <div class="wrap hero">
+      <div>
+        <div class="eyebrow">The Android browser project</div>
+        <h1>Browse more.<br><em>Carry less.</em></h1>
+        <p class="lead">Yehaw is being built as a practical, lightweight Android web browser—with useful everyday controls and careful attention to phones that have limited memory.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#download">Get YeeHaw free <span aria-hidden="true">→</span></a>
+          <a class="btn btn-secondary" href="https://github.com/clyde6205/yeehaw.pro" target="_blank" rel="noopener">Explore the project ↗</a>
+        </div>
+        <p class="fine">Free Android browser. Public APK download is being prepared and will appear here once the signed release is verified.</p>
+      </div>
+      <div class="device-stage" aria-label="Illustrative Yehaw browser interface">
+        <div class="glow"></div><div class="phone">
+          <div class="notch"></div><div class="screen-top"><span>9:41</span><span>● ● ▰</span></div>
+          <div class="search">⌕ &nbsp; Search or enter website address</div>
+          <div class="tiles"><div class="tile">⌂</div><div class="tile">☆</div><div class="tile">↧</div><div class="tile">▤</div><div class="tile">◉</div><div class="tile">⌕</div><div class="tile">◌</div><div class="tile">＋</div></div>
+          <div class="tile-labels"><span>Home</span><span>Saved</span><span>Files</span><span>Tabs</span><span>Privacy</span><span>Find</span><span>History</span><span>New tab</span></div>
+          <div class="webpage"><b>Your web, without the clutter.</b><span>A simple browser surface for the pages you need.</span><div class="web-lines"></div><div class="web-lines"></div><div class="web-lines short"></div></div>
+          <div class="phone-bottom"><span>‹</span><span>›</span><span>↻</span><span>＋</span><span>⋮</span></div>
+        </div>
+      </div>
     </div>
-  </form>
-  <div class="stats">Data used: <b id="dataUsed">0 B</b> &nbsp;·&nbsp; Saved offline: <b id="offlineSaved">0 B</b></div>
-  <div class="tiles">
-    <a class="tile" href="?a=saved"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.7 5.5 6 .9-4.3 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.3 9.9l6-.9z"/></svg></span><span class="label">Saved</span></a>
-    <a class="tile" href="?a=history"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3.5 2.2"/></svg></span><span class="label">History</span></a>
-    <a class="tile" href="?a=downloads"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 11 4.5 4.5 4.5-4.5"/><path d="M4.5 19.5h15"/></svg></span><span class="label">Files</span></a>
-    <a class="tile" href="?a=tabs"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="4.5" width="12.5" height="12.5" rx="2"/><path d="M4.5 8.5H17a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8.5z"/></svg></span><span class="label">Tabs</span></a>
-    <a class="tile" href="?a=privacy"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5v6c0 4.6-3 7.6-7 9.5-4-1.9-7-4.9-7-9.5v-6z"/><path d="m9 11.8 2.2 2.2 4-4.5"/></svg></span><span class="label">Privacy</span></a>
-    <a class="tile" href="?a=find"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><span class="label">Find</span></a>
-    <a class="tile" href="?a=apps"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span class="label">Apps</span></a>
-    <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label">Share</span></a>
-  </div>
-  <div class="tagline"><b>Your web, without the clutter.</b>A simple browser surface for the pages you need.</div>
-  <div class="version">YeeHaw™ Browser v0.4.7</div>
-  <div class="legal">YeeHaw™ · Free tier for ages 13+ · Pro is optional · No financial advice · Independent browser, not affiliated with Google</div>
-  <nav>
-    <a href="?a=home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><small>Home</small></a>
-    <a href="?a=back" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg><small>Back</small></a>
-    <a href="?a=forward" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg><small>Next</small></a>
-    <a href="?a=newtab" aria-label="New tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><small>New</small></a>
-    <a href="?a=more" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg><small>Menu</small></a>
-  </nav>
+    <div class="trust"><div class="wrap trust-grid">
+      <div class="trust-item"><div class="trust-icon">1</div><div><strong>Android-first</strong><span>Built for phones, not a desktop port</span></div></div>
+      <div class="trust-item"><div class="trust-icon">↯</div><div><strong>Memory-aware</strong><span>Designed to limit background tab pressure</span></div></div>
+      <div class="trust-item"><div class="trust-icon">⌁</div><div><strong>Web compatibility</strong><span>Uses the Android System WebView engine</span></div></div>
+    </div></div>
+    <section class="content wrap" id="features">
+      <div class="section-head"><div class="kicker">Built for everyday browsing</div><h2>Useful browser tools.<br>Not unnecessary weight.</h2><p>The current Android codebase includes a growing set of browser essentials. Features remain subject to device and WebView compatibility testing.</p></div>
+      <div class="feature-grid">
+        <article class="feature"><div class="feature-icon">▤</div><h3>Tabs & session recovery</h3><p>Multiple tabs with saved session state and restoration after process recreation or memory pressure.</p></article>
+        <article class="feature"><div class="feature-icon">☆</div><h3>Bookmarks & history</h3><p>Locally stored bookmarks and bounded browsing history for quick return to useful pages.</p></article>
+        <article class="feature"><div class="feature-icon">↧</div><h3>Downloads & uploads</h3><p>Android DownloadManager integration and website file-upload support.</p></article>
+        <article class="feature"><div class="feature-icon">◉</div><h3>Privacy controls</h3><p>Private browsing profile, HTTPS-focused handling and permission prompts for sensitive capabilities.</p></article>
+        <article class="feature"><div class="feature-icon">⌕</div><h3>Find & share</h3><p>Find-in-page, share actions, desktop-site mode and selectable search providers.</p></article>
+        <article class="feature"><div class="feature-icon">◌</div><h3>Offline reading</h3><p>User-triggered text snapshots for reading saved pages without a network connection.</p></article>
+      </div>
+    </section>
+    <section class="content wrap" id="lightweight">
+      <div class="split">
+        <div><div class="kicker">A deliberate engineering choice</div><h2 style="font-size:clamp(2rem,4vw,3.3rem);letter-spacing:-.06em;line-height:1.06;margin:12px 0">Small app layer.<br>System-maintained web engine.</h2><p style="color:var(--muted)">Yehaw uses Android System WebView, a Chromium-based engine supplied and updated by the device. This keeps Yehaw from shipping its own full Chromium engine inside the APK. Actual memory use and site compatibility depend on the device, Android version and installed WebView provider.</p></div>
+        <div class="panel"><span class="status">Current architecture</span><ul class="list"><li>Native Kotlin Android application</li><li>Android System WebView rendering</li><li>Memory-aware background tab policy</li><li>Local SQLite browser data</li><li>Android DownloadManager handoff</li><li>No account sync service claimed or advertised</li></ul></div>
+      </div>
+    </section>
+    <section class="content wrap" id="download">
+      <div class="callout"><div><div class="kicker">Free Android download</div><h2>The public installer is being prepared.</h2><p>We will publish the download here only after the APK is verified and signed for safe installation. No broken links, expired build artifacts or misleading download buttons.</p></div><span class="status">Release verification pending</span></div>
+    </section>
+    <section class="content wrap" id="status">
+      <div class="callout"><div><div class="kicker">Development status</div><h2>Building and validating in the open.</h2><p>The Android app is already running on test devices. The public release still needs a verified signed installer, device compatibility checks and final security review.</p></div><a class="btn btn-primary" href="https://github.com/clyde6205/yeehaw.pro/actions" target="_blank" rel="noopener">View build checks ↗</a></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px"><a class="btn btn-secondary" href="https://github.com/clyde6205/yeehaw.pro" target="_blank" rel="noopener">GitHub repository ↗</a><a class="btn btn-secondary" href="https://github.com/clyde6205/yeehaw.pro/releases" target="_blank" rel="noopener">Release page ↗</a></div>
+    </section>
+  </main>
+  <footer class="footer"><div class="wrap footer-inner"><span>© <span id="year"></span> Yehaw. Android browser project.</span><span>Built with a focus on practical browsing and responsible release validation.</span></div></footer>
   <script>
-    window.yeehawStats=function(used,saved){var a=document.getElementById('dataUsed');var b=document.getElementById('offlineSaved');if(a){a.textContent=used;}if(b){b.textContent=saved;}};
+    const menu=document.getElementById('menu'),nav=document.getElementById('nav');
+    menu.addEventListener('click',()=>{const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));});
+    nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{nav.classList.remove('open');menu.setAttribute('aria-expanded','false');}));
+    document.getElementById('year').textContent=new Date().getFullYear();
   </script>
-<script>
-(function(){
-  var toast=document.createElement('div');toast.id='fd-toast';document.body.appendChild(toast);
-  function say(msg){toast.innerHTML=msg;toast.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(function(){toast.style.display='none'},3500);}
-  var APP='https://github.com/clyde6205/yeehaw.pro/releases/latest';
-  var INAPP='This feature lives in the <b>YeeHaw app</b> — install free: <a href="'+APP+'">Download APK</a>';
-  var map={saved:INAPP,history:INAPP,tabs:INAPP,find:INAPP,newtab:INAPP,back:INAPP,forward:INAPP,more:INAPP,home:INAPP,
-    downloads:APP,apps:'https://github.com/clyde6205/ChatMe',
-    privacy:'https://github.com/clyde6205/yeehaw.pro/blob/main/PRIVACY.md'};
-  document.addEventListener('click',function(e){
-    var a=e.target.closest('a');if(!a)return;
-    var m=(a.getAttribute('href')||'').match(/^\?a=(\w+)/);if(!m)return;
-    e.preventDefault();var dest=map[m[1]]||INAPP;
-    if(String(dest).indexOf('http')===0){location.href=dest;}else{say(dest);}
-  },true);
-  document.addEventListener('submit',function(e){
-    var f=e.target;if(!f||f.tagName!=='FORM')return;
-    var el=f.querySelector('input');var q=el?el.value.trim():'';
-    e.preventDefault();
-    if(q){location.href='https://duckduckgo.com/?q='+encodeURIComponent(q);}
-  },true);
-  var sh=document.querySelector('a[href="?a=shareapp"]');
-  if(sh){sh.addEventListener('click',function(e){
-    e.preventDefault();
-    if(navigator.share){navigator.share({title:'YeeHaw Browser',text:'Your web, without the clutter.',url:location.origin}).catch(function(){});}
-    else{try{navigator.clipboard.writeText(location.origin);say('Link copied 📋');}catch(_){say(location.origin);}}
-  });}
-})();
-</script>
 </body>
 </html>
