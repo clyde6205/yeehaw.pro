@@ -15,6 +15,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Environment
 import android.view.Gravity
 import android.view.View
@@ -93,6 +95,13 @@ class MainActivity : Activity() {
     private var lastRxSample = -1L
     private var sessionDataUsed = 0L
     private var sessionOfflineSaved = 0L
+    private val statsHandler = Handler(Looper.getMainLooper())
+    private val statsTicker = object : Runnable {
+        override fun run() {
+            sampleDataUsage()
+            statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
+        }
+    }
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
     private val maxTabs: Int by lazy {
@@ -107,6 +116,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         browserStore = BrowserStore(this)
+        sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
+        sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
         memorySaver = browserPreferences.getBoolean("memory_saver", false)
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
@@ -158,6 +169,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        statsHandler.removeCallbacks(statsTicker)
         persistSession()
         tabs.filterNot { it.evicted }.forEach { it.webView.onPause() }
         super.onPause()
@@ -166,6 +178,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         currentWebView()?.onResume()
+        statsHandler.removeCallbacks(statsTicker)
+        statsHandler.post(statsTicker)
     }
 
     override fun onStop() {
@@ -1197,15 +1211,27 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Real, measured data accounting: network bytes received by this app, plus bytes served from offline storage. */
+    /**
+     * Measures this app UID's received network bytes. The first sample after process start is
+     * a baseline; subsequent positive deltas are persisted across launches. This includes all
+     * app traffic (not just page payloads), so the UI labels it as app data received.
+     */
     private fun sampleDataUsage() {
         try {
             val rx = android.net.TrafficStats.getUidRxBytes(applicationInfo.uid)
             if (rx >= 0) {
-                if (lastRxSample >= 0 && rx > lastRxSample) sessionDataUsed += rx - lastRxSample
+                if (lastRxSample >= 0 && rx >= lastRxSample) {
+                    val delta = rx - lastRxSample
+                    if (delta > 0) {
+                        sessionDataUsed = (sessionDataUsed + delta).coerceAtLeast(sessionDataUsed)
+                        browserPreferences.edit().putLong(PREF_TOTAL_DATA_RECEIVED, sessionDataUsed).apply()
+                    }
+                }
+                // A lower value indicates a counter reset (for example, after reboot).
                 lastRxSample = rx
             }
         } catch (_: Exception) {
+            // TrafficStats may be unavailable on a device; retain the last verified totals.
         }
         updateDataStatsDisplay()
     }
@@ -1337,7 +1363,10 @@ class MainActivity : Activity() {
     }
 
     private fun showOfflinePage(page: BrowserStore.OfflinePage) {
-        sessionOfflineSaved += page.content.toByteArray().size
+        val reusedBytes = BrowserStore.utf8ByteCount(page.content)
+        sessionOfflineSaved = (sessionOfflineSaved + reusedBytes).coerceAtLeast(sessionOfflineSaved)
+        browserPreferences.edit().putLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, sessionOfflineSaved).apply()
+        updateDataStatsDisplay()
         val content = ScrollView(this).apply {
             isFillViewport = true
             addView(TextView(this@MainActivity).apply {
@@ -1564,6 +1593,9 @@ class MainActivity : Activity() {
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.
         private const val START_HOST = "start.yeehaw.internal"
+        private const val STATS_REFRESH_INTERVAL_MS = 1_000L
+        private const val PREF_TOTAL_DATA_RECEIVED = "total_data_received_bytes"
+        private const val PREF_TOTAL_OFFLINE_BYTES_REUSED = "total_offline_bytes_reused"
         private const val CHATME_PACKAGE = "com.clyde6205.chatmepro"
         private const val CHATME_URL = "https://chatme.pro"
         private const val HOME_URL = "https://start.yeehaw.internal/"
