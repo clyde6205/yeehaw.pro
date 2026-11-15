@@ -45,7 +45,7 @@ For release distribution, configure a user-owned signing key and secrets outside
 
 ## Cloudflare deployment
 
-The Cloudflare Workers Build configuration uses `npm run build` followed by `npx wrangler deploy`. The root `wrangler.jsonc` explicitly restricts static assets to `./public`. Android APKs are built separately through the Android CI workflow.
+The Cloudflare Workers Build configuration runs `npm run build && npm run check` before `npx wrangler deploy`; the static checks must pass before any website deployment. The root `wrangler.jsonc` explicitly restricts static assets to `./public`. Android APKs are built separately through the Android CI workflow.
 
 ## Release principles
 
