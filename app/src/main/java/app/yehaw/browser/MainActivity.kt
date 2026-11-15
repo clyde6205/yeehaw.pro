@@ -15,6 +15,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Environment
 import android.view.Gravity
 import android.view.View
@@ -71,7 +73,6 @@ class MainActivity : Activity() {
     private lateinit var addressBar: EditText
     private lateinit var pageContainer: LinearLayout
     private lateinit var statusText: TextView
-    private lateinit var adBanner: com.google.android.gms.ads.AdView
     private val tabs = mutableListOf<BrowserTab>()
     private lateinit var browserStore: BrowserStore
     private val browserPreferences by lazy { getSharedPreferences("browser_settings", Context.MODE_PRIVATE) }
@@ -93,6 +94,13 @@ class MainActivity : Activity() {
     private var lastRxSample = -1L
     private var sessionDataUsed = 0L
     private var sessionOfflineSaved = 0L
+    private val statsHandler = Handler(Looper.getMainLooper())
+    private val statsTicker = object : Runnable {
+        override fun run() {
+            sampleDataUsage()
+            statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
+        }
+    }
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
     private val maxTabs: Int by lazy {
@@ -107,6 +115,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         browserStore = BrowserStore(this)
+        sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
+        sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
         memorySaver = browserPreferences.getBoolean("memory_saver", false)
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
@@ -119,10 +129,6 @@ class MainActivity : Activity() {
         val restoredTabs = restoreTabs(savedInstanceState)
         if (!restoredTabs) handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
-        try {
-            com.google.android.gms.ads.MobileAds.initialize(this) { }
-        } catch (_: Exception) {
-        }
         try {
             setupBilling()
         } catch (_: Exception) {
@@ -158,6 +164,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        statsHandler.removeCallbacks(statsTicker)
         persistSession()
         tabs.filterNot { it.evicted }.forEach { it.webView.onPause() }
         super.onPause()
@@ -166,6 +173,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         currentWebView()?.onResume()
+        statsHandler.removeCallbacks(statsTicker)
+        statsHandler.post(statsTicker)
     }
 
     override fun onStop() {
@@ -246,7 +255,6 @@ class MainActivity : Activity() {
         controlsScroll.visibility = visibility
         libraryControlsScroll.visibility = visibility
         statusText.visibility = visibility
-        if (::adBanner.isInitialized) adBanner.visibility = if (onHomePage || isProMode()) View.GONE else View.VISIBLE
     }
 
     private fun displayUrl(url: String?): String {
@@ -342,16 +350,6 @@ class MainActivity : Activity() {
             maxLines = 1
         }
         root.addView(statusText)
-
-        adBanner = com.google.android.gms.ads.AdView(this).apply {
-            setAdSize(com.google.android.gms.ads.AdSize.BANNER)
-            adUnitId = ADMOB_TEST_BANNER_ID
-            try {
-                loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
-            } catch (_: Exception) {
-            }
-        }
-        root.addView(adBanner)
 
         pageContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1152,7 +1150,6 @@ class MainActivity : Activity() {
         val purchasesUpdatedListener = com.android.billingclient.api.PurchasesUpdatedListener { result, purchases ->
             if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK && !purchases.isNullOrEmpty()) {
                 browserPreferences.edit().putBoolean("pro_mode", true).apply()
-                if (::adBanner.isInitialized) adBanner.visibility = View.GONE
                 Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off forever.", Toast.LENGTH_LONG).show()
             }
         }
@@ -1197,15 +1194,27 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Real, measured data accounting: network bytes received by this app, plus bytes served from offline storage. */
+    /**
+     * Measures this app UID's received network bytes. The first sample after process start is
+     * a baseline; subsequent positive deltas are persisted across launches. This includes all
+     * app traffic (not just page payloads), so the UI labels it as app data received.
+     */
     private fun sampleDataUsage() {
         try {
             val rx = android.net.TrafficStats.getUidRxBytes(applicationInfo.uid)
             if (rx >= 0) {
-                if (lastRxSample >= 0 && rx > lastRxSample) sessionDataUsed += rx - lastRxSample
+                if (lastRxSample >= 0 && rx >= lastRxSample) {
+                    val delta = rx - lastRxSample
+                    if (delta > 0) {
+                        sessionDataUsed = (sessionDataUsed + delta).coerceAtLeast(sessionDataUsed)
+                        browserPreferences.edit().putLong(PREF_TOTAL_DATA_RECEIVED, sessionDataUsed).apply()
+                    }
+                }
+                // A lower value indicates a counter reset (for example, after reboot).
                 lastRxSample = rx
             }
         } catch (_: Exception) {
+            // TrafficStats may be unavailable on a device; retain the last verified totals.
         }
         updateDataStatsDisplay()
     }
@@ -1337,7 +1346,10 @@ class MainActivity : Activity() {
     }
 
     private fun showOfflinePage(page: BrowserStore.OfflinePage) {
-        sessionOfflineSaved += page.content.toByteArray().size
+        val reusedBytes = BrowserStore.utf8ByteCount(page.content)
+        sessionOfflineSaved = (sessionOfflineSaved + reusedBytes).coerceAtLeast(sessionOfflineSaved)
+        browserPreferences.edit().putLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, sessionOfflineSaved).apply()
+        updateDataStatsDisplay()
         val content = ScrollView(this).apply {
             isFillViewport = true
             addView(TextView(this@MainActivity).apply {
@@ -1559,11 +1571,13 @@ class MainActivity : Activity() {
         private const val REQUEST_SITE_PERMISSION = 4104
         private const val REQUEST_GEO_PERMISSION = 4105
         private const val PRODUCT_ID_PRO = "yeehaw_pro"
-        private const val ADMOB_TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
         private const val CHROME_USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.
         private const val START_HOST = "start.yeehaw.internal"
+        private const val STATS_REFRESH_INTERVAL_MS = 1_000L
+        private const val PREF_TOTAL_DATA_RECEIVED = "total_data_received_bytes"
+        private const val PREF_TOTAL_OFFLINE_BYTES_REUSED = "total_offline_bytes_reused"
         private const val CHATME_PACKAGE = "com.clyde6205.chatmepro"
         private const val CHATME_URL = "https://chatme.pro"
         private const val HOME_URL = "https://start.yeehaw.internal/"

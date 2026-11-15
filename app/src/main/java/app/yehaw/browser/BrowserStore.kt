@@ -156,5 +156,8 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
     companion object {
         const val MAX_OFFLINE_PAGES = 100
         const val MAX_OFFLINE_TEXT_CHARS = 250_000
+
+        /** Exact UTF-8 bytes in the text copy delivered locally from offline storage. */
+        fun utf8ByteCount(text: String): Long = text.toByteArray(Charsets.UTF_8).size.toLong()
     }
 }
