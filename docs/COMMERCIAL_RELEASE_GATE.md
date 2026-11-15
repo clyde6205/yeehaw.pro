@@ -39,6 +39,15 @@ This document separates source implementation from evidence required for public 
 - [ ] Crash/ANR monitoring and a documented incident response contact.
 - [ ] Accessibility review: TalkBack, focus order, text scaling, contrast, touch targets, landscape, and keyboard navigation.
 
+## Payments and monetization
+
+- [ ] Decide whether YeeHaw Pro is a subscription or a one-time product; product type, price, offer token and customer-facing copy must agree.
+- [ ] Configure the product in the publisher-owned Google Play Console and verify all supported country pricing and tax behavior.
+- [ ] Verify purchase tokens server-side using the Google Play Developer API; never grant paid entitlements from a client-only preference.
+- [ ] Acknowledge eligible purchases, restore active purchases after reinstall/device change, and handle pending, cancelled, refunded, revoked and chargeback states.
+- [ ] Test purchase and restore flows using Play license testers before any production payment is accepted.
+- [ ] Keep paid checkout disabled until server verification and entitlement lifecycle tests pass.
+
 ## Operational readiness
 
 - [ ] Publish a support and security contact.
