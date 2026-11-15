@@ -101,8 +101,6 @@ class MainActivity : Activity() {
             statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
         }
     }
-    private var billingClient: com.android.billingclient.api.BillingClient? = null
-    private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
     private val activityManager by lazy { getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager }
     private val maxTabs: Int by lazy {
         BrowserPerformancePolicy.maxLiveTabs(activityManager.isLowRamDevice, activityManager.memoryClass)
@@ -128,10 +126,6 @@ class MainActivity : Activity() {
         val restoredTabs = restoreTabs(savedInstanceState)
         if (!restoredTabs) handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
-        try {
-            setupBilling()
-        } catch (_: Exception) {
-        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -1117,74 +1111,21 @@ class MainActivity : Activity() {
         Toast.makeText(this, "ChatMe is not installed yet — opening chatme.pro to get it.", Toast.LENGTH_LONG).show()
     }
 
-    private fun isProMode(): Boolean = browserPreferences.getBoolean("pro_mode", false)
-
-    /** YeeHaw Pro tier: one-time purchase through Google Play Billing. Free tier stays fully functional forever. */
+    /**
+     * Pro checkout is intentionally unavailable until purchase tokens can be verified by a
+     * trusted backend and entitlements can be restored/revoked correctly. Never grant Pro from
+     * a local preference or an unverified client callback.
+     */
     private fun openProUpgrade() {
-        if (isProMode()) {
-            Toast.makeText(this, "YeeHaw Pro is active on this device.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val product = proProductDetails
-        if (product != null && billingClient?.isReady == true) {
-            val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken ?: ""
-            val flowParams = com.android.billingclient.api.BillingFlowParams.newBuilder()
-                .setProductDetailsParamsList(listOf(
-                    com.android.billingclient.api.BillingFlowParams.ProductDetailsParams.newBuilder()
-                        .setProductDetails(product)
-                        .setOfferToken(offerToken)
-                        .build()
-                ))
-                .build()
-            billingClient?.launchBillingFlow(this, flowParams)
-            return
-        }
         AlertDialog.Builder(this)
             .setTitle("YeeHaw Pro")
-            .setMessage("Pro removes all ads forever and funds free development. The free tier keeps every tool working forever — nothing is paywalled.\n\nA small monthly subscription, automatically priced for your country by Google Play: UPI in India, M-Pesa in Africa, cards and local wallets worldwide. Cancel anytime in Play Store settings.\n\nPro activates automatically once the store listing is live.")
+            .setMessage(
+                "Paid upgrades are not available in this release. The free browser remains usable. " +
+                    "Pro will open only after Google Play purchase verification, entitlement restoration, " +
+                    "refund handling, and publisher setup are complete."
+            )
             .setPositiveButton("OK", null)
             .show()
-    }
-
-    private fun setupBilling() {
-        if (billingClient != null) return
-        val purchasesUpdatedListener = com.android.billingclient.api.PurchasesUpdatedListener { result, purchases ->
-            if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK && !purchases.isNullOrEmpty()) {
-                browserPreferences.edit().putBoolean("pro_mode", true).apply()
-                Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off forever.", Toast.LENGTH_LONG).show()
-            }
-        }
-        billingClient = com.android.billingclient.api.BillingClient.newBuilder(this)
-            .setListener(purchasesUpdatedListener)
-            .enablePendingPurchases(
-                com.android.billingclient.api.PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()
-            )
-            .build()
-        billingClient?.startConnection(object : com.android.billingclient.api.BillingClientStateListener {
-            override fun onBillingSetupFinished(result: com.android.billingclient.api.BillingResult) {
-                if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) queryProProduct()
-            }
-
-            override fun onBillingServiceDisconnected() {
-            }
-        })
-    }
-
-    private fun queryProProduct() {
-        val client = billingClient ?: return
-        val params = com.android.billingclient.api.QueryProductDetailsParams.newBuilder()
-            .setProductList(listOf(
-                com.android.billingclient.api.QueryProductDetailsParams.Product.newBuilder()
-                    .setProductId(PRODUCT_ID_PRO)
-                    .setProductType(com.android.billingclient.api.BillingClient.ProductType.SUBS)
-                    .build()
-            ))
-            .build()
-        client.queryProductDetailsAsync(params) { result, products ->
-            if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
-                proProductDetails = products.firstOrNull { it.productId == PRODUCT_ID_PRO }
-            }
-        }
     }
 
     private fun openDownloads() {
@@ -1420,7 +1361,7 @@ class MainActivity : Activity() {
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
             "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
-            if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
+            "YeeHaw Pro — not yet available",
             if (turboMode) "Turbo mode — ON (blocks network images)" else "Turbo mode — OFF (full images)"
         )
         AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.9").setItems(choices) { _, which ->
@@ -1580,7 +1521,6 @@ class MainActivity : Activity() {
         private const val REQUEST_FILE_CHOOSER = 4103
         private const val REQUEST_SITE_PERMISSION = 4104
         private const val REQUEST_GEO_PERMISSION = 4105
-        private const val PRODUCT_ID_PRO = "yeehaw_pro"
         private const val CHROME_USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.
