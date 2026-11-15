@@ -103,13 +103,9 @@ class MainActivity : Activity() {
     }
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
+    private val activityManager by lazy { getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager }
     private val maxTabs: Int by lazy {
-        val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
-        when {
-            memoryClass <= 128 -> 2
-            memoryClass <= 192 -> 3
-            else -> 4
-        }
+        BrowserPerformancePolicy.maxLiveTabs(activityManager.isLowRamDevice, activityManager.memoryClass)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,9 +114,12 @@ class MainActivity : Activity() {
         sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
         sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
-        memorySaver = browserPreferences.getBoolean("memory_saver", false)
+        memorySaver = browserPreferences.getBoolean(
+            "memory_saver",
+            BrowserPerformancePolicy.defaultMemorySaver(activityManager.isLowRamDevice, activityManager.memoryClass)
+        )
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
-        turboMode = browserPreferences.getBoolean("turbo_mode", true)
+        turboMode = browserPreferences.getBoolean("turbo_mode", false)
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
@@ -403,15 +402,16 @@ class MainActivity : Activity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = false
-            loadsImagesAutomatically = !memorySaver
-            blockNetworkImage = false
+            loadsImagesAutomatically = !memorySaver && !turboMode
+            blockNetworkImage = turboMode
             cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
             setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             mediaPlaybackRequiresUserGesture = true
-            offscreenPreRaster = true
+            // Pre-rasterizing off-screen content increases memory use; keep it disabled for low-RAM phones.
+            offscreenPreRaster = false
             setSupportMultipleWindows(true)
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
@@ -973,7 +973,8 @@ class MainActivity : Activity() {
         pageContainer.removeView(tab.webView)
         tab.webView.stopLoading()
         tab.webView.onPause()
-        tab.webView.clearCache(false)
+        // WebView's HTTP cache is shared by the profile. Do not clear it when evicting a tab:
+        // doing so forces repeat downloads and defeats YeeHaw's data-saving purpose.
         tab.webView.destroy()
         tab.evicted = true
     }
@@ -1420,9 +1421,9 @@ class MainActivity : Activity() {
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
             "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
             if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
-            if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
+            if (turboMode) "Turbo mode — ON (blocks network images)" else "Turbo mode — OFF (full images)"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.7").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.8").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
@@ -1437,7 +1438,7 @@ class MainActivity : Activity() {
                     browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
                     tabs.forEachIndexed { index, tab ->
                         if (!tab.evicted) {
-                            tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                            tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
                             if (index != activeTabIndex) tab.webView.onPause()
                             else tab.webView.onResume()
                         }
@@ -1505,8 +1506,17 @@ class MainActivity : Activity() {
                 10 -> {
                     turboMode = !turboMode
                     browserPreferences.edit().putBoolean("turbo_mode", turboMode).apply()
+                    tabs.filterNot { it.evicted }.forEach { tab ->
+                        tab.webView.settings.blockNetworkImage = turboMode
+                        tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
+                    }
                     currentWebView()?.reload()
-                    Toast.makeText(this, if (turboMode) "Turbo: images and video blocked for the fastest loads." else "Turbo off: full sites with images.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        if (turboMode) "Turbo blocks network images to reduce data use. Some pages may look incomplete; turn Turbo off for full images."
+                        else "Turbo off: websites can load images normally.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }.show()
