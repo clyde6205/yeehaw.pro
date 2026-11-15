@@ -73,7 +73,6 @@ class MainActivity : Activity() {
     private lateinit var addressBar: EditText
     private lateinit var pageContainer: LinearLayout
     private lateinit var statusText: TextView
-    private lateinit var adBanner: com.google.android.gms.ads.AdView
     private val tabs = mutableListOf<BrowserTab>()
     private lateinit var browserStore: BrowserStore
     private val browserPreferences by lazy { getSharedPreferences("browser_settings", Context.MODE_PRIVATE) }
@@ -130,10 +129,6 @@ class MainActivity : Activity() {
         val restoredTabs = restoreTabs(savedInstanceState)
         if (!restoredTabs) handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
-        try {
-            com.google.android.gms.ads.MobileAds.initialize(this) { }
-        } catch (_: Exception) {
-        }
         try {
             setupBilling()
         } catch (_: Exception) {
@@ -260,7 +255,6 @@ class MainActivity : Activity() {
         controlsScroll.visibility = visibility
         libraryControlsScroll.visibility = visibility
         statusText.visibility = visibility
-        if (::adBanner.isInitialized) adBanner.visibility = if (onHomePage || isProMode()) View.GONE else View.VISIBLE
     }
 
     private fun displayUrl(url: String?): String {
@@ -356,16 +350,6 @@ class MainActivity : Activity() {
             maxLines = 1
         }
         root.addView(statusText)
-
-        adBanner = com.google.android.gms.ads.AdView(this).apply {
-            setAdSize(com.google.android.gms.ads.AdSize.BANNER)
-            adUnitId = ADMOB_TEST_BANNER_ID
-            try {
-                loadAd(com.google.android.gms.ads.AdRequest.Builder().build())
-            } catch (_: Exception) {
-            }
-        }
-        root.addView(adBanner)
 
         pageContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1166,7 +1150,6 @@ class MainActivity : Activity() {
         val purchasesUpdatedListener = com.android.billingclient.api.PurchasesUpdatedListener { result, purchases ->
             if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK && !purchases.isNullOrEmpty()) {
                 browserPreferences.edit().putBoolean("pro_mode", true).apply()
-                if (::adBanner.isInitialized) adBanner.visibility = View.GONE
                 Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off forever.", Toast.LENGTH_LONG).show()
             }
         }
@@ -1588,7 +1571,6 @@ class MainActivity : Activity() {
         private const val REQUEST_SITE_PERMISSION = 4104
         private const val REQUEST_GEO_PERMISSION = 4105
         private const val PRODUCT_ID_PRO = "yeehaw_pro"
-        private const val ADMOB_TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
         private const val CHROME_USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.
