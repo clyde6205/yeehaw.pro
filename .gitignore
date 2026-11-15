@@ -27,5 +27,10 @@ Thumbs.db
 # Generated static deployment output
 public/
 
+# Android signing material (never commit)
+*.jks
+*.keystore
+app/debug.keystore
+
 # Local rollback snapshot - never commit
 .backup-before-browser-home-rebuild/

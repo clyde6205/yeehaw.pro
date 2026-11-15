@@ -1,6 +1,6 @@
 # Yehaw — Lightweight Android Browser
 
-Yehaw is an Android-first web browser project. The former Filipino directory, service launcher and recipes website has been retired as the product direction. The public website is now the browser product and development information site.
+Yehaw is an Android-first web browser project. The former Filipino directory, service launcher and recipes website has been retired as the product direction. The public website is the browser product and development information site.
 
 ## Android application
 
@@ -19,13 +19,21 @@ Compatibility and memory use depend on Android version, the installed WebView pr
 
 ## Website
 
-The Vercel website is a lightweight, responsive product page for the Yehaw Android browser. It is not a browser running inside the website and it does not provide an APK download until a signed public release has been published.
+Cloudflare Workers serves the generated static product website. The build script writes the public deployment payload to `public/`; only that directory may be published. Android source, workflow files, ZIP archives, Gradle files, signing material and project documentation must never be included in the public asset bundle.
+
+Build and verify the static website with:
+
+```bash
+npm ci
+npm run build
+npm run check
+```
 
 ## Build and test Android
 
 The repository includes GitHub Actions workflows for Android builds and emulator smoke tests. View them at:
 
-https://github.com/clyde6205/yehaw.app/actions
+https://github.com/clyde6205/yeehaw.pro/actions
 
 Open the project in Android Studio and run the Gradle Android application configuration. A debug build can be produced with:
 
@@ -35,16 +43,9 @@ Open the project in Android Studio and run the Gradle Android application config
 
 For release distribution, configure a user-owned signing key and secrets outside source control. Never commit signing keys or production credentials.
 
-## Vercel
+## Cloudflare deployment
 
-The Vercel project is linked to this GitHub repository. The static product site is built with:
-
-```bash
-npm ci
-npm run build
-```
-
-The build output is `public/`. Vercel serves the static browser product page; Android APKs are built separately through the Android CI workflow.
+The Cloudflare Workers Build configuration uses `npm run build` followed by `npx wrangler deploy`. The root `wrangler.jsonc` explicitly restricts static assets to `./public`. Android APKs are built separately through the Android CI workflow.
 
 ## Release principles
 

@@ -8,7 +8,8 @@ This document separates source implementation from evidence required for public 
 - [ ] Minified release APK builds on the exact release commit.
 - [ ] Release APK is signed with the publisher-owned production keystore.
 - [ ] Verify APK signature with Android apksigner and record certificate SHA-256.
-- [ ] API 23, API 29, and API 35 emulator test suites pass on the exact same commit.
+- [ ] Release APK is no larger than 12 MiB.
+- [ ] API 23, API 29, API 35, and API 36 emulator test suites pass on the exact same commit.
 - [ ] Regression suite covers app launch, storage bounds, invalid URL rejection, session restoration, offline reading, and clear-data behavior.
 - [ ] Test on physical Android devices, including a low-memory device and current Android version.
 - [ ] Verify app upgrade from the previous published version and preservation/migration of user data.
@@ -39,6 +40,6 @@ This document separates source implementation from evidence required for public 
 
 ## Current source status
 
-The app is a native Kotlin browser interface built on Android System WebView; Chromium is supplied and updated by the device. The repository has CI workflows for debug/release APK assembly and API 23/29/35 emulator tests. Release signing is optional in CI and requires publisher-owned secrets. No signed public APK or Play Store submission is asserted by this document.
+The app is a native Kotlin browser interface built on Android System WebView; Chromium is supplied and updated by the device. The repository has CI workflows for debug/release APK assembly and API 23/29/35/36 emulator tests. Release signing is optional in CI and requires publisher-owned secrets. No signed public APK or Play Store submission is asserted by this document.
 
 **Release rule:** every gate must be supported by evidence attached to the release commit. Do not describe the product as globally launched or fully production-ready until these gates are satisfied.
