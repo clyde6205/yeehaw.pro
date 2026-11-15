@@ -21,7 +21,7 @@ The home screen therefore uses the label **Offline text reused**, not a claim th
 ## Offline storage limits
 
 - Maximum UTF-8 text per saved page: 256 KiB.
-- Maximum total UTF-8 text payload in the offline library: 8 MiB.
+- Maximum total UTF-8 text payload in the offline library: 8 MiB. SQLite pages, indexes and metadata add some on-disk overhead beyond this text-payload ceiling.
 - Maximum saved pages: 100.
 - When a limit is reached, oldest saved pages are removed first.
 - The app counts the actual UTF-8 payload bytes stored in SQLite, not Kotlin character count.
