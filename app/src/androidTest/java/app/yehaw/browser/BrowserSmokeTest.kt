@@ -239,4 +239,17 @@ class BrowserSmokeTest {
         assertTrue("Emoji must count their full UTF-8 encoding", BrowserStore.utf8ByteCount("🌎") == 4L)
     }
 
+
+    @Test
+    fun lowMemoryPolicyUsesConservativeDefaultsWithoutOverridingNormalDevices() {
+        assertTrue(BrowserPerformancePolicy.defaultMemorySaver(true, 256))
+        assertTrue(BrowserPerformancePolicy.defaultMemorySaver(false, 128))
+        assertTrue(!BrowserPerformancePolicy.defaultMemorySaver(false, 256))
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(true, 256) == 2)
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(false, 128) == 2)
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(false, 160) == 3)
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(false, 256) == 4)
+    }
+
+
 }
