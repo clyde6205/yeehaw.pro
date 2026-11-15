@@ -11,8 +11,12 @@ Engine capability is bounded by the installed provider version and Android OS. W
 ## Low-memory policy
 
 - Keep the APK independent of a bundled browser engine.
-- Limit live tabs conservatively on constrained devices.
+- Limit live tabs conservatively using Android's low-RAM device signal and memory class (two live tabs on low-RAM/128 MB-class devices, three through 192 MB, otherwise four).
+- Default memory saver on low-RAM devices only when the user has not already selected a preference; users can explicitly override it.
+- Keep WebView off-screen pre-rasterization disabled to avoid extra memory use.
 - Evict background WebViews under memory pressure, retaining their last URL/title and approximate scroll position; recreate them on demand using the shared browser profile.
+- Preserve the shared WebView HTTP cache when evicting a tab; clearing it during memory cleanup would force repeat downloads and undermine data savings.
+- Turbo mode is an explicit opt-in that blocks network images; it does not claim to block video or rewrite website content.
 - Keep persistent history bounded.
 - Offer an explicit memory-saver mode; never silently disable JavaScript or rewrite pages.
 - Do not claim that every 1 GB device can run every modern website. A page's own memory requirements can exceed device capacity.
@@ -30,7 +34,8 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - In-page text search and a shortcut to the Android downloads manager.
 - Selectable Google, DuckDuckGo, Bing, and Brave Search providers, with the preference saved locally.
 - Optional desktop user-agent mode, persisted across launches and applied to new tabs.
-- Optional memory saver that suppresses automatic image loading and pauses background tabs, persisted across launches.
+- Adaptive memory saver default on Android low-RAM devices (unless overridden by the user), suppressing automatic image loading and pausing background tabs; preference persists across launches.
+- Optional Turbo mode blocks network images only after the user enables it; JavaScript and page markup remain unchanged.
 - Clear history, bookmarks, cookies, cache, and Web Storage.
 - User-controlled third-party-cookie compatibility toggle, persisted across launches.
 - User-initiated popup windows in tabs and immersive full-screen HTML5 video.
