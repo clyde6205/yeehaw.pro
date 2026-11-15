@@ -15,6 +15,17 @@ This document separates source implementation from evidence required for public 
 - [ ] Verify app upgrade from the previous published version and preservation/migration of user data.
 - [ ] Run dependency, lint, and static security checks; resolve release-blocking findings.
 
+
+## Data-savings and storage evidence
+
+- [ ] Verify the app-UID received-byte counter on physical devices against Android's per-app network usage, including process restart, reboot/counter reset, unsupported-counter behavior, and downloads handled by Android DownloadManager.
+- [ ] Verify that the offline reuse counter increments only when a saved local text copy is opened, persists across launches, and counts exact UTF-8 bytes.
+- [ ] Preserve the distinction between app-wide received bytes and page-specific traffic; do not market either as total data saved.
+- [ ] Verify the offline library's hard limits: 256 KiB UTF-8 per page, 8 MiB total, and 100 pages maximum, with oldest-first eviction.
+- [ ] Measure cold-cache and warm-cache transfer sizes on metered mobile networks using controlled test pages and known resource sizes.
+- [ ] Record startup time, page-load timing, memory use, cache hit/reuse behavior, battery use, and APK size on physical 1 GB, 2 GB, and 3 GB RAM devices.
+- [ ] Do not publish percentage data-savings claims until controlled, repeatable device measurements support them.
+
 ## Store and publisher requirements
 
 - [ ] Final app name, icon, screenshots, feature graphic, short and full descriptions.
