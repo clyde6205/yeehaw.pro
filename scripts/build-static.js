@@ -10,6 +10,7 @@ await mkdir(output, { recursive: true });
 // The public site is the Yehaw Android browser product page only.
 // Legacy directory/admin scripts are intentionally excluded from deployment.
 await cp(join(root, "icons"), join(output, "icons"), { recursive: true });
+await cp(join(root, "get"), join(output, "get"), { recursive: true });
 for (const item of ["index.html", "manifest.json", "sw.js"]) {
   await cp(join(root, item), join(output, item));
 }
