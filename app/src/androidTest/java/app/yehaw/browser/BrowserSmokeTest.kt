@@ -231,4 +231,12 @@ class BrowserSmokeTest {
             store.close()
         }
     }
+
+    @Test
+    fun offlineSavingsCounterUsesExactUtf8ByteCounts() {
+        assertTrue("ASCII text must use its exact UTF-8 byte count", BrowserStore.utf8ByteCount("YeeHaw") == 6L)
+        assertTrue("Multibyte text must count encoded bytes, not Kotlin characters", BrowserStore.utf8ByteCount("café") == 5L)
+        assertTrue("Emoji must count their full UTF-8 encoding", BrowserStore.utf8ByteCount("🌎") == 4L)
+    }
+
 }
