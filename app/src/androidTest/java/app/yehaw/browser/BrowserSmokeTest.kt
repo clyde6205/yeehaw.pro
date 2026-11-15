@@ -190,16 +190,51 @@ class BrowserSmokeTest {
     }
 
     @Test
-    fun offlineReadingTextIsClippedToTheDocumentedMaximum() {
+    fun offlineReadingTextIsClippedToTheDocumentedUtf8ByteMaximum() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = BrowserStore(context)
         val url = "https://example.com/yehaw-offline-size-" + System.currentTimeMillis()
         try {
-            val content = "x".repeat(BrowserStore.MAX_OFFLINE_TEXT_CHARS + 500)
+            val content = "🌎".repeat(BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
             val id = store.saveOfflinePage(url, "Large article", content)
             val saved = store.offlinePage(id)
             assertTrue(saved != null)
-            assertTrue("Offline reading text must be bounded", saved!!.content.length == BrowserStore.MAX_OFFLINE_TEXT_CHARS)
+            assertTrue(
+                "A saved offline page must never exceed the per-page UTF-8 byte budget",
+                BrowserStore.utf8ByteCount(saved!!.content) <= BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE
+            )
+            assertTrue("UTF-8 truncation must not split surrogate pairs", !saved.content.contains("\uFFFD"))
+        } finally {
+            store.clearOfflinePages()
+            store.close()
+        }
+    }
+
+    @Test
+    fun offlineLibraryEnforcesAnEightMiBTotalStorageBudget() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = BrowserStore(context)
+        val prefix = "https://example.com/yeehaw-offline-budget-" + System.currentTimeMillis()
+        try {
+            repeat(40) { index ->
+                store.saveOfflinePage(
+                    "$prefix/$index",
+                    "Offline $index",
+                    "x".repeat(BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
+                )
+            }
+            assertTrue(
+                "Offline text storage must stay within the 8 MiB library budget",
+                store.offlineStorageBytes() <= BrowserStore.MAX_OFFLINE_TOTAL_BYTES
+            )
+            assertTrue(
+                "The newest offline reading copy must be retained",
+                store.offlinePages().any { it.url == "$prefix/39" }
+            )
+            assertTrue(
+                "Oldest pages must be evicted when the storage budget is full",
+                store.offlinePages().none { it.url == "$prefix/0" }
+            )
         } finally {
             store.clearOfflinePages()
             store.close()
@@ -238,5 +273,18 @@ class BrowserSmokeTest {
         assertTrue("Multibyte text must count encoded bytes, not Kotlin characters", BrowserStore.utf8ByteCount("café") == 5L)
         assertTrue("Emoji must count their full UTF-8 encoding", BrowserStore.utf8ByteCount("🌎") == 4L)
     }
+
+
+    @Test
+    fun lowMemoryPolicyUsesConservativeDefaultsWithoutOverridingNormalDevices() {
+        assertTrue(BrowserPerformancePolicy.defaultMemorySaver(true, 256))
+        assertTrue(BrowserPerformancePolicy.defaultMemorySaver(false, 128))
+        assertTrue(!BrowserPerformancePolicy.defaultMemorySaver(false, 256))
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(true, 256) == 2)
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(false, 128) == 2)
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(false, 160) == 3)
+        assertTrue(BrowserPerformancePolicy.maxLiveTabs(false, 256) == 4)
+    }
+
 
 }

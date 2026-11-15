@@ -18,8 +18,8 @@ android {
         applicationId = "app.yehaw.browser"
         minSdk = 23
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.4.8"
+        versionCode = 19
+        versionName = "0.4.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -61,7 +61,6 @@ android {
 }
 
 dependencies {
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

@@ -15,6 +15,17 @@ This document separates source implementation from evidence required for public 
 - [ ] Verify app upgrade from the previous published version and preservation/migration of user data.
 - [ ] Run dependency, lint, and static security checks; resolve release-blocking findings.
 
+
+## Data-savings and storage evidence
+
+- [ ] Verify the app-UID received-byte counter on physical devices against Android's per-app network usage, including process restart, reboot/counter reset, unsupported-counter behavior, and downloads handled by Android DownloadManager.
+- [ ] Verify that the offline reuse counter increments only when a saved local text copy is opened, persists across launches, and counts exact UTF-8 bytes.
+- [ ] Preserve the distinction between app-wide received bytes and page-specific traffic; do not market either as total data saved.
+- [ ] Verify the offline library's hard limits: 256 KiB UTF-8 per page, 8 MiB total, and 100 pages maximum, with oldest-first eviction.
+- [ ] Measure cold-cache and warm-cache transfer sizes on metered mobile networks using controlled test pages and known resource sizes.
+- [ ] Record startup time, page-load timing, memory use, cache hit/reuse behavior, battery use, and APK size on physical 1 GB, 2 GB, and 3 GB RAM devices.
+- [ ] Do not publish percentage data-savings claims until controlled, repeatable device measurements support them.
+
 ## Store and publisher requirements
 
 - [ ] Final app name, icon, screenshots, feature graphic, short and full descriptions.
@@ -27,6 +38,24 @@ This document separates source implementation from evidence required for public 
 - [ ] Closed/open testing and production rollout plan appropriate to Play Console requirements.
 - [ ] Crash/ANR monitoring and a documented incident response contact.
 - [ ] Accessibility review: TalkBack, focus order, text scaling, contrast, touch targets, landscape, and keyboard navigation.
+
+## Payments and monetization
+
+- [ ] Decide whether YeeHaw Pro is a subscription or a one-time product; product type, price, offer token and customer-facing copy must agree.
+- [ ] Configure the product in the publisher-owned Google Play Console and verify all supported country pricing and tax behavior.
+- [ ] Verify purchase tokens server-side using the Google Play Developer API; never grant paid entitlements from a client-only preference.
+- [ ] Acknowledge eligible purchases, restore active purchases after reinstall/device change, and handle pending, cancelled, refunded, revoked and chargeback states.
+- [ ] Test purchase and restore flows using Play license testers before any production payment is accepted.
+- [ ] Keep paid checkout disabled until server verification and entitlement lifecycle tests pass.
+
+## Global distribution and accessibility
+
+- [ ] Localize native browser controls, start page, permission prompts, error states, onboarding, privacy policy and support content for the first launch markets.
+- [ ] Verify right-to-left layout and text shaping for Arabic and other RTL locales.
+- [ ] Test on constrained cellular networks, including high latency, packet loss, intermittent connectivity, data caps and transitions between Wi-Fi and mobile data.
+- [ ] Verify search, downloads, file uploads, media and common sign-in flows across representative global sites and WebView provider versions.
+- [ ] Review privacy disclosures, consent, age rating and consumer requirements for each launch market.
+- [ ] Prepare a staged country rollout, crash/ANR monitoring, rollback plan and support coverage before broad distribution.
 
 ## Operational readiness
 

@@ -101,15 +101,9 @@ class MainActivity : Activity() {
             statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
         }
     }
-    private var billingClient: com.android.billingclient.api.BillingClient? = null
-    private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
+    private val activityManager by lazy { getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager }
     private val maxTabs: Int by lazy {
-        val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
-        when {
-            memoryClass <= 128 -> 2
-            memoryClass <= 192 -> 3
-            else -> 4
-        }
+        BrowserPerformancePolicy.maxLiveTabs(activityManager.isLowRamDevice, activityManager.memoryClass)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,9 +112,12 @@ class MainActivity : Activity() {
         sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
         sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
-        memorySaver = browserPreferences.getBoolean("memory_saver", false)
+        memorySaver = browserPreferences.getBoolean(
+            "memory_saver",
+            BrowserPerformancePolicy.defaultMemorySaver(activityManager.isLowRamDevice, activityManager.memoryClass)
+        )
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
-        turboMode = browserPreferences.getBoolean("turbo_mode", true)
+        turboMode = browserPreferences.getBoolean("turbo_mode", false)
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
@@ -129,10 +126,6 @@ class MainActivity : Activity() {
         val restoredTabs = restoreTabs(savedInstanceState)
         if (!restoredTabs) handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
-        try {
-            setupBilling()
-        } catch (_: Exception) {
-        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -403,15 +396,16 @@ class MainActivity : Activity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = false
-            loadsImagesAutomatically = !memorySaver
-            blockNetworkImage = false
+            loadsImagesAutomatically = !memorySaver && !turboMode
+            blockNetworkImage = turboMode
             cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
             setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             mediaPlaybackRequiresUserGesture = true
-            offscreenPreRaster = true
+            // Pre-rasterizing off-screen content increases memory use; keep it disabled for low-RAM phones.
+            offscreenPreRaster = false
             setSupportMultipleWindows(true)
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
@@ -973,7 +967,8 @@ class MainActivity : Activity() {
         pageContainer.removeView(tab.webView)
         tab.webView.stopLoading()
         tab.webView.onPause()
-        tab.webView.clearCache(false)
+        // Avoid purging WebView's in-memory resource cache during tab eviction.
+        // The disk cache remains managed by Android System WebView.
         tab.webView.destroy()
         tab.evicted = true
     }
@@ -1116,74 +1111,21 @@ class MainActivity : Activity() {
         Toast.makeText(this, "ChatMe is not installed yet — opening chatme.pro to get it.", Toast.LENGTH_LONG).show()
     }
 
-    private fun isProMode(): Boolean = browserPreferences.getBoolean("pro_mode", false)
-
-    /** YeeHaw Pro tier: one-time purchase through Google Play Billing. Free tier stays fully functional forever. */
+    /**
+     * Pro checkout is intentionally unavailable until purchase tokens can be verified by a
+     * trusted backend and entitlements can be restored/revoked correctly. Never grant Pro from
+     * a local preference or an unverified client callback.
+     */
     private fun openProUpgrade() {
-        if (isProMode()) {
-            Toast.makeText(this, "YeeHaw Pro is active on this device.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val product = proProductDetails
-        if (product != null && billingClient?.isReady == true) {
-            val offerToken = product.subscriptionOfferDetails?.firstOrNull()?.offerToken ?: ""
-            val flowParams = com.android.billingclient.api.BillingFlowParams.newBuilder()
-                .setProductDetailsParamsList(listOf(
-                    com.android.billingclient.api.BillingFlowParams.ProductDetailsParams.newBuilder()
-                        .setProductDetails(product)
-                        .setOfferToken(offerToken)
-                        .build()
-                ))
-                .build()
-            billingClient?.launchBillingFlow(this, flowParams)
-            return
-        }
         AlertDialog.Builder(this)
             .setTitle("YeeHaw Pro")
-            .setMessage("Pro removes all ads forever and funds free development. The free tier keeps every tool working forever — nothing is paywalled.\n\nA small monthly subscription, automatically priced for your country by Google Play: UPI in India, M-Pesa in Africa, cards and local wallets worldwide. Cancel anytime in Play Store settings.\n\nPro activates automatically once the store listing is live.")
+            .setMessage(
+                "Paid upgrades are not available in this release. The free browser remains usable. " +
+                    "Pro will open only after Google Play purchase verification, entitlement restoration, " +
+                    "refund handling, and publisher setup are complete."
+            )
             .setPositiveButton("OK", null)
             .show()
-    }
-
-    private fun setupBilling() {
-        if (billingClient != null) return
-        val purchasesUpdatedListener = com.android.billingclient.api.PurchasesUpdatedListener { result, purchases ->
-            if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK && !purchases.isNullOrEmpty()) {
-                browserPreferences.edit().putBoolean("pro_mode", true).apply()
-                Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off forever.", Toast.LENGTH_LONG).show()
-            }
-        }
-        billingClient = com.android.billingclient.api.BillingClient.newBuilder(this)
-            .setListener(purchasesUpdatedListener)
-            .enablePendingPurchases(
-                com.android.billingclient.api.PendingPurchasesParams.newBuilder().enableOneTimeProducts().build()
-            )
-            .build()
-        billingClient?.startConnection(object : com.android.billingclient.api.BillingClientStateListener {
-            override fun onBillingSetupFinished(result: com.android.billingclient.api.BillingResult) {
-                if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) queryProProduct()
-            }
-
-            override fun onBillingServiceDisconnected() {
-            }
-        })
-    }
-
-    private fun queryProProduct() {
-        val client = billingClient ?: return
-        val params = com.android.billingclient.api.QueryProductDetailsParams.newBuilder()
-            .setProductList(listOf(
-                com.android.billingclient.api.QueryProductDetailsParams.Product.newBuilder()
-                    .setProductId(PRODUCT_ID_PRO)
-                    .setProductType(com.android.billingclient.api.BillingClient.ProductType.SUBS)
-                    .build()
-            ))
-            .build()
-        client.queryProductDetailsAsync(params) { result, products ->
-            if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
-                proProductDetails = products.firstOrNull { it.productId == PRODUCT_ID_PRO }
-            }
-        }
     }
 
     private fun openDownloads() {
@@ -1419,10 +1361,10 @@ class MainActivity : Activity() {
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
             "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
-            if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
-            if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
+            "YeeHaw Pro — not yet available",
+            if (turboMode) "Turbo mode — ON (blocks network images)" else "Turbo mode — OFF (full images)"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.7").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.9").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
@@ -1437,7 +1379,7 @@ class MainActivity : Activity() {
                     browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
                     tabs.forEachIndexed { index, tab ->
                         if (!tab.evicted) {
-                            tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                            tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
                             if (index != activeTabIndex) tab.webView.onPause()
                             else tab.webView.onResume()
                         }
@@ -1505,8 +1447,17 @@ class MainActivity : Activity() {
                 10 -> {
                     turboMode = !turboMode
                     browserPreferences.edit().putBoolean("turbo_mode", turboMode).apply()
+                    tabs.filterNot { it.evicted }.forEach { tab ->
+                        tab.webView.settings.blockNetworkImage = turboMode
+                        tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
+                    }
                     currentWebView()?.reload()
-                    Toast.makeText(this, if (turboMode) "Turbo: images and video blocked for the fastest loads." else "Turbo off: full sites with images.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        if (turboMode) "Turbo blocks network images to reduce data use. Some pages may look incomplete; turn Turbo off for full images."
+                        else "Turbo off: websites can load images normally.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }.show()
@@ -1570,7 +1521,6 @@ class MainActivity : Activity() {
         private const val REQUEST_FILE_CHOOSER = 4103
         private const val REQUEST_SITE_PERMISSION = 4104
         private const val REQUEST_GEO_PERMISSION = 4105
-        private const val PRODUCT_ID_PRO = "yeehaw_pro"
         private const val CHROME_USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         // The start page is bundled in the APK and served from memory: no network, instant on any device.

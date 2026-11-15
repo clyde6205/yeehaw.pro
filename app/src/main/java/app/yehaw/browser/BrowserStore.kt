@@ -94,17 +94,50 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
     fun saveOfflinePage(url: String, title: String, content: String): Long {
         require(isWebUrl(url)) { "Only HTTP/HTTPS pages can be saved offline." }
         require(content.isNotBlank()) { "This page has no readable text to save." }
-        val clipped = content.take(MAX_OFFLINE_TEXT_CHARS)
+        val clipped = truncateUtf8ToBytes(content, MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
         val db = writableDatabase
-        val id = db.insertWithOnConflict("offline_pages", null, ContentValues().apply {
-            put("url", url.take(4096))
-            put("title", title.take(512).ifBlank { url })
-            put("content", clipped)
-            put("saved_at", System.currentTimeMillis())
-        }, SQLiteDatabase.CONFLICT_REPLACE)
-        db.execSQL("DELETE FROM offline_pages WHERE id NOT IN (SELECT id FROM offline_pages ORDER BY saved_at DESC LIMIT $MAX_OFFLINE_PAGES)")
-        return id
+        db.beginTransaction()
+        try {
+            val id = db.insertWithOnConflict("offline_pages", null, ContentValues().apply {
+                put("url", url.take(4096))
+                put("title", title.take(512).ifBlank { url })
+                put("content", clipped)
+                put("saved_at", System.currentTimeMillis())
+            }, SQLiteDatabase.CONFLICT_REPLACE)
+            require(id != -1L) { "Could not save this offline page." }
+
+            // Enforce both a page-count ceiling and a byte budget. Keep the newest copies first.
+            db.execSQL("DELETE FROM offline_pages WHERE id NOT IN (SELECT id FROM offline_pages ORDER BY saved_at DESC LIMIT $MAX_OFFLINE_PAGES)")
+            val removeIds = mutableListOf<Long>()
+            var retainedBytes = 0L
+            db.rawQuery(
+                "SELECT id, length(CAST(content AS BLOB)) FROM offline_pages ORDER BY saved_at DESC, id DESC",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val rowId = cursor.getLong(0)
+                    val rowBytes = cursor.getLong(1)
+                    if (retainedBytes + rowBytes > MAX_OFFLINE_TOTAL_BYTES) {
+                        removeIds.add(rowId)
+                    } else {
+                        retainedBytes += rowBytes
+                    }
+                }
+            }
+            removeIds.forEach { db.delete("offline_pages", "id=?", arrayOf(it.toString())) }
+            db.setTransactionSuccessful()
+            return id
+        } finally {
+            db.endTransaction()
+        }
     }
+
+    /** Actual UTF-8 payload bytes currently held by the offline reading library. */
+    fun offlineStorageBytes(): Long =
+        readableDatabase.rawQuery(
+            "SELECT COALESCE(SUM(length(CAST(content AS BLOB))), 0) FROM offline_pages",
+            null
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
 
     fun offlinePages(): List<OfflinePage> {
         val rows = mutableListOf<OfflinePage>()
@@ -156,8 +189,28 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
     companion object {
         const val MAX_OFFLINE_PAGES = 100
         const val MAX_OFFLINE_TEXT_CHARS = 250_000
+        const val MAX_OFFLINE_TEXT_BYTES_PER_PAGE = 256 * 1024
+        const val MAX_OFFLINE_TOTAL_BYTES = 8 * 1024 * 1024
 
         /** Exact UTF-8 bytes in the text copy delivered locally from offline storage. */
         fun utf8ByteCount(text: String): Long = text.toByteArray(Charsets.UTF_8).size.toLong()
+
+        /** Truncate at a Unicode code-point boundary so stored UTF-8 never exceeds the byte budget. */
+        fun truncateUtf8ToBytes(text: String, maxBytes: Int): String {
+            require(maxBytes >= 0)
+            val result = StringBuilder()
+            var index = 0
+            var usedBytes = 0
+            while (index < text.length) {
+                val codePoint = Character.codePointAt(text, index)
+                val codePointChars = Character.charCount(codePoint)
+                val codePointBytes = String(Character.toChars(codePoint)).toByteArray(Charsets.UTF_8).size
+                if (usedBytes + codePointBytes > maxBytes) break
+                result.appendCodePoint(codePoint)
+                usedBytes += codePointBytes
+                index += codePointChars
+            }
+            return result.toString()
+        }
     }
 }
