@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b1322">
+<title>Get YeeHaw</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1322;color:#f4f7fd;font:16px/1.5 system-ui,sans-serif;text-align:center;padding:24px}
+main{max-width:34rem}
+h1{font-size:clamp(2.4rem,9vw,4rem);letter-spacing:-.06em;margin:0}
+h1 span{color:#b8f36b}
+p{color:#a9b7cf;max-width:28rem;margin:12px auto}
+a.btn{display:inline-block;margin-top:18px;padding:16px 28px;border-radius:16px;background:#b8f36b;color:#101b0b;font-weight:800;text-decoration:none;font-size:18px}
+.note{font-size:.82rem;color:#8292aa}
+</style>
+</head>
+<body>
+<main>
+<h1>Yee<span>Haw</span></h1>
+<p>A lightweight browser for everyday phones, with offline reading and a live, measured data-use and offline-reuse counter.</p>
+<a class="btn" id="go" href="/">Get YeeHaw</a>
+<p class="note" id="note" role="status" aria-live="polite"></p>
+</main>
+<script>
+(function(){
+  // Keep this on the product site until a signed, owner-approved store or APK URL exists.
+  var INSTALL_URL = "https://yeehaw.pro/";
+  var query = new URLSearchParams(location.search);
+  var referral = (query.get("r") || "").toUpperCase();
+  var channel = (query.get("c") || "").toLowerCase();
+  if (!/^[A-Z2-7]{8}$/.test(referral)) referral = "";
+  if (!/^[a-z_]{2,16}$/.test(channel)) channel = "";
+  var destination = new URL(INSTALL_URL);
+  if (destination.hostname === "play.google.com" && referral) {
+    destination.searchParams.set("referrer", "utm_source=yeehaw_share&utm_medium=" + (channel || "link") + "&utm_campaign=" + referral);
+  }
+  document.getElementById("go").href = destination.toString();
+  document.getElementById("note").textContent = "The signed app download is being prepared. No unsigned installer is offered here.";
+})();
+</script>
+</body>
+</html>
