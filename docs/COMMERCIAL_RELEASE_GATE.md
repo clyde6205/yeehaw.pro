@@ -48,6 +48,15 @@ This document separates source implementation from evidence required for public 
 - [ ] Test purchase and restore flows using Play license testers before any production payment is accepted.
 - [ ] Keep paid checkout disabled until server verification and entitlement lifecycle tests pass.
 
+## Global distribution and accessibility
+
+- [ ] Localize native browser controls, start page, permission prompts, error states, onboarding, privacy policy and support content for the first launch markets.
+- [ ] Verify right-to-left layout and text shaping for Arabic and other RTL locales.
+- [ ] Test on constrained cellular networks, including high latency, packet loss, intermittent connectivity, data caps and transitions between Wi-Fi and mobile data.
+- [ ] Verify search, downloads, file uploads, media and common sign-in flows across representative global sites and WebView provider versions.
+- [ ] Review privacy disclosures, consent, age rating and consumer requirements for each launch market.
+- [ ] Prepare a staged country rollout, crash/ANR monitoring, rollback plan and support coverage before broad distribution.
+
 ## Operational readiness
 
 - [ ] Publish a support and security contact.
