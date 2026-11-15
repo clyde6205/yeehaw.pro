@@ -15,7 +15,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - Default memory saver on low-RAM devices only when the user has not already selected a preference; users can explicitly override it.
 - Keep WebView off-screen pre-rasterization disabled to avoid extra memory use.
 - Evict background WebViews under memory pressure, retaining their last URL/title and approximate scroll position; recreate them on demand using the shared browser profile.
-- Preserve the shared WebView HTTP cache when evicting a tab; clearing it during memory cleanup would force repeat downloads and undermine data savings.
+- Do not purge WebView's in-memory resource cache when evicting a tab. Android System WebView continues to manage its disk cache; cache reuse remains subject to HTTP cache headers and provider behavior.
 - Turbo mode is an explicit opt-in that blocks network images; it does not claim to block video or rewrite website content.
 - Keep persistent history bounded.
 - Offer an explicit memory-saver mode; never silently disable JavaScript or rewrite pages.
