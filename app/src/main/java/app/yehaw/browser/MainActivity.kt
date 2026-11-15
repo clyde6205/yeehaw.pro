@@ -973,8 +973,8 @@ class MainActivity : Activity() {
         pageContainer.removeView(tab.webView)
         tab.webView.stopLoading()
         tab.webView.onPause()
-        // WebView's HTTP cache is shared by the profile. Do not clear it when evicting a tab:
-        // doing so forces repeat downloads and defeats YeeHaw's data-saving purpose.
+        // Avoid purging WebView's in-memory resource cache during tab eviction.
+        // The disk cache remains managed by Android System WebView.
         tab.webView.destroy()
         tab.evicted = true
     }
