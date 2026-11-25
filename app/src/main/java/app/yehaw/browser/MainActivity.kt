@@ -34,6 +34,11 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import app.yehaw.browser.core.Guardian
+import app.yehaw.browser.core.RetryScheduler
+import app.yehaw.browser.core.SavingsMeter
+import app.yehaw.browser.core.SignalLevel
+import app.yehaw.browser.core.SignalMonitor
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.URLUtil
@@ -101,6 +106,11 @@ class MainActivity : Activity() {
             statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
         }
     }
+    private lateinit var signalMonitor: SignalMonitor
+    private lateinit var savings: SavingsMeter
+    private val retryScheduler = RetryScheduler()
+    private val loadStartedAt = java.util.WeakHashMap<WebView, Long>()
+    private var startedSafe = false
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
     private val maxTabs: Int by lazy {
@@ -114,7 +124,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        browserStore = BrowserStore(this)
+        browserStore = BrowserStoreRepair.open(this)
+        savings = SavingsMeter(this)
+        signalMonitor = SignalMonitor(this) { level -> onSignalChanged(level) }
+        startedSafe = Guardian.shouldStartSafe(this)
         sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
         sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
@@ -126,7 +139,12 @@ class MainActivity : Activity() {
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
         buildInterface()
         CookieManager.getInstance().setAcceptCookie(true)
-        val restoredTabs = restoreTabs(savedInstanceState)
+        val restoredTabs = if (startedSafe) false else restoreTabs(savedInstanceState)
+        if (startedSafe) {
+            Toast.makeText(this, "Safe start after a problem. Your saved pages and bookmarks are untouched.", Toast.LENGTH_LONG).show()
+        }
+        signalMonitor.start()
+        statsHandler.postDelayed({ Guardian.markStable(this) }, 30_000L)
         if (!restoredTabs) handleIncomingIntent(intent)
         if (tabs.isEmpty()) createTab(HOME_URL)
         try {
@@ -164,6 +182,8 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        Guardian.setForeground(false)
+        savings.flush()
         statsHandler.removeCallbacks(statsTicker)
         persistSession()
         tabs.filterNot { it.evicted }.forEach { it.webView.onPause() }
@@ -172,6 +192,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Guardian.setForeground(true)
         currentWebView()?.onResume()
         statsHandler.removeCallbacks(statsTicker)
         statsHandler.post(statsTicker)
@@ -419,6 +440,7 @@ class MainActivity : Activity() {
             setGeolocationEnabled(true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
+        applySignalPolicy(webView.settings)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, thirdPartyCookiesEnabled)
         webView.settings.userAgentString = if (desktopMode) DESKTOP_USER_AGENT else CHROME_USER_AGENT
 
@@ -605,14 +627,10 @@ class MainActivity : Activity() {
                         null
                     }
                 }
-                if (turboMode) {
+                if ((turboMode || signalMonitor.level.textFirst) && request?.isForMainFrame != true) {
                     val path = (uri.path ?: "").lowercase()
-                    val heavy = path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") ||
-                        path.endsWith(".gif") || path.endsWith(".webp") || path.endsWith(".svg") ||
-                        path.endsWith(".ico") || path.endsWith(".mp4") || path.endsWith(".webm") ||
-                        path.endsWith(".woff") || path.endsWith(".woff2") || path.endsWith(".ttf") ||
-                        path.endsWith(".otf")
-                    if (heavy) {
+                    if (SavingsMeter.isHeavyAsset(path)) {
+                        savings.recordSkipped(path)
                         return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                     }
                 }
@@ -642,6 +660,7 @@ class MainActivity : Activity() {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 tab.failed = false
                 tab.lastHistoryUrl = null
+                if (view != null && !isStartPageUrl(url)) loadStartedAt[view] = android.os.SystemClock.elapsedRealtime()
                 if (view === currentWebView() && pageContainer.indexOfChild(view) < 0) showTab(activeTabIndex)
                 if (!url.isNullOrBlank()) {
                     tab.currentUrl = url
@@ -675,6 +694,11 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 val tab = tabs.firstOrNull { it.webView === view }
+                if (view != null && tab != null && !tab.failed) {
+                    val started = loadStartedAt.remove(view)
+                    if (started != null) signalMonitor.recordLoad(android.os.SystemClock.elapsedRealtime() - started, true)
+                    retryScheduler.reset(view)
+                }
                 if (tab != null && !url.isNullOrBlank() && !isStartPageUrl(url) &&
                     (url.startsWith("https://") || url.startsWith("http://"))) {
                     tab.currentUrl = url
@@ -704,9 +728,25 @@ class MainActivity : Activity() {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || view == null) return true
                 val index = tabs.indexOfFirst { it.webView === view }
                 if (index < 0) return true
+                val lostUrl = tabs[index].currentUrl
+                val lostTitle = tabs[index].title
+                retryScheduler.reset(view)
                 pageContainer.removeView(view)
                 tabs.removeAt(index)
                 view.destroy()
+                val rescue = isWebUrl(lostUrl) && Guardian.allowRenderRescue()
+                if (rescue) {
+                    // Rebuild the lost tab in the same position with a fresh renderer and reload its page.
+                    val fresh = WebView(this@MainActivity)
+                    configureWebView(fresh)
+                    tabs.add(index.coerceAtMost(tabs.size), BrowserTab(webView = fresh, title = lostTitle, currentUrl = lostUrl))
+                    activeTabIndex = index.coerceAtMost(tabs.lastIndex)
+                    showTab(activeTabIndex)
+                    fresh.loadUrl(lostUrl)
+                    Guardian.noteRepair(this@MainActivity)
+                    Toast.makeText(this@MainActivity, "That page ran out of memory. It was restarted automatically.", Toast.LENGTH_LONG).show()
+                    return true
+                }
                 if (tabs.isEmpty()) {
                     activeTabIndex = -1
                     createTab(HOME_URL)
@@ -715,7 +755,7 @@ class MainActivity : Activity() {
                     else if (activeTabIndex == index) activeTabIndex = -1
                     showTab(if (activeTabIndex < 0) index.coerceAtMost(tabs.lastIndex) else activeTabIndex)
                 }
-                Toast.makeText(this@MainActivity, "A page used too much memory and was restarted.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "A page used too much memory and was closed.", Toast.LENGTH_LONG).show()
                 return true
             }
 
@@ -745,8 +785,11 @@ class MainActivity : Activity() {
                 if (request?.isForMainFrame == true && view != null) {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true
+                    loadStartedAt.remove(view)
+                    signalMonitor.recordLoad(0, false)
                     if (view === currentWebView()) showTab(activeTabIndex)
-                    statusText.text = "Page could not be loaded."
+                    statusText.text = "Page could not be loaded. Retrying automatically…"
+                    retryScheduler.schedule(view) { retryTab(tab) }
                 }
             }
         }
@@ -1226,6 +1269,51 @@ class MainActivity : Activity() {
             "window.yeehawStats && window.yeehawStats('" + formatDataBytes(sessionDataUsed) + "','" + formatDataBytes(sessionOfflineSaved) + "')",
             null
         )
+        val repairs = Guardian.totalCrashesRecovered(this) + Guardian.totalRepairs(this)
+        view.evaluateJavascript(
+            "window.yeehawLive && window.yeehawLive('" + signalMonitor.level.label + "'," + signalMonitor.level.ordinal + "," +
+                savings.skippedRequests + ",'" + formatDataBytes(savings.estimatedBytesAvoided) + "','" +
+                formatDuration(savings.lowSignalSecs) + "'," + repairs + ")",
+            null
+        )
+    }
+
+    private fun formatDuration(seconds: Long): String = when {
+        seconds >= 3600 -> (seconds / 3600).toString() + "h " + ((seconds % 3600) / 60) + "m"
+        seconds >= 60 -> (seconds / 60).toString() + "m " + (seconds % 60) + "s"
+        else -> seconds.toString() + "s"
+    }
+
+    /** Adapts every tab to the connection the user actually has. Never claims to improve signal. */
+    private fun applySignalPolicy(settings: WebSettings) {
+        val lowSignal = signalMonitor.level.textFirst
+        settings.cacheMode = if (lowSignal || preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
+    }
+
+    private fun onSignalChanged(level: SignalLevel) {
+        savings.onSignal(level)
+        tabs.filterNot { it.evicted }.forEach { applySignalPolicy(it.webView.settings) }
+        statusText.text = when (level) {
+            SignalLevel.OFFLINE -> "Offline. Saved pages still open."
+            SignalLevel.POOR -> "Weak signal: text-first mode saves your data."
+            SignalLevel.FAIR -> "Fair signal."
+            SignalLevel.GOOD -> "Signal OK."
+        }
+        if (level != SignalLevel.OFFLINE) {
+            // The connection is back (or usable): resume every page that was interrupted.
+            tabs.filter { it.failed && !it.evicted }.forEach { tab -> retryScheduler.runNow(tab.webView) { retryTab(tab) } }
+        }
+        updateDataStatsDisplay()
+    }
+
+    private fun retryTab(tab: BrowserTab) {
+        if (!tabs.contains(tab) || tab.evicted || !tab.failed) return
+        tab.failed = false
+        if (tabs.indexOf(tab) == activeTabIndex) {
+            pageContainer.removeAllViews()
+            pageContainer.addView(tab.webView)
+        }
+        tab.webView.reload()
     }
 
     private fun formatDataBytes(bytes: Long): String = when {
@@ -1555,6 +1643,9 @@ class MainActivity : Activity() {
         pendingWebPermission = null
         pendingGeoCallback?.invoke(pendingGeoOrigin, false, false)
         pendingGeoCallback = null
+        retryScheduler.cancelAll()
+        signalMonitor.stop()
+        savings.flush()
         browserStore.close()
         super.onDestroy()
     }

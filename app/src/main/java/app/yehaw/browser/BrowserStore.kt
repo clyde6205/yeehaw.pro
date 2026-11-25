@@ -161,3 +161,28 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
         fun utf8ByteCount(text: String): Long = text.toByteArray(Charsets.UTF_8).size.toLong()
     }
 }
+
+/**
+ * Opens the store; if the database file is damaged it is moved aside (never deleted) and a fresh
+ * store is created, so the browser always starts. The moved file stays on disk for recovery.
+ */
+object BrowserStoreRepair {
+    fun open(context: Context): BrowserStore {
+        var store = BrowserStore(context)
+        try {
+            store.readableDatabase.rawQuery("PRAGMA quick_check", null).use { c ->
+                if (c.moveToFirst() && c.getString(0) != "ok") throw android.database.sqlite.SQLiteException("quick_check failed")
+            }
+            return store
+        } catch (_: Exception) {
+            try { store.close() } catch (_: Exception) {}
+            val file = context.getDatabasePath("yehaw-browser.db")
+            val aside = java.io.File(file.parentFile, "yehaw-browser.db.corrupt-" + System.currentTimeMillis())
+            if (file.exists()) file.renameTo(aside)
+            java.io.File(file.path + "-wal").delete(); java.io.File(file.path + "-shm").delete(); java.io.File(file.path + "-journal").delete()
+            app.yehaw.browser.core.Guardian.noteRepair(context)
+            store = BrowserStore(context)
+            return store
+        }
+    }
+}

@@ -18,8 +18,8 @@ android {
         applicationId = "app.yehaw.browser"
         minSdk = 23
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.4.8"
+        versionCode = 19
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

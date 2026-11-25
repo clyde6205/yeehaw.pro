@@ -60,7 +60,9 @@
     </div>
   </form>
   <div class="stats" aria-live="polite">App data received: <b id="dataUsed">0 B</b> &nbsp;·&nbsp; Data saved offline: <b id="offlineSaved">0 B</b></div>
-  <div class="stats-note">Measured app network bytes and verified UTF-8 text bytes reused from offline copies. Offline savings exclude images, scripts and other page assets.</div>
+  <div class="stats" aria-live="polite" id="liveRow">Signal: <b id="sig">Checking</b> &nbsp;·&nbsp; Requests skipped: <b id="skipped">0</b> &nbsp;·&nbsp; Data avoided (est.): <b id="estSaved">0 B</b></div>
+  <div class="stats" id="liveRow2">Time in weak-signal mode: <b id="lowTime">0s</b> &nbsp;·&nbsp; Auto-repairs: <b id="repairs">0</b></div>
+  <div class="stats-note">Measured app network bytes and verified UTF-8 text bytes reused from offline copies are exact. Requests skipped is an exact count; data avoided is a conservative estimate because a request that is never sent has no measurable size. YeeHaw does not improve your signal; it uses the connection you have more carefully.</div>
   <div class="tiles">
     <a class="tile" href="?a=saved"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.7 5.5 6 .9-4.3 4.3 1 6-5.4-2.9-5.4 2.9 1-6L3.3 9.9l6-.9z"/></svg></span><span class="label">Saved</span></a>
     <a class="tile" href="?a=history"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3.5 2.2"/></svg></span><span class="label">History</span></a>
@@ -72,7 +74,7 @@
     <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label">Share</span></a>
   </div>
   <div class="tagline"><b>Your web, without the clutter.</b>A simple browser surface for the pages you need.</div>
-  <div class="version">YeeHaw™ Browser v0.4.8</div>
+  <div class="version">YeeHaw™ Browser v0.5.0</div>
   <div class="legal">YeeHaw™ · Free tier for ages 13+ · Pro is optional · No financial advice · Independent browser, not affiliated with Google</div>
   <nav>
     <a href="?a=home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><small>Home</small></a>
@@ -83,6 +85,14 @@
   </nav>
   <script>
     window.yeehawStats=function(used,saved){var a=document.getElementById('dataUsed');var b=document.getElementById('offlineSaved');if(a){a.textContent=used;}if(b){b.textContent=saved;}};
+    window.yeehawLive=function(sig,lvl,skipped,est,low,repairs){
+      var q=function(i){return document.getElementById(i)};
+      var s=q('sig');if(s){s.textContent=sig;s.style.color=lvl<2?'#ffb86b':'#b8f36b';}
+      if(q('skipped'))q('skipped').textContent=skipped;
+      if(q('estSaved'))q('estSaved').textContent=est;
+      if(q('lowTime'))q('lowTime').textContent=low;
+      if(q('repairs'))q('repairs').textContent=repairs;
+    };
   </script>
 </body>
 </html>
