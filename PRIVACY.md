@@ -9,7 +9,9 @@ Your tabs, history, bookmarks, downloads, saved offline pages, Quick Paste snipp
 
 ## What the app may send us
 
-- An anonymous random install ID, the app version, Android version, phone memory size and country code, so we can count installs and fix problems on low-memory phones.- Anonymous counts of crashes, freezes and data-saver activity. No web addresses and no page content.- In the EEA, UK and Switzerland this is sent only after you agree. Everywhere, you can turn it off, and "Forget me" in the app asks us to delete the data tied to your install ID.
+- An anonymous random install ID, the app version, Android version, phone memory size and country code, so we can count installs and fix problems on low-memory phones.
+- Anonymous counts of crashes, freezes and data-saver activity. No web addresses and no page content.
+- In the EEA, UK and Switzerland this is sent only after you agree. Everywhere, you can turn it off, and "Forget me" in the app asks us to delete the data tied to your install ID.
 
 ## Pro subscription
 
