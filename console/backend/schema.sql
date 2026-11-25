@@ -100,3 +100,13 @@ CREATE TABLE IF NOT EXISTS health_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS health_events_kind_idx ON health_events (kind, created_at);
+
+CREATE TABLE IF NOT EXISTS entitlements (
+  device_id     uuid PRIMARY KEY,
+  product_id    text NOT NULL,
+  token_hash    text NOT NULL,
+  state         text NOT NULL,
+  active        boolean NOT NULL,
+  expires_at    timestamptz,
+  verified_at   timestamptz NOT NULL DEFAULT now()
+);
