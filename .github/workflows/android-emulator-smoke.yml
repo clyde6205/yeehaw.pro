@@ -108,6 +108,21 @@ jobs:
           adb shell input keyevent 82 || true
           gradle --no-daemon :app:connectedDebugAndroidTest --info 2>&1 | tail -150
           exit ${PIPESTATUS[0]}
+      - name: Emulator measurements (cold start, memory) - emulator numbers, not a phone
+        if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 10
+        run: |
+          gradle --no-daemon :app:installDebug -q
+          PKG=app.yehaw.browser.debug
+          echo "=== API ${{ matrix.api-level }} @ 1.5 GB RAM emulator"
+          adb shell getprop ro.build.version.release
+          adb shell cat /proc/meminfo | head -1
+          for i in 1 2 3 4 5; do
+            adb shell am force-stop $PKG; sleep 2
+            adb shell am start -W -n $PKG/app.yehaw.browser.MainActivity | grep -E "ThisTime|TotalTime" | tr '\n' ' '; echo
+          done
+          sleep 8
+          adb shell dumpsys meminfo $PKG | grep -E "TOTAL|Java Heap|Native Heap" | head -6
       - name: Upload emulator diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
