@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<title>YeeHaw</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="brand">Yee<b>Haw</b></div>
+    <div class="greet" id="greet">Kumusta!</div>
+  </header>
+
+  <form id="searchForm" autocomplete="off">
+    <input id="q" type="search" inputmode="search" enterkeyhint="go" placeholder="Search or type address" aria-label="Search or type address">
+  </form>
+
+  <a id="defaultCta" class="cta" href="yeehaw://default-browser" hidden>
+    <span>TAP HERE to make Yehaw your Default Browser NOW</span>
+    <small>You will confirm once in your phone's browser settings.</small>
+  </a>
+
+  <section>
+    <h2>Pera at Bayad</h2>
+    <div class="grid" id="grid-money"></div>
+  </section>
+  <section>
+    <h2>Shop</h2>
+    <div class="grid" id="grid-shop"></div>
+  </section>
+  <section>
+    <h2>Social</h2>
+    <div class="grid" id="grid-social"></div>
+  </section>
+  <section>
+    <h2>Balita at Panahon</h2>
+    <div class="grid" id="grid-news"></div>
+  </section>
+
+  <section class="tools">
+    <a href="yeehaw://offline">Offline pages</a>
+    <a href="yeehaw://downloads">Downloads</a>
+    <a href="yeehaw://tabs">Tabs</a>
+  </section>
+
+  <footer id="stats"></footer>
+</main>
+
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <h3 id="sheetTitle"></h3>
+    <div id="sheetList"></div>
+    <div class="newrow">
+      <input id="newLabel" type="text" maxlength="24" placeholder="Account name (e.g. Shop 2)" aria-label="New account name">
+      <button id="newBtn" type="button">Add</button>
+    </div>
+    <button id="sheetClose" type="button" class="plain">Close</button>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

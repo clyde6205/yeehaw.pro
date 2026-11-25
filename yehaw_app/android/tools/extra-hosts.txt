@@ -1,0 +1,17 @@
+# Supplemental ad/tracker domains; compile with:
+# python3 tools/compile_blocklist.py app/src/main/assets/blocklist/hosts.bin hosts_raw.txt tools/extra-hosts.txt
+doubleclick.net
+googlesyndication.com
+googleadservices.com
+adservice.google.com
+adnxs.com
+taboola.com
+outbrain.com
+popads.net
+propellerads.com
+exoclick.com
+mgid.com
+revcontent.com
+criteo.com
+scorecardresearch.com
+hotjar.com

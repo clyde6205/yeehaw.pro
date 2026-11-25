@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="url_hint">Maghanap o mag-type ng address</string>
+    <string name="home">Home</string>
+    <string name="back">Bumalik</string>
+    <string name="forward">Susunod</string>
+    <string name="reload">I-reload</string>
+    <string name="new_tab">Bagong tab</string>
+    <string name="close_all">Isara lahat</string>
+    <string name="close">Isara</string>
+    <string name="delete">Burahin</string>
+    <string name="pause">I-pause</string>
+    <string name="resume">Ituloy</string>
+    <string name="cancel">Kanselahin</string>
+    <string name="save_offline">I-save para offline</string>
+    <string name="offline_pages">Mga offline na page</string>
+    <string name="downloads">Mga download</string>
+    <string name="share">I-share</string>
+    <string name="copy_link">Kopyahin ang link</string>
+    <string name="clear_data">Burahin ang browsing data…</string>
+    <string name="settings">Settings</string>
+    <string name="default_set">Ang YeeHaw na ang default browser mo.</string>
+    <string name="page_saved">Na-save ang page para sa offline</string>
+    <string name="link_copied">Nakopya ang link</string>
+    <string name="settings_adblock">I-block ang ads at trackers</string>
+    <string name="settings_datasaver">Data saver (i-compress ang larawan)</string>
+    <string name="settings_textonly">Text-only (walang larawan)</string>
+    <string name="settings_autosleep">Patulugin ang tab na hindi ginagamit</string>
+    <string name="cleared">Nabura na ang browsing data</string>
+    <string name="state_paused">Naka-pause</string>
+    <string name="state_waiting_network">Naghihintay ng network</string>
+    <string name="state_done">Tapos na</string>
+</resources>
