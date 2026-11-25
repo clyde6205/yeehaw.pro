@@ -271,6 +271,14 @@ views.config = async function (el) {
       table([['Version', function (r) { return 'v' + r.version + (r.is_active ? ' (live)' : ''); }], ['Note', function (r) { return r.note || ''; }], ['When', function (r) { return new Date(r.created_at).toLocaleString(); }], ['', function (r) { return r.is_active ? '' : act('Roll back', async function () { if (!confirm('Publish v' + r.version + ' as the live config?')) return; await api('/config/rollback', { method: 'POST', body: { version: r.version } }); toast('Rolled back'); show('config'); }, 'alt'); }]], S.hist)));
 };
 
+views.subs = async function (el) {
+  var d = await api('/subscriptions');
+  el.append(h('div', { class: 'grid g4' }, kpi('Active Pro', N(d.active), 'verified by Google Play'), kpi('Inactive / expired', N(d.inactive))),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'By state'), table([['State', function (r) { return r.state; }], ['Active', function (r) { return r.active ? 'yes' : 'no'; }], ['Devices', function (r) { return N(r.n); }]], d.by_state)),
+      h('div', { class: 'card' }, h('h2', {}, 'Recent verifications'), table([['Device', function (r) { return r.id; }], ['Product', function (r) { return r.product_id; }], ['State', function (r) { return r.state; }], ['Expires', function (r) { return r.expires_at ? new Date(r.expires_at).toLocaleDateString() : ''; }], ['Checked', function (r) { return ago(r.verified_at); }]], d.recent))),
+    h('p', { class: 'small mute' }, d.note));
+};
+
 views.system = async function (el) {
   var s = await api('/system'), a = await api('/audit?limit=100');
   el.append(h('div', { class: 'grid g4' }, kpi('Database latency', s.db_latency_ms + ' ms'), kpi('Database size', bytes(s.db_bytes)), kpi('Live config', 'v' + s.active_config_version), kpi('Blocked devices', N(s.counts.blocked))),
@@ -279,7 +287,7 @@ views.system = async function (el) {
 };
 
 /* ---------------- shell */
-var TABS = [['overview', 'Overview'], ['users', 'Users'], ['ads', 'Advertising'], ['updates', 'Updates & flags'], ['ops', 'Operations'], ['config', 'Search & blocklist'], ['system', 'System & audit']];
+var TABS = [['overview', 'Overview'], ['users', 'Users'], ['ads', 'Advertising'], ['updates', 'Updates & flags'], ['subs', 'Subscriptions'], ['ops', 'Operations'], ['config', 'Search & blocklist'], ['system', 'System & audit']];
 async function show(tab, quiet) {
   S.tab = tab; $('#drawer').classList.remove('open');
   var main = $('#main'); if (!main) return;

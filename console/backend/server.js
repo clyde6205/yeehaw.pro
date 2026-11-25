@@ -474,6 +474,19 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
     res.json({ entries: await rows('SELECT at, actor, action, detail FROM admin_audit ORDER BY id DESC LIMIT $1', [limit]) });
   }));
+  // Subscriptions: read-only view of server-verified Pro entitlements (Google Play is the source of truth).
+  admin.get('/subscriptions', wrap(async (_req, res) => {
+    const [counts, list] = await Promise.all([
+      rows(`SELECT state, active, count(*)::int AS n FROM entitlements GROUP BY 1, 2 ORDER BY 3 DESC`),
+      rows(`SELECT left(device_id::text, 8) AS id, product_id, state, active, expires_at, verified_at FROM entitlements ORDER BY verified_at DESC LIMIT 100`),
+    ]);
+    res.json({
+      active: counts.filter((r) => r.active).reduce((t, r) => t + r.n, 0),
+      inactive: counts.filter((r) => !r.active).reduce((t, r) => t + r.n, 0),
+      by_state: counts, recent: list,
+      note: 'Counts come from server-side Google Play verification. Revenue is not shown: purchase amounts are not stored; use Play Console financial reports.',
+    });
+  }));
   admin.get('/system', wrap(async (_req, res) => {
     const t0 = Date.now();
     await pool.query('SELECT 1');

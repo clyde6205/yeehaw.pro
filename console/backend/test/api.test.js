@@ -409,3 +409,12 @@ test('pro verify: fails closed without Play credentials, signed answer with a ve
     assert.equal(r.status, 400);
   } finally { s2.close(); }
 });
+
+test('admin subscriptions view requires token and lists verified entitlements', async () => {
+  assert.equal((await fetch(base + '/v1/admin/subscriptions')).status, 401);
+  const r = await admin('/subscriptions');
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(typeof j.active, 'number');
+  assert.ok(Array.isArray(j.recent));
+});
