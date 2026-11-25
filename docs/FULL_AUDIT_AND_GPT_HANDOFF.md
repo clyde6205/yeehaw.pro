@@ -1,5 +1,5 @@
 # YeeHaw™ Browser — Full Audit and GPT Coding Handoff
-Audit date: 2026-11-25 (Manila). Repo `clyde6205/yeehaw.pro`, branch `feature/low-signal-watchdog-savings` (head `4cfb66d`), PR #11 into `main`, nothing merged.
+Audit date: 2026-11-25 (Manila). Repo `clyde6205/yeehaw.pro`, branch `feature/low-signal-watchdog-savings` (head `4cfb66d`), PR #11 was merged into `main` at `3749e215` (earlier text saying "nothing merged" was wrong); work since then is on `integration/reconcile-main`.
 Status key: ✅ proven with evidence · 🟡 written/compiled but not exercised · ❌ not done · ⚠️ risk.
 **Rule for the auditor: a ✅ needs the evidence named in its row. If you cannot reproduce it, downgrade it.**
 
@@ -53,7 +53,7 @@ Win billions of users on **low-memory, low-grade phones** in the most populous, 
 
 ## 4. Backlog for GPT (priority order, each with an acceptance test)
 **P0 — launch blockers**
-1. **Merge path:** review PR #11, confirm CI green, merge to `main`. *Accept:* `main` build green; tag `v0.6.0`.
+1. **Merge path:** open a PR from `integration/reconcile-main` into `main`, confirm CI green, merge. *Accept:* `main` build green; tag `v0.6.0`.
 2. **Signing:** generate upload keystore (owner stores offline), add the four `ANDROID_KEYSTORE_*` secrets via GitHub UI (never in chat). *Accept:* workflow prints `apksigner verify` OK.
 3. **Deploy API:** link Vercel to the repo (root `console/backend`) or CLI deploy; run schema migration (creates `entitlements`); set `PLAY_SERVICE_ACCOUNT_JSON`, rotate `ADMIN_TOKEN` and Neon password; add `api.yeehaw.pro` CNAME. *Accept:* `curl https://api.yeehaw.pro/healthz` → `{"ok":true}`; `/v1/config/app-config` signature verifies with the app's public key; `POST /v1/pro/verify` with a Play test token returns signed `pro:true`.
 4. **Real-device test** on a 2 GB Android Go phone (+ one API 23 phone): cold start time, RSS (`adb shell dumpsys meminfo app.yehaw.browser.debug`), data used per page vs Chrome, throttled 2G/3G, airplane mode, forced crash relaunch. *Accept:* a table of measured numbers in `docs/DEVICE_TEST_RESULTS.md` with device models and Android versions. Do NOT publish speed claims without it.
