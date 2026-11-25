@@ -1,36 +1,80 @@
-# YeeHaw™ Launch Audit (for independent verification, e.g. by GPT)
-Vision: a fast browser that works on low-memory, low-grade phones on weak networks, spreads by QR/WhatsApp/Messenger/Telegram/Viber/SMS/Bluetooth, no login, free (consented ads) + server-verified Pro.
-Status key: ✅ done+evidenced · 🟡 written, unverified · ❌ not done. **Verifier: demand the evidence column.**
+# YeeHaw™ Launch Audit
 
-## A. Build & quality
-- ✅ v0.6.0 compiles in CI: Android build run 45578016894 green on commit cb605a2. Debug APK 3.2 MB, release (unsigned, R8) 496,632 bytes, limit 12 MiB. Evidence: GitHub Actions run + artifact `yehaw-android-apks`.
-- ❌ Unit/instrumented tests for core/ (SignalMonitor hysteresis, RetryScheduler, Guardian crash-loop).
-- ❌ Lint/R8/ProGuard release check; APK size on release.
-## B. Low-memory claim (core promise)
-- ❌ Emulator smoke tests (API 23/29/35/36) cannot run on these GitHub runners: logs say "hardware acceleration is not available" (no KVM; typical for private repos) and the emulator action fails before any app test starts (runs 45578784748, 45579043449). Needs a real phone, Firebase Test Lab, or a KVM-enabled runner. ❌ Real-device test on 2 GB phone: cold start, RSS, jank. Evidence: logs + numbers.
-- ❌ Throttled 2G/3G + airplane-mode runs.
-- 🟡 Savings meter: exact counters vs ESTIMATED avoided bytes. Evidence: compare against `TrafficStats` on device.
-- ❌ Low-RAM behaviour (`onTrimMemory`, tab discard) verified.
-## C. Self-repair
-- 🟡 Crash relaunch, crash-loop safe start, freeze watchdog, renderer-death rescue, DB repair. Evidence: forced-crash test on device (Android 10+ background-start limits make relaunch best-effort).
-## D. Apps-tile tools
-- 🟡 Built and compiled (Apps tile → YeeHaw tools): Memory Saver, Adaptive Data Saver, Storage Protection, Quick Paste, Clipboard Convenience (opt-in), Screenshot & Markup, Offline Reading. Not yet exercised on a device. Evidence needed: manual run-through.
-## E. Growth/sharing
-- 🟡 Share menu wired (QR, WhatsApp, Messenger, Telegram, Viber, SMS, Bluetooth/Nearby APK). ❌ Verify QR, WhatsApp/Messenger/Telegram/Viber/SMS, Bluetooth APK share on device; Play policy on sharing APKs.
-## F. Backend & founder console
-- ✅ 27 backend tests pass locally; browser E2E on seeded (fake) data.
-- ❌ Live API not updated (Vercel git source failed). 🟡 App now wired to console (telemetry boot, health counts, signed config, device block/update, blacklist, search routing); needs the API deployed to see data.
-- 🟡 Server-verified Pro: `/v1/pro/verify` + signed answer + client (backend 28/28 tests; Play call untested without credentials). ❌ Needs `PLAY_SERVICE_ACCOUNT_JSON`.
-- ❌ Ads: AdMob SDK intentionally NOT bundled (size/RAM); needs real AdMob ids — see docs/ADS_DECISION.md.
-- ❌ Rotate admin token + Neon password. Vercel Hobby forbids commercial use → paid host. ❌ DNS CNAME api.yeehaw.pro.
-## G. Security/privacy
-- ✅ Permission review done (docs/PERMISSIONS_REVIEW.md): runtime-only prompts, hardware features optional, cleartext justified, app's own calls HTTPS-only.
-- 🟡 Anonymous telemetry + consent. ❌ Privacy policy URL, Data Safety form.
-## H. Web
-- 🟡 Cloudflare: build+check pass in CI; dashboard build command must be `npm ci && npm run build` (docs/CLOUDFLARE_DEPLOY.md). Not confirmable from here. ❌ yeehaw.pro/get serves APK/Play link.
-## I. i18n & legal
-- 🟡 80 start-page languages (labels only; stats modes 2–3 and tagline sub-line English; other screens not translated). Native review required. RTL: ar, he, fa, ur, ps, sd.
-- 🟡 ™ on brand/legal line. ❌ Trademark search. 🟡 Disclaimers in docs/LEGAL_DISCLAIMERS.md need lawyer review.
-## J. Play release
-- ❌ Signed AAB, Play App Signing, content rating, target-audience, Data Safety, store listing.
-- ❌ New personal accounts need closed test: 12+ testers, 14 consecutive days, before production (support.google.com/googleplay/android-developer/answer/14151465). **Public Play launch cannot be same-day.**
+Branch `integration/reconcile-main` @ `780d2a7` · PR #12 into `main` (unmerged; `main` untouched at 3c73d6a) · audited 2026-11-25.
+Vision: fast browser for low-memory, low-grade phones on weak networks; spreads by QR/WhatsApp/Messenger/Telegram/Viber/SMS/Bluetooth; no login; free tier (consented ads) + server-verified Pro.
+
+Every line carries one of five statuses. **Complete and verified** means a command, CI run or measurement is cited. Nothing is marked verified from reading code.
+
+Legend: **CV** Complete and verified · **IV** Implemented but not verified · **PC** Partially complete · **BLK** Blocked by external provider or owner action · **NI** Not implemented
+
+## 1. Repository and build (P0/P1)
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Repo integrated on one branch, PR open, `main` untouched | CV | `git ls-remote` shows branch = HEAD; PR #12 |
+| Android compiles (debug + R8 release) | CV | Android build run 45594995936 success. Debug ≈3.2 MB, release unsigned ≈0.5 MB (size gate 12 MiB in workflow) |
+| JVM unit tests (policy, retry/guard logic, config rules, signature verify) | CV | Same run: `:app:testDebugUnitTest` passed (LogicTest, PerformancePolicyTest, ConfigRulesTest) |
+| Android lint blocks regressions | CV | Added to CI this session. It caught two real defects (Base64 API 26 call reachable on API 23–25; fine-only location request broken on Android 12+); both fixed, lint now green |
+| Backend tests with Postgres in CI | CV | backend-tests workflow success on f6033ff; re-run on later commits via workflow |
+| Static site build + checks in CI | CV | "Static product site checks" success on 8d0f69ce |
+| Dependency vulnerability audit (npm / Gradle) | NI | Not in CI yet |
+| Emulator / API 23 instrumented tests | BLK | Private repo has no KVM on standard runners; software emulation unsupported by the action. Needs Firebase Test Lab (GCP service account), larger paid runner, self-hosted KVM, or public repo. Workflow honestly reports "NOT run (infrastructure)" |
+| Signed release APK/AAB | BLK | No keystore secrets supplied |
+
+## 2. Core browser (P2)
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Low-memory tab policy (live-tab cap by RAM class, eviction, restore, 12-tab ceiling) | IV | Logic unit-tested; behaviour on a 2 GB device not run |
+| `onTrimMemory` / renderer-death rescue | IV | Code audited; no forced-kill device test |
+| Weak-network retry (GET-only, capped backoff), failed-page panel | IV | Backoff logic unit-tested; no throttled-network run. POST auto-retry duplicate-submit bug fixed |
+| Data Saver (Save-Data header on page requests, request skipping, honest counters) | PC | Mechanism implemented; **no measured savings exist**; WebView cannot add headers to subresources (documented) |
+| Savings meter reports measured vs estimated separately | IV | Reviewed; needs comparison with TrafficStats on device |
+| Private browsing (own process, separate data dir, wiped on exit, API 28+) | IV | Manifest and code audited; not run. Unavailable below API 28 by design (message shown) |
+| Storage guard (refuse downloads when critically low) | IV | Code path added; not run on device |
+| Bookmarks/history: single delete, confirmed clear-all | IV | Implemented; unit coverage none; not run |
+| Every visible control works | PC | Audited by reading; no click-through on device |
+| Device test matrix results | BLK | `DEVICE_TEST_RESULTS.md` has no numbers by design; needs a real phone or device farm |
+
+## 3. Production infrastructure (P3)
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Neon `entitlements` migration (additive) | CV | Applied to live `yeehaw`; table present, other tables untouched |
+| Backend `/v1/pro/verify`, admin subscriptions, signed config | CV (tests) / BLK (live) | Backend tests pass in CI; **live API still runs old code** |
+| Vercel API deployed from this branch | BLK | Vercel GitHub app cannot see the private repo; owner must connect repo with Root Directory `console/backend` |
+| `api.yeehaw.pro` DNS | BLK | Owner adds CNAME |
+| Cloudflare site deploy of this branch | BLK | Build/check pass in CI; production state unreadable from sandbox; dashboard command to confirm: `npm ci && npm run build`, output `./public` |
+| Vercel plan allows commercial use | BLK | Hobby forbids it; upgrade before charging |
+
+## 4. Founder console and monetization (P4)
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Admin API: devices, config, blacklist, subscriptions view | CV (tests) | Backend tests |
+| Roles, sessions, 2FA, richer user/entitlement management, security events | NI | Single bearer token today |
+| Server-verified Pro (fails closed) | IV | Verifier wired and tested with mocks; real Play call untestable without credentials |
+| Play service account / product | BLK | Owner creates in Play Console |
+| Ads | BLK | No SDK bundled, no real AdMob IDs (docs/ADS_DECISION.md) |
+| Rotate admin token / Neon password | BLK (owner declined 2026-11-25) | Accepted risk; recorded in KNOWN_ISSUES |
+
+## 5. Site, i18n, accessibility, sharing, privacy (P5)
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Start page layout preserved, only additive icons | IV | Reviewed against v0.4.6 layout; no screenshot comparison |
+| Marketing site, privacy, terms, support pages | CV (build) | Static checks pass; live rendering not checked from sandbox |
+| Public site shows no GitHub repo/Actions links | CV | Removed; static check passes |
+| Support email address | BLK | Owner must provide |
+| 80 start-page languages | PC | Machine-prepared labels; not native-reviewed; other screens untranslated |
+| RTL (ar, he, fa, ur, ps, sd) | IV | Direction set; not visually checked |
+| TalkBack, font scaling, contrast, touch targets | NI | No audit performed yet |
+| Share flows (QR, WhatsApp, Messenger, Telegram, Viber, SMS, Bluetooth) | IV | Wired; none exercised on device |
+| Permissions minimal and justified | CV (review) | docs/PERMISSIONS_REVIEW.md; lint-driven location fix applied |
+| Privacy policy + Data Safety answers | PC | Policy page exists; Play Data Safety form not filed |
+
+## 6. Release (P6)
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Release checklist, security audit, deployment docs | CV | docs/RELEASE_CHECKLIST.md, SECURITY_AUDIT.md, PRODUCTION_DEPLOYMENT.md |
+| Play listing, content rating, Data Safety, signed AAB | BLK | Owner actions; de-prioritized per owner |
+| New-account closed test (12 testers × 14 days) | BLK | Owner; public Play launch cannot be same-day |
+| Trademark search, legal review of disclaimers | BLK | Owner/lawyer |
+
+## Honest bottom line
+The code builds, lints clean and passes its unit and backend tests in CI. It has **never been run on a device or emulator**, the live API is **not** on this code, and nothing about speed, memory or data savings has been **measured**. Those are the three gaps between "builds" and "ready for launch".

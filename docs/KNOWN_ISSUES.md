@@ -18,4 +18,5 @@ Category key: APP = application defect, BUILD, INFRA, PROVIDER config, OWNER (ne
 | 12 | Play closed test: 12 testers x 14 days before production on new personal accounts. | OWNER | Recruit testers. |
 | 13 | `yehaw_app/` is a legacy, separate project (`co.yehaw.browser`). | APP | Preserved, not deleted. Not part of the shipped app. Decide on archiving. |
 | 14 | 80-language strings are machine-prepared, not reviewed by native speakers. | APP | Native review needed before claiming quality. |
-| 15 | No JVM unit tests yet for the pure-logic helpers. | APP | Adding in P1. |
+| 15 | JVM tests cover policy, retry/guard and config-signature logic only; no UI/WebView or instrumented tests. | APP/ENV | Needs emulator or device (see #1). Lint is now in CI. |
+| 16 | No dependency vulnerability audit (npm/Gradle) in CI; no accessibility audit. | APP | Next P1/P5 items. |
