@@ -1,0 +1,504 @@
+'use strict';
+const path = require('node:path');
+const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { makePool, migrate } = require('./db');
+const V = require('./lib/validate');
+const { loadSigner, safeEqual } = require('./lib/sign');
+
+const crypto = require('node:crypto');
+const CONFIG_TTL_SECONDS = 3600;
+const bucketOf = (id) => parseInt(crypto.createHash('sha256').update(id).digest('hex').slice(0, 8), 16) % 100;
+
+function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1 }) {
+  if (!pool) throw new Error('pool is required');
+  if (!adminToken || adminToken.length < 32) throw new Error('ADMIN_TOKEN must be at least 32 characters');
+  if (!signingKeyPem) throw new Error('CONFIG_SIGNING_KEY_PEM is required');
+  const signer = loadSigner(signingKeyPem.replace(/\\n/g, '\n'));
+
+  const app = express();
+  app.disable('x-powered-by');
+  app.set('etag', false);
+  app.set('trust proxy', trustProxy);
+
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        'default-src': ["'self'"],
+        'script-src': ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net', 'https://cdn.tailwindcss.com'],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'img-src': ["'self'", 'data:'],
+        'connect-src': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        'base-uri': ["'none'"],
+        'form-action': ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }));
+
+  const limiter = (windowMs, limit) => rateLimits
+    ? rateLimit({ windowMs, limit, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited' } })
+    : (_req, _res, next) => next();
+  const small = express.json({ limit: '8kb', strict: true });
+  const big = express.json({ limit: '256kb', strict: true });
+  const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+  // ------------------------------------------------------------------ public: telemetry
+  app.post('/v1/telemetry/boot', limiter(60_000, 30), small, wrap(async (req, res) => {
+    const p = V.bootPayload(req.body);
+    // Prefer the edge-derived country (Cloudflare / Vercel) over the device locale; never store IP addresses.
+    const edge = String(req.get('cf-ipcountry') || req.get('x-vercel-ip-country') || '').toUpperCase();
+    const country = /^[A-Z]{2}$/.test(edge) && edge !== 'XX' && edge !== 'T1' ? edge : p.country;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const dev = await client.query(
+        `INSERT INTO devices (device_id, app_version, android_os_ver, ram_mb, country, version_code)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (device_id) DO UPDATE SET last_seen = now(), boot_count = devices.boot_count + 1,
+           app_version = EXCLUDED.app_version, android_os_ver = EXCLUDED.android_os_ver,
+           ram_mb = EXCLUDED.ram_mb, country = COALESCE(EXCLUDED.country, devices.country),
+           version_code = COALESCE(EXCLUDED.version_code, devices.version_code)
+         RETURNING blocked`,
+        [p.device_id, p.app_version, p.android_os_ver, p.ram_mb, country, p.version_code]
+      );
+      if (dev.rows[0].blocked) { await client.query('COMMIT'); return res.status(200).json({ ok: true, blocked: true }); }
+      await client.query(
+        `INSERT INTO sessions (device_id, day) VALUES ($1, (now() AT TIME ZONE 'UTC')::date)
+         ON CONFLICT (device_id, day) DO UPDATE SET session_count = sessions.session_count + 1, last_at = now()`,
+        [p.device_id]
+      );
+      await client.query('COMMIT');
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+    res.status(200).json({ ok: true });
+  }));
+
+  // User-initiated erasure ("forget me"): removes the device and, by cascade, its sessions and ad events.
+  app.post('/v1/telemetry/forget', limiter(60_000, 10), small, wrap(async (req, res) => {
+    const id = String((req.body && req.body.device_id) || '').toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('device_id: must be a UUID', 'device_id');
+    await pool.query('DELETE FROM devices WHERE device_id = $1', [id]);
+    res.status(200).json({ ok: true });
+  }));
+
+  app.post('/v1/telemetry/ad-event', limiter(60_000, 240), small, wrap(async (req, res) => {
+    const e = V.adEventPayload(req.body);
+    const r = await pool.query(
+      `INSERT INTO ad_events (device_id, event_type, ad_format, ad_unit, network, revenue_micros, currency)
+       SELECT $1,$2,$3,$4,$5,$6,$7 WHERE EXISTS (SELECT 1 FROM devices WHERE device_id = $1 AND NOT blocked)`,
+      [e.device_id, e.event, e.ad_format, e.ad_unit, e.network, e.revenue_micros, e.currency]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'unknown_device' });
+    res.status(200).json({ ok: true });
+  }));
+
+  app.post('/v1/telemetry/share-event', limiter(60_000, 120), small, wrap(async (req, res) => {
+    const e = V.shareEventPayload(req.body);
+    const r = await pool.query(
+      `INSERT INTO share_events (device_id, action, channel, ref_code)
+       SELECT $1,$2,$3,$4 WHERE EXISTS (SELECT 1 FROM devices WHERE device_id = $1 AND NOT blocked)`,
+      [e.device_id, e.action, e.channel, e.ref_code]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'unknown_device' });
+    res.status(200).json({ ok: true });
+  }));
+
+  // Device-reported health and measured savings (deltas). Counts only: no URLs, no page content.
+  app.post('/v1/telemetry/health', limiter(60_000, 30), small, wrap(async (req, res) => {
+    const h = V.healthPayload(req.body);
+    if (!h.rows.length) return res.status(200).json({ ok: true });
+    const ok = await pool.query('SELECT 1 FROM devices WHERE device_id = $1 AND NOT blocked', [h.device_id]);
+    if (!ok.rowCount) return res.status(404).json({ error: 'unknown_device' });
+    const kinds = h.rows.map((r) => r[0]), vals = h.rows.map((r) => r[1]);
+    await pool.query(
+      `INSERT INTO health_events (device_id, kind, value) SELECT $1, k, v FROM unnest($2::text[], $3::bigint[]) AS t(k, v)`,
+      [h.device_id, kinds, vals]
+    );
+    res.status(200).json({ ok: true });
+  }));
+
+  // Per-device status, signed like the config: blocked, update required/available (staged rollout by device bucket).
+  app.get('/v1/device/status', limiter(60_000, 60), wrap(async (req, res) => {
+    const id = String(req.query.d || '').toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('d: must be a UUID', 'd');
+    const vc = Number.parseInt(req.query.vc, 10);
+    const dev = (await pool.query('SELECT blocked, blocked_reason, version_code FROM devices WHERE device_id = $1', [id])).rows[0];
+    const row = await activeRow();
+    const up = (row && row.update_policy) || {};
+    const code = Number.isInteger(vc) ? vc : (dev && dev.version_code) || 0;
+    const required = !!up.min_version_code && code > 0 && code < up.min_version_code;
+    const available = !!up.latest_version_code && code > 0 && code < up.latest_version_code && bucketOf(id) < (up.rollout_percent ?? 100);
+    const body = Buffer.from(JSON.stringify({
+      blocked: !!(dev && dev.blocked), blocked_reason: dev && dev.blocked ? (dev.blocked_reason || '') : '',
+      update_required: required, update_available: required || available,
+      latest_version_name: up.latest_version_name || '', update_url: up.update_url || '', update_message: up.message || '',
+      checked_at: new Date().toISOString(),
+    }), 'utf8');
+    res.set({ 'X-Config-Signature': signer.sign(body), 'Cache-Control': 'no-store' });
+    res.type('application/json').send(body);
+  }));
+
+  // ------------------------------------------------------------------ public: signed remote config
+  const configCache = new Map(); // version -> { body, sig }
+  const rowToConfig = (r) => ({
+    version: r.version,
+    issued_at: new Date(r.created_at).toISOString(),
+    ttl_seconds: CONFIG_TTL_SECONDS,
+    default_search_url: r.default_search_url,
+    affiliate_tag: r.affiliate_tag,
+    speed_dial: r.speed_dial,
+    blacklisted_domains: r.blacklisted_domains,
+    admob_enabled: r.admob_enabled,
+    features: r.features || {},
+    update_policy: r.update_policy || {},
+    ads_policy: r.ads_policy || {},
+    promos: r.promos || [],
+    announcement: r.announcement || null,
+  });
+  const activeRow = async (db = pool) => (await db.query('SELECT * FROM remote_configs WHERE is_active')).rows[0];
+
+  app.get('/v1/config/app-config', limiter(60_000, 120), wrap(async (req, res) => {
+    const row = await activeRow();
+    if (!row) return res.status(503).json({ error: 'no_active_config' });
+    let hit = configCache.get(row.version);
+    if (!hit) {
+      const body = Buffer.from(JSON.stringify(rowToConfig(row)), 'utf8');
+      hit = { body, sig: signer.sign(body) };
+      configCache.clear();
+      configCache.set(row.version, hit);
+    }
+    const etag = `"v${row.version}"`;
+    res.set({ ETag: etag, 'X-Config-Version': String(row.version), 'X-Config-Signature': hit.sig, 'Cache-Control': 'public, max-age=300' });
+    if (req.get('if-none-match') === etag) return res.status(304).end();
+    res.type('application/json').send(hit.body);
+  }));
+
+  // ------------------------------------------------------------------ admin
+  const failedAuth = limiter(15 * 60_000, 10);
+  const requireAdmin = (req, res, next) => {
+    const h = req.get('authorization') || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+    if (token && safeEqual(token, adminToken)) return next();
+    return failedAuth(req, res, () => res.status(401).json({ error: 'unauthorized' }));
+  };
+  const admin = express.Router();
+  admin.use(limiter(60_000, 240), requireAdmin);
+  admin.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+
+  admin.get('/stats', wrap(async (_req, res) => {
+    const today = `(now() AT TIME ZONE 'UTC')::date`;
+    const q = (sql, p) => pool.query(sql, p).then((r) => r.rows);
+    const [tot, newToday, dau, mau, low, countries, trend, versions, ads, revenue, shares] = await Promise.all([
+      q('SELECT count(*)::int AS n FROM devices'),
+      q(`SELECT count(*)::int AS n FROM devices WHERE (first_seen AT TIME ZONE 'UTC')::date = ${today}`),
+      q(`SELECT count(*)::int AS n FROM sessions WHERE day = ${today}`),
+      q(`SELECT count(DISTINCT device_id)::int AS n FROM sessions WHERE day > ${today} - 30`),
+      q('SELECT count(*)::int AS n FROM devices WHERE ram_mb <= 2048'),
+      q(`SELECT COALESCE(country::text,'??') AS country, count(*)::int AS devices FROM devices GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 10`),
+      q(`SELECT to_char(day,'YYYY-MM-DD') AS day, count(*)::int AS users FROM sessions WHERE day > ${today} - 14 GROUP BY day ORDER BY day`),
+      q('SELECT app_version, count(*)::int AS devices FROM devices GROUP BY 1 ORDER BY 2 DESC LIMIT 5'),
+      q(`SELECT event_type, count(*)::int AS n FROM ad_events WHERE created_at > now() - interval '30 days' GROUP BY 1`),
+      q(`SELECT currency::text AS currency, sum(revenue_micros)::bigint AS micros FROM ad_events WHERE event_type='paid' AND created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC`),
+      q(`SELECT action, channel, count(*)::int AS n FROM share_events WHERE created_at > now() - interval '30 days' GROUP BY 1, 2`),
+    ]);
+    const ev = Object.fromEntries(ads.map((r) => [r.event_type, r.n]));
+    const sumAction = (a) => shares.filter((r) => r.action === a).reduce((t, r) => t + r.n, 0);
+    const byChannel = {};
+    shares.forEach((r) => { byChannel[r.channel] = (byChannel[r.channel] || 0) + r.n; });
+    res.json({
+      total_installs: tot[0].n, new_today: newToday[0].n, dau: dau[0].n, mau: mau[0].n,
+      low_ram_devices: low[0].n, countries, dau_trend: trend, versions,
+      shares_30d: {
+        qr_shown: sumAction('qr_shown'), shared: sumAction('shared'), apk_shared: sumAction('apk_shared'),
+        by_channel: Object.entries(byChannel).map(([channel, count]) => ({ channel, count })).sort((a, b) => b.count - a.count || a.channel.localeCompare(b.channel)),
+      },
+      ads_30d: { impressions: ev.impression || 0, clicks: ev.click || 0, revenue: revenue.map((r) => ({ currency: r.currency, amount: Number(r.micros) / 1e6 })) },
+    });
+  }));
+
+  admin.get('/live', wrap(async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const { rows } = await pool.query(
+      `SELECT left(d.device_id::text, 8) AS id, d.country::text AS country, d.app_version, d.android_os_ver, d.ram_mb,
+              s.last_at AS at, s.session_count
+         FROM sessions s JOIN devices d USING (device_id) ORDER BY s.last_at DESC LIMIT $1`, [limit]);
+    res.json({ pings: rows });
+  }));
+
+  admin.get('/config', wrap(async (_req, res) => {
+    const row = await activeRow();
+    const hist = await pool.query('SELECT version, is_active, note, created_by, created_at FROM remote_configs ORDER BY version DESC LIMIT 20');
+    res.json({ config: rowToConfig(row), signing_key_fingerprint: signer.fingerprint, history: hist.rows });
+  }));
+
+  async function publish(patch, { actor, action, detail }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const cur = (await client.query('SELECT * FROM remote_configs WHERE is_active FOR UPDATE')).rows[0];
+      if (patch.base_version != null && cur && patch.base_version !== cur.version) {
+        await client.query('ROLLBACK');
+        const err = new Error('config changed since you loaded it; reload and retry'); err.status = 409; throw err;
+      }
+      const next = (await client.query('SELECT COALESCE(max(version),0)+1 AS v FROM remote_configs')).rows[0].v;
+      const m = { ...(cur || {}), ...patch.fields };
+      await client.query('UPDATE remote_configs SET is_active = false WHERE is_active');
+      const ins = await client.query(
+        `INSERT INTO remote_configs (version,is_active,default_search_url,affiliate_tag,speed_dial,blacklisted_domains,admob_enabled,note,created_by,
+                                     features,update_policy,ads_policy,promos,announcement)
+         VALUES ($1,true,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13::jsonb) RETURNING *`,
+        [next, m.default_search_url, m.affiliate_tag, JSON.stringify(m.speed_dial), m.blacklisted_domains, m.admob_enabled, patch.fields.note ?? null, actor,
+          JSON.stringify(m.features || {}), JSON.stringify(m.update_policy || {}), JSON.stringify(m.ads_policy || {}), JSON.stringify(m.promos || []),
+          m.announcement == null ? null : JSON.stringify(m.announcement)]
+      );
+      await client.query('INSERT INTO admin_audit (actor, action, detail) VALUES ($1,$2,$3::jsonb)', [actor, action, JSON.stringify({ ...detail, version: next })]);
+      await client.query('COMMIT');
+      configCache.clear();
+      return ins.rows[0];
+    } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+  }
+
+  admin.post('/config', big, wrap(async (req, res) => {
+    const base = req.body && req.body.base_version;
+    if (base != null && !Number.isInteger(base)) throw new V.ValidationError('base_version: must be an integer', 'base_version');
+    const fields = V.configPatch(Object.fromEntries(Object.entries(req.body).filter(([k]) => k !== 'base_version')));
+    const row = await publish({ fields, base_version: base }, { actor: 'admin', action: 'config.publish', detail: { changed: Object.keys(fields) } });
+    res.status(201).json({ config: rowToConfig(row) });
+  }));
+
+  admin.post('/config/rollback', small, wrap(async (req, res) => {
+    const v = req.body && req.body.version;
+    if (!Number.isInteger(v)) throw new V.ValidationError('version: must be an integer', 'version');
+    const old = (await pool.query('SELECT * FROM remote_configs WHERE version = $1', [v])).rows[0];
+    if (!old) return res.status(404).json({ error: 'unknown_version' });
+    const fields = {
+      default_search_url: old.default_search_url, affiliate_tag: old.affiliate_tag, speed_dial: old.speed_dial,
+      blacklisted_domains: old.blacklisted_domains, admob_enabled: old.admob_enabled, note: `rollback to v${v}`,
+      features: old.features, update_policy: old.update_policy, ads_policy: old.ads_policy, promos: old.promos, announcement: old.announcement,
+    };
+    const row = await publish({ fields }, { actor: 'admin', action: 'config.rollback', detail: { from: v } });
+    res.status(201).json({ config: rowToConfig(row) });
+  }));
+
+  const audit = (action, detail) => pool.query('INSERT INTO admin_audit (actor, action, detail) VALUES ($1,$2,$3::jsonb)', ['admin', action, JSON.stringify(detail || {})]);
+  const TODAY = `(now() AT TIME ZONE 'UTC')::date`;
+  const rows = (sql, p) => pool.query(sql, p).then((r) => r.rows);
+
+  // ---- users / devices
+  const devFilter = (q) => {
+    const w = [], p = [];
+    if (q.q) { p.push(String(q.q).toLowerCase().replace(/[%_\\]/g, '')); w.push(`(device_id::text LIKE $${p.length} || '%' OR lower(tags::text) LIKE '%' || $${p.length} || '%')`); }
+    if (q.country && /^[A-Za-z]{2}$/.test(q.country)) { p.push(q.country.toUpperCase()); w.push(`country = $${p.length}`); }
+    if (q.version) { p.push(String(q.version).slice(0, 32)); w.push(`app_version = $${p.length}`); }
+    if (q.blocked === '1') w.push('blocked');
+    if (q.lowram === '1') w.push('ram_mb <= 2048');
+    return { where: w.length ? 'WHERE ' + w.join(' AND ') : '', p };
+  };
+  admin.get('/devices', wrap(async (req, res) => {
+    const { where, p } = devFilter(req.query);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const total = (await pool.query(`SELECT count(*)::int AS n FROM devices ${where}`, p)).rows[0].n;
+    const list = await rows(
+      `SELECT device_id, country::text AS country, app_version, version_code, android_os_ver, ram_mb, boot_count, first_seen, last_seen, blocked, blocked_reason, tags
+         FROM devices ${where} ORDER BY last_seen DESC LIMIT ${limit} OFFSET ${offset}`, p);
+    res.json({ total, limit, offset, devices: list });
+  }));
+  admin.get('/devices/export', wrap(async (req, res) => {
+    const { where, p } = devFilter(req.query);
+    const list = await rows(`SELECT device_id, country::text AS country, app_version, android_os_ver, ram_mb, boot_count, first_seen, last_seen, blocked FROM devices ${where} ORDER BY last_seen DESC LIMIT 50000`, p);
+    const esc = (v) => { const s = v == null ? '' : v instanceof Date ? v.toISOString() : String(v); return /^[=+\-@]/.test(s) || /[",\n]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : '') + s.replace(/"/g, '""') + '"' : s; };
+    const head = 'device_id,country,app_version,android_os_ver,ram_mb,boot_count,first_seen,last_seen,blocked';
+    await audit('devices.export', { rows: list.length });
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="yeehaw-devices.csv"' });
+    res.send([head, ...list.map((r) => head.split(',').map((k) => esc(r[k])).join(','))].join('\n'));
+  }));
+  admin.get('/devices/:id', wrap(async (req, res) => {
+    const id = req.params.id.toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('id: must be a UUID', 'id');
+    const d = (await pool.query('SELECT * FROM devices WHERE device_id = $1', [id])).rows[0];
+    if (!d) return res.status(404).json({ error: 'unknown_device' });
+    const [days, ads, health, shares] = await Promise.all([
+      rows(`SELECT to_char(day,'YYYY-MM-DD') AS day, session_count FROM sessions WHERE device_id=$1 ORDER BY day DESC LIMIT 30`, [id]),
+      rows(`SELECT event_type, count(*)::int AS n, COALESCE(sum(revenue_micros),0)::bigint AS micros FROM ad_events WHERE device_id=$1 GROUP BY 1`, [id]),
+      rows(`SELECT kind, sum(value)::bigint AS total FROM health_events WHERE device_id=$1 GROUP BY 1`, [id]),
+      rows(`SELECT action, channel, count(*)::int AS n FROM share_events WHERE device_id=$1 GROUP BY 1,2`, [id]),
+    ]);
+    res.json({ device: d, sessions: days, ads, health: health.map((h) => ({ kind: h.kind, total: Number(h.total) })), shares });
+  }));
+  admin.post('/devices/:id/block', small, wrap(async (req, res) => {
+    const id = req.params.id.toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('id: must be a UUID', 'id');
+    if (typeof (req.body && req.body.blocked) !== 'boolean') throw new V.ValidationError('blocked: must be true or false', 'blocked');
+    const reason = req.body.blocked ? String(req.body.reason || '').slice(0, 200) : null;
+    const r = await pool.query(`UPDATE devices SET blocked=$2, blocked_reason=$3, blocked_at=CASE WHEN $2 THEN now() ELSE NULL END WHERE device_id=$1`, [id, req.body.blocked, reason]);
+    if (!r.rowCount) return res.status(404).json({ error: 'unknown_device' });
+    await audit(req.body.blocked ? 'device.block' : 'device.unblock', { device: id.slice(0, 8), reason });
+    res.json({ ok: true });
+  }));
+  admin.post('/devices/:id/note', small, wrap(async (req, res) => {
+    const id = req.params.id.toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('id: must be a UUID', 'id');
+    const notes = String((req.body && req.body.notes) || '').slice(0, 500);
+    const tags = Array.isArray(req.body && req.body.tags) ? [...new Set(req.body.tags.map((t) => String(t).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24)).filter(Boolean))].slice(0, 8) : [];
+    const r = await pool.query('UPDATE devices SET notes=$2, tags=$3 WHERE device_id=$1', [id, notes, tags]);
+    if (!r.rowCount) return res.status(404).json({ error: 'unknown_device' });
+    await audit('device.note', { device: id.slice(0, 8) });
+    res.json({ ok: true });
+  }));
+  admin.delete('/devices/:id', wrap(async (req, res) => {
+    const id = req.params.id.toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('id: must be a UUID', 'id');
+    const r = await pool.query('DELETE FROM devices WHERE device_id = $1', [id]);
+    await audit('device.erase', { device: id.slice(0, 8), existed: r.rowCount > 0 });
+    res.json({ ok: true, erased: r.rowCount });
+  }));
+
+  // ---- advertising analytics
+  admin.get('/analytics/ads', wrap(async (req, res) => {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+    const w = `a.created_at > now() - ($1 || ' days')::interval`, p = [String(days)];
+    const [totals, byDay, byFormat, byCountry, byNetwork, byCampaign] = await Promise.all([
+      rows(`SELECT event_type, count(*)::int AS n, COALESCE(sum(revenue_micros),0)::bigint AS micros FROM ad_events a WHERE ${w} GROUP BY 1`, p),
+      rows(`SELECT to_char((a.created_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS day,
+              count(*) FILTER (WHERE event_type='impression')::int AS impressions, count(*) FILTER (WHERE event_type='click')::int AS clicks,
+              COALESCE(sum(revenue_micros) FILTER (WHERE event_type='paid'),0)::bigint AS micros
+            FROM ad_events a WHERE ${w} GROUP BY 1 ORDER BY 1`, p),
+      rows(`SELECT ad_format, count(*) FILTER (WHERE event_type='impression')::int AS impressions, count(*) FILTER (WHERE event_type='click')::int AS clicks,
+              COALESCE(sum(revenue_micros) FILTER (WHERE event_type='paid'),0)::bigint AS micros FROM ad_events a WHERE ${w} GROUP BY 1 ORDER BY 2 DESC`, p),
+      rows(`SELECT COALESCE(d.country::text,'??') AS country, count(*) FILTER (WHERE event_type='impression')::int AS impressions,
+              count(*) FILTER (WHERE event_type='click')::int AS clicks, COALESCE(sum(revenue_micros) FILTER (WHERE event_type='paid'),0)::bigint AS micros
+            FROM ad_events a JOIN devices d USING (device_id) WHERE ${w} GROUP BY 1 ORDER BY 4 DESC, 2 DESC LIMIT 25`, p),
+      rows(`SELECT COALESCE(network,'unknown') AS network, count(*) FILTER (WHERE event_type='impression')::int AS impressions,
+              COALESCE(sum(revenue_micros) FILTER (WHERE event_type='paid'),0)::bigint AS micros FROM ad_events a WHERE ${w} GROUP BY 1 ORDER BY 3 DESC, 2 DESC`, p),
+      rows(`SELECT ad_unit AS campaign, count(*) FILTER (WHERE event_type='impression')::int AS impressions, count(*) FILTER (WHERE event_type='click')::int AS clicks
+            FROM ad_events a WHERE ${w} AND ad_unit LIKE 'campaign:%' GROUP BY 1 ORDER BY 2 DESC LIMIT 50`, p),
+    ]);
+    const t = Object.fromEntries(totals.map((r) => [r.event_type, r]));
+    const imp = (t.impression || {}).n || 0, clk = (t.click || {}).n || 0, micros = Number((t.paid || {}).micros || 0);
+    const num = (r) => ({ ...r, micros: undefined, revenue: Number(r.micros) / 1e6, ctr: r.impressions ? (r.clicks || 0) / r.impressions : 0,
+      ecpm: r.impressions ? (Number(r.micros) / 1e6) / r.impressions * 1000 : 0 });
+    res.json({
+      days, impressions: imp, clicks: clk, ctr: imp ? clk / imp : 0, revenue_note: 'Revenue is summed across currencies reported by the ad SDK; check the currency before comparing.',
+      revenue: micros / 1e6, ecpm: imp ? micros / 1e6 / imp * 1000 : 0,
+      by_day: byDay.map(num), by_format: byFormat.map(num), by_country: byCountry.map(num), by_network: byNetwork.map(num),
+      by_campaign: byCampaign.map((r) => ({ campaign: r.campaign.slice(9), impressions: r.impressions, clicks: r.clicks, ctr: r.impressions ? r.clicks / r.impressions : 0 })),
+    });
+  }));
+
+  // ---- global operations
+  admin.get('/analytics/geo', wrap(async (_req, res) => {
+    const list = await rows(
+      `SELECT COALESCE(d.country::text,'??') AS country, count(*)::int AS devices,
+              count(*) FILTER (WHERE d.ram_mb <= 2048)::int AS low_ram,
+              count(*) FILTER (WHERE d.last_seen > now() - interval '7 days')::int AS active_7d,
+              count(*) FILTER (WHERE d.first_seen > now() - interval '7 days')::int AS new_7d
+         FROM devices d GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 100`);
+    res.json({ countries: list });
+  }));
+  admin.get('/analytics/fleet', wrap(async (_req, res) => {
+    const [versions, os, ram, installs, dau] = await Promise.all([
+      rows(`SELECT app_version, count(*)::int AS devices FROM devices GROUP BY 1 ORDER BY 2 DESC LIMIT 12`),
+      rows(`SELECT android_os_ver, count(*)::int AS devices FROM devices GROUP BY 1 ORDER BY 2 DESC LIMIT 12`),
+      rows(`SELECT CASE WHEN ram_mb<=1024 THEN '<=1 GB' WHEN ram_mb<=2048 THEN '1-2 GB' WHEN ram_mb<=3072 THEN '2-3 GB' WHEN ram_mb<=4096 THEN '3-4 GB' ELSE '>4 GB' END AS tier, count(*)::int AS devices FROM devices GROUP BY 1 ORDER BY min(ram_mb)`),
+      rows(`SELECT to_char((first_seen AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS day, count(*)::int AS n FROM devices WHERE first_seen > now() - interval '30 days' GROUP BY 1 ORDER BY 1`),
+      rows(`SELECT to_char(day,'YYYY-MM-DD') AS day, count(*)::int AS n FROM sessions WHERE day > ${TODAY} - 30 GROUP BY day ORDER BY day`),
+    ]);
+    const ret = (await rows(
+      `SELECT count(*) FILTER (WHERE (d.first_seen AT TIME ZONE 'UTC')::date <= ${TODAY}-1)::int AS c1,
+              count(*) FILTER (WHERE (d.first_seen AT TIME ZONE 'UTC')::date <= ${TODAY}-1 AND EXISTS (SELECT 1 FROM sessions s WHERE s.device_id=d.device_id AND s.day=(d.first_seen AT TIME ZONE 'UTC')::date+1))::int AS r1,
+              count(*) FILTER (WHERE (d.first_seen AT TIME ZONE 'UTC')::date <= ${TODAY}-7)::int AS c7,
+              count(*) FILTER (WHERE (d.first_seen AT TIME ZONE 'UTC')::date <= ${TODAY}-7 AND EXISTS (SELECT 1 FROM sessions s WHERE s.device_id=d.device_id AND s.day=(d.first_seen AT TIME ZONE 'UTC')::date+7))::int AS r7,
+              count(*) FILTER (WHERE (d.first_seen AT TIME ZONE 'UTC')::date <= ${TODAY}-30)::int AS c30,
+              count(*) FILTER (WHERE (d.first_seen AT TIME ZONE 'UTC')::date <= ${TODAY}-30 AND EXISTS (SELECT 1 FROM sessions s WHERE s.device_id=d.device_id AND s.day=(d.first_seen AT TIME ZONE 'UTC')::date+30))::int AS r30
+         FROM devices d`))[0];
+    const pct = (r, c) => (c ? r / c : null);
+    res.json({ versions, android: os, ram_tiers: ram, installs_30d: installs, dau_30d: dau,
+      retention: { d1: pct(ret.r1, ret.c1), d7: pct(ret.r7, ret.c7), d30: pct(ret.r30, ret.c30), cohort: { d1: ret.c1, d7: ret.c7, d30: ret.c30 } } });
+  }));
+  admin.get('/analytics/health', wrap(async (req, res) => {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+    const p = [String(days)];
+    const [totals, trend, byVersion, reporting] = await Promise.all([
+      rows(`SELECT kind, sum(value)::bigint AS total, count(DISTINCT device_id)::int AS devices FROM health_events WHERE created_at > now() - ($1 || ' days')::interval GROUP BY 1`, p),
+      rows(`SELECT to_char((created_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS day,
+              COALESCE(sum(value) FILTER (WHERE kind='crash'),0)::bigint AS crash, COALESCE(sum(value) FILTER (WHERE kind='freeze'),0)::bigint AS freeze,
+              COALESCE(sum(value) FILTER (WHERE kind='render_rescue'),0)::bigint AS render_rescue
+            FROM health_events WHERE created_at > now() - ($1 || ' days')::interval GROUP BY 1 ORDER BY 1`, p),
+      rows(`SELECT d.app_version, COALESCE(sum(h.value) FILTER (WHERE h.kind='crash'),0)::bigint AS crashes, count(DISTINCT d.device_id)::int AS devices
+            FROM health_events h JOIN devices d USING (device_id) WHERE h.created_at > now() - ($1 || ' days')::interval GROUP BY 1 ORDER BY 2 DESC LIMIT 10`, p),
+      rows(`SELECT count(DISTINCT device_id)::int AS n FROM health_events WHERE created_at > now() - ($1 || ' days')::interval`, p),
+    ]);
+    const t = Object.fromEntries(totals.map((r) => [r.kind, Number(r.total)]));
+    res.json({
+      days, reporting_devices: reporting[0].n,
+      crashes: t.crash || 0, freezes: t.freeze || 0, render_rescues: t.render_rescue || 0, store_repairs: t.store_repair || 0,
+      savings: { skipped_requests: t.skipped_requests || 0, est_bytes_avoided: t.est_bytes_avoided || 0, low_signal_seconds: t.low_signal_seconds || 0, data_received_bytes: t.data_received_bytes || 0 },
+      trend: trend.map((r) => ({ day: r.day, crash: Number(r.crash), freeze: Number(r.freeze), render_rescue: Number(r.render_rescue) })),
+      by_version: byVersion.map((r) => ({ app_version: r.app_version, crashes: Number(r.crashes), devices: r.devices })),
+    });
+  }));
+
+  admin.get('/audit', wrap(async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 500);
+    res.json({ entries: await rows('SELECT at, actor, action, detail FROM admin_audit ORDER BY id DESC LIMIT $1', [limit]) });
+  }));
+  admin.get('/system', wrap(async (_req, res) => {
+    const t0 = Date.now();
+    await pool.query('SELECT 1');
+    const [size, counts, cfg] = await Promise.all([
+      rows('SELECT pg_database_size(current_database())::bigint AS bytes'),
+      rows(`SELECT (SELECT count(*) FROM devices)::int AS devices, (SELECT count(*) FROM sessions)::int AS sessions, (SELECT count(*) FROM ad_events)::int AS ad_events,
+                   (SELECT count(*) FROM health_events)::int AS health_events, (SELECT count(*) FROM share_events)::int AS share_events, (SELECT count(*) FROM devices WHERE blocked)::int AS blocked`),
+      activeRow(),
+    ]);
+    res.json({ db_latency_ms: Date.now() - t0, db_bytes: Number(size[0].bytes), counts: counts[0], active_config_version: cfg && cfg.version,
+      signing_key_fingerprint: signer.fingerprint, node: process.version, server_time: new Date().toISOString() });
+  }));
+
+  app.use('/v1/admin', admin);
+
+  // Founder console (single file). Served from this origin so the API needs no CORS.
+  app.get(['/admin', '/admin/'], (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+  });
+
+  app.get('/healthz', wrap(async (_req, res) => { await pool.query('SELECT 1'); res.json({ ok: true }); }));
+  app.get('/', (_req, res) => res.json({ service: 'yeehaw-console-api', ok: true }));
+
+  app.use((_req, res) => res.status(404).json({ error: 'not_found' }));
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, _req, res, _next) => {
+    if (err instanceof V.ValidationError) return res.status(400).json({ error: 'invalid_request', message: err.message, field: err.field });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large' });
+    if (err.status === 409) return res.status(409).json({ error: 'conflict', message: err.message });
+    console.error('[error]', err);
+    res.status(500).json({ error: 'server_error' });
+  });
+
+  return app;
+}
+
+module.exports = { createApp };
+
+if (require.main === module) {
+  (async () => {
+    const pool = makePool();
+    await migrate(pool);
+    const app = createApp({
+      pool,
+      adminToken: process.env.ADMIN_TOKEN,
+      signingKeyPem: process.env.CONFIG_SIGNING_KEY_PEM,
+      trustProxy: Number(process.env.TRUST_PROXY ?? 1),
+    });
+    const port = Number(process.env.PORT || 8080);
+    const server = app.listen(port, () => console.log(`yeehaw-console-api listening on :${port}`));
+    const stop = () => server.close(() => pool.end().then(() => process.exit(0)));
+    process.on('SIGTERM', stop); process.on('SIGINT', stop);
+  })().catch((e) => { console.error(e); process.exit(1); });
+}

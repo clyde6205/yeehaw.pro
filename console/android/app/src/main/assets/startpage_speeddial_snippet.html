@@ -1,0 +1,20 @@
+<!-- Paste this block into assets/startpage.html just before </body>. Uses your existing .tiles/.tile/.icon/.label styles. -->
+<script>
+window.yeehawSpeedDial = function (list) {
+  var old = document.getElementById('yhDial'); if (old) old.remove();
+  if (!Array.isArray(list) || !list.length) return;
+  var wrap = document.createElement('div'); wrap.className = 'tiles'; wrap.id = 'yhDial';
+  list.slice(0, 12).forEach(function (e) {
+    if (!e || typeof e.url !== 'string' || e.url.indexOf('https://') !== 0) return;
+    var a = document.createElement('a'); a.className = 'tile'; a.href = e.url; a.rel = e.sponsored ? 'sponsored noopener' : 'noopener';
+    var ic = document.createElement('span'); ic.className = 'icon'; ic.style.fontWeight = '800'; ic.style.fontSize = '1.3rem';
+    ic.textContent = String(e.title || '?').trim().charAt(0).toUpperCase();
+    var lb = document.createElement('span'); lb.className = 'label'; lb.textContent = String(e.title || '');
+    a.appendChild(ic); a.appendChild(lb);
+    if (e.sponsored) { var sp = document.createElement('span'); sp.className = 'label'; sp.style.fontSize = '.62rem'; sp.style.color = '#5a6b84'; sp.textContent = 'Sponsored'; a.appendChild(sp); }
+    wrap.appendChild(a);
+  });
+  var first = document.querySelector('.tiles'); // the built-in tiles
+  if (first && first.parentNode) first.parentNode.insertBefore(wrap, first.nextSibling); else document.body.appendChild(wrap);
+};
+</script>

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>YeeHaw Founder Console</title>
+<style>
+:root{--bg:#080d18;--card:#101a2a;--line:#1d2b45;--ink:#eef3fb;--mute:#8da0bd;--lime:#b8f36b;--blue:#82b7ff;--warn:#ffb86b;--bad:#ff7a7a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--blue)}h1,h2,h3{margin:0}h2{font-size:1.05rem;margin-bottom:10px}h3{font-size:.9rem;color:var(--mute);font-weight:600;margin:14px 0 6px}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;flex-wrap:wrap}
+.brand{font-weight:900;color:var(--lime);letter-spacing:-.04em;font-size:1.1rem}.brand span{color:var(--ink)}
+nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}nav button{background:none;border:0;color:var(--mute);padding:8px 12px;border-radius:9px;font-weight:600;cursor:pointer}
+nav button.on{background:#17263b;color:var(--lime)}
+main{padding:16px;max-width:1280px;margin:0 auto}
+.grid{display:grid;gap:12px}.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.kpi .v{font-size:1.6rem;font-weight:800;color:var(--lime)}.kpi .l{color:var(--mute);font-size:.78rem}.kpi .s{color:var(--mute);font-size:.72rem}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-size:.84rem;vertical-align:top}th{color:var(--mute);font-weight:600}
+tr.click{cursor:pointer}tr.click:hover{background:#14233a}.wrap{overflow-x:auto}
+input,select,textarea{background:#131f35;border:1px solid #2d4160;color:var(--ink);border-radius:9px;padding:7px 10px;font:inherit;max-width:100%}
+input[type=checkbox]{width:auto}textarea{width:100%;min-height:90px;font-family:ui-monospace,monospace;font-size:.8rem}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--lime);outline-offset:1px}
+label{display:flex;flex-direction:column;gap:4px;color:var(--mute);font-size:.78rem}label.ck{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:.88rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}.row>label{flex:1;min-width:130px}
+button.b{background:var(--lime);color:#101b0b;border:0;border-radius:9px;padding:8px 14px;font-weight:800;cursor:pointer}
+button.b.alt{background:#1d2f4a;color:var(--ink)}button.b.red{background:#4a1d1d;color:#ffd0d0}button.b:disabled{opacity:.5;cursor:not-allowed}
+.pill{display:inline-block;border-radius:99px;padding:1px 8px;font-size:.72rem;background:#1d2f4a;color:var(--ink)}.pill.red{background:#4a1d1d;color:#ffb0b0}.pill.warn{background:#4a3a1d;color:var(--warn)}.pill.ok{background:#1f3a1d;color:var(--lime)}
+.mute{color:var(--mute)}.small{font-size:.76rem}.bar{height:8px;border-radius:4px;background:#1d2f4a;overflow:hidden}.bar>i{display:block;height:100%;background:var(--lime)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#17263b;border:1px solid var(--lime);padding:10px 16px;border-radius:10px;display:none;z-index:20;max-width:90vw}
+#toast.err{border-color:var(--bad)}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:#0c1424;border-left:1px solid var(--line);padding:16px;overflow:auto;transform:translateX(100%);transition:transform .15s;z-index:15}
+#drawer.open{transform:none}
+.login{max-width:380px;margin:12vh auto;text-align:center}.login .card{display:flex;flex-direction:column;gap:10px}
+svg text{fill:var(--mute);font-size:10px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<aside id="drawer" aria-label="Details"></aside>
+<noscript><p style="padding:2rem">The console needs JavaScript.</p></noscript>
+<script>
+(function () {
+'use strict';
+/* ---------------- tiny DOM + api helpers (textContent only: nothing from the network is ever parsed as HTML) */
+function h(tag, attrs) {
+  var e = document.createElement(tag), kids = Array.prototype.slice.call(arguments, 2);
+  Object.keys(attrs || {}).forEach(function (k) {
+    var v = attrs[k];
+    if (v == null || v === false) return;
+    if (k === 'class') e.className = v; else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+    else if (k === 'value') e.value = v; else if (k === 'checked') e.checked = !!v; else e.setAttribute(k, v === true ? '' : v);
+  });
+  kids.flat(9).forEach(function (c) { if (c == null || c === false) return; e.appendChild(c.nodeType ? c : document.createTextNode(String(c))); });
+  return e;
+}
+var $ = function (s, r) { return (r || document).querySelector(s); };
+var tok = function () { try { return sessionStorage.getItem('yh.tok') || ''; } catch (e) { return ''; } };
+var setTok = function (t) { try { t ? sessionStorage.setItem('yh.tok', t) : sessionStorage.removeItem('yh.tok'); } catch (e) {} };
+function toast(msg, err) { var t = $('#toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = 'none'; }, err ? 6000 : 2600); }
+async function api(path, opts) {
+  opts = opts || {};
+  var r = await fetch('/v1/admin' + path, { method: opts.method || 'GET', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok() }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  if (opts.raw && r.ok) return r;
+  var d = null; try { d = await r.json(); } catch (e) {}
+  if (r.status === 401) { setTok(''); render(); throw new Error('Signed out'); }
+  if (!r.ok) throw new Error((d && (d.message || d.error)) || 'HTTP ' + r.status);
+  return d;
+}
+var N = function (n) { return Number(n || 0).toLocaleString(); };
+var pct = function (x) { return x == null ? 'n/a' : (x * 100).toFixed(1) + '%'; };
+var money = function (x) { return (x || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }); };
+function bytes(b) { b = Number(b || 0); if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB'; if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB'; if (b >= 1e3) return Math.round(b / 1e3) + ' KB'; return b + ' B'; }
+function dur(s) { s = Number(s || 0); if (s >= 3600) return (s / 3600).toFixed(1) + ' h'; if (s >= 60) return Math.round(s / 60) + ' min'; return s + ' s'; }
+function ago(iso) { var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); return s < 60 ? Math.round(s) + 's ago' : s < 3600 ? Math.round(s / 60) + 'm ago' : s < 86400 ? Math.round(s / 3600) + 'h ago' : Math.round(s / 86400) + 'd ago'; }
+var flag = function (c) { return /^[A-Z]{2}$/.test(c || '') ? String.fromCodePoint.apply(null, c.split('').map(function (x) { return 127397 + x.charCodeAt(0); })) : '🌐'; };
+var csvList = function (s) { return String(s || '').split(/[\s,]+/).map(function (x) { return x.trim().toUpperCase(); }).filter(Boolean); };
+
+function kpi(l, v, s) { return h('div', { class: 'card kpi' }, h('div', { class: 'l' }, l), h('div', { class: 'v' }, v), s ? h('div', { class: 's' }, s) : null); }
+function table(cols, data, onRow) {
+  return h('div', { class: 'wrap' }, h('table', {}, h('thead', {}, h('tr', {}, cols.map(function (c) { return h('th', {}, c[0]); }))),
+    h('tbody', {}, data.length ? data.map(function (r) {
+      return h('tr', { class: onRow ? 'click' : '', onclick: onRow ? function () { onRow(r); } : null }, cols.map(function (c) { var v = c[1](r); return h('td', {}, v); }));
+    }) : h('tr', {}, h('td', { colspan: cols.length, class: 'mute' }, 'No data yet')))));
+}
+function bars(items, opt) { // items: [{label, value}]
+  opt = opt || {}; var w = 560, hh = 120, pad = 18, max = Math.max.apply(null, items.map(function (i) { return i.value; }).concat([1]));
+  var bw = items.length ? (w - pad) / items.length : 10, ns = 'http://www.w3.org/2000/svg', s = document.createElementNS(ns, 'svg');
+  s.setAttribute('viewBox', '0 0 ' + w + ' ' + (hh + 16)); s.setAttribute('width', '100%'); s.setAttribute('role', 'img'); s.setAttribute('aria-label', opt.label || 'chart');
+  items.forEach(function (it, i) {
+    var bh = Math.round((it.value / max) * (hh - 6)), r = document.createElementNS(ns, 'rect');
+    r.setAttribute('x', pad + i * bw + 1); r.setAttribute('y', hh - bh); r.setAttribute('width', Math.max(bw - 2, 1)); r.setAttribute('height', bh); r.setAttribute('rx', 2); r.setAttribute('fill', opt.color || '#b8f36b');
+    var t = document.createElementNS(ns, 'title'); t.textContent = it.label + ': ' + N(it.value); r.appendChild(t); s.appendChild(r);
+    if (items.length <= 16 || i % Math.ceil(items.length / 10) === 0) { var x = document.createElementNS(ns, 'text'); x.setAttribute('x', pad + i * bw); x.setAttribute('y', hh + 12); x.textContent = String(it.label).slice(5); s.appendChild(x); }
+  });
+  var m = document.createElementNS(ns, 'text'); m.setAttribute('x', 0); m.setAttribute('y', 10); m.textContent = N(max); s.appendChild(m);
+  return s;
+}
+function guard(fn, btn) { return async function () { if (btn) btn.disabled = true; try { await fn(); } catch (e) { toast(e.message, true); } finally { if (btn) btn.disabled = false; } }; }
+function act(label, fn, cls) { var b = h('button', { class: 'b ' + (cls || '') }, label); b.addEventListener('click', function () { guard(fn, b)(); }); return b; }
+
+/* ---------------- state + config publishing */
+var S = { tab: 'overview', cfg: null, ver: null, timers: [] };
+async function loadCfg() { var d = await api('/config'); S.cfg = d.config; S.ver = d.config.version; S.hist = d.history; S.fp = d.signing_key_fingerprint; return d; }
+async function publish(patch, note) {
+  var body = Object.assign({ base_version: S.ver, note: note || '' }, patch);
+  var r = await api('/config', { method: 'POST', body: body });
+  S.cfg = r.config; S.ver = r.config.version; toast('Published config v' + S.ver + '. Apps pick it up within the hour (or at next launch).'); return r;
+}
+
+/* ---------------- views */
+var views = {};
+views.overview = async function (el) {
+  var s = await api('/stats'), live = await api('/live?limit=25');
+  var sh = s.shares_30d;
+  el.append(
+    h('div', { class: 'grid g4' }, kpi('Total installs', N(s.total_installs), '+' + N(s.new_today) + ' today'), kpi('DAU', N(s.dau)), kpi('MAU (30d)', N(s.mau)),
+      kpi('Low-RAM devices', N(s.low_ram_devices), s.total_installs ? pct(s.low_ram_devices / s.total_installs) + ' of fleet' : ''), kpi('Shares (30d)', N(sh.qr_shown + sh.shared + sh.apk_shared), 'QR ' + N(sh.qr_shown) + ' | links ' + N(sh.shared) + ' | APK ' + N(sh.apk_shared)),
+      kpi('Ad impressions (30d)', N(s.ads_30d.impressions), s.ads_30d.revenue.map(function (r) { return r.currency + ' ' + money(r.amount); }).join(' | ') || 'no revenue yet')),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' },
+      h('div', { class: 'card' }, h('h2', {}, 'Daily active users (14 days)'), bars(s.dau_trend.map(function (d) { return { label: d.day, value: d.users }; }), { label: 'DAU' })),
+      h('div', { class: 'card' }, h('h2', {}, 'Top countries'), table([['Country', function (r) { return flag(r.country) + ' ' + r.country; }], ['Devices', function (r) { return N(r.devices); }]], s.countries))),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' },
+      h('div', { class: 'card' }, h('h2', {}, 'App versions'), table([['Version', function (r) { return r.app_version; }], ['Devices', function (r) { return N(r.devices); }]], s.versions)),
+      h('div', { class: 'card' }, h('h2', {}, 'How the app spreads (30d)'), table([['Channel', function (r) { return r.channel; }], ['Count', function (r) { return N(r.count); }]], sh.by_channel))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Live launches ', h('span', { class: 'pill ok' }, 'refreshes every 15 s')),
+      table([['Device', function (r) { return r.id; }], ['Country', function (r) { return flag(r.country) + ' ' + (r.country || '??'); }], ['Version', function (r) { return r.app_version; }], ['Android', function (r) { return r.android_os_ver; }], ['RAM', function (r) { return r.ram_mb + ' MB'; }], ['Sessions today', function (r) { return r.session_count; }], ['Seen', function (r) { return ago(r.at); }]], live.pings)));
+  S.timers.push(setInterval(async function () { if (S.tab !== 'overview') return; try { await show('overview', true); } catch (e) {} }, 15000));
+};
+
+views.users = async function (el) {
+  var F = S.uf || (S.uf = { q: '', country: '', version: '', blocked: false, lowram: false, offset: 0 });
+  var qs = function (x) { var p = new URLSearchParams(); if (F.q) p.set('q', F.q); if (F.country) p.set('country', F.country); if (F.version) p.set('version', F.version); if (F.blocked) p.set('blocked', '1'); if (F.lowram) p.set('lowram', '1'); Object.keys(x || {}).forEach(function (k) { p.set(k, x[k]); }); return p.toString(); };
+  var d = await api('/devices?' + qs({ limit: 50, offset: F.offset }));
+  var inp = function (k, ph, w) { return h('input', { value: F[k], placeholder: ph, style: 'width:' + w + 'px', onchange: function (e) { F[k] = e.target.value.trim(); F.offset = 0; show('users'); } }); };
+  el.append(h('div', { class: 'card' }, h('h2', {}, 'Users (anonymous devices) ', h('span', { class: 'pill' }, N(d.total) + ' match')),
+    h('div', { class: 'row' }, inp('q', 'Device ID prefix or tag', 200), inp('country', 'Country (PH)', 110), inp('version', 'Version (0.5.0)', 130),
+      h('label', { class: 'ck' }, h('input', { type: 'checkbox', checked: F.blocked, onchange: function (e) { F.blocked = e.target.checked; F.offset = 0; show('users'); } }), 'Blocked only'),
+      h('label', { class: 'ck' }, h('input', { type: 'checkbox', checked: F.lowram, onchange: function (e) { F.lowram = e.target.checked; F.offset = 0; show('users'); } }), 'Low RAM (2 GB or less)'),
+      act('Export CSV', async function () { var r = await api('/devices/export?' + qs(), { raw: true }); var b = await r.blob(); var a = h('a', { href: URL.createObjectURL(b), download: 'yeehaw-devices.csv' }); document.body.appendChild(a); a.click(); a.remove(); }, 'alt')),
+    h('p', { class: 'small mute' }, 'YeeHaw has no accounts. Users are anonymous device IDs. Blocking stops that device’s telemetry, ad and health reporting and marks it blocked in the signed device status the app can check.'),
+    table([['Device', function (r) { return r.device_id.slice(0, 8); }], ['Country', function (r) { return flag(r.country) + ' ' + (r.country || '??'); }], ['Version', function (r) { return r.app_version; }], ['Android', function (r) { return r.android_os_ver; }], ['RAM', function (r) { return r.ram_mb + ' MB'; }], ['Launches', function (r) { return N(r.boot_count); }], ['Last seen', function (r) { return ago(r.last_seen); }], ['Status', function (r) { return r.blocked ? h('span', { class: 'pill red' }, 'blocked') : h('span', { class: 'pill ok' }, 'ok'); }], ['Tags', function (r) { return (r.tags || []).join(', '); }]], d.devices, openDevice),
+    h('div', { class: 'row', style: 'margin-top:10px' }, act('Previous', async function () { F.offset = Math.max(0, F.offset - 50); show('users'); }, 'alt'), act('Next', async function () { if (F.offset + 50 < d.total) { F.offset += 50; show('users'); } }, 'alt'), h('span', { class: 'mute small' }, 'Showing ' + (d.total ? F.offset + 1 : 0) + '–' + Math.min(F.offset + 50, d.total)))));
+};
+async function openDevice(r) {
+  var d = await api('/devices/' + r.device_id), dev = d.device, dr = $('#drawer');
+  var reason = h('input', { placeholder: 'Reason (kept in audit log)', value: dev.blocked_reason || '' });
+  var notes = h('textarea', { style: 'min-height:60px' }); notes.value = dev.notes || '';
+  var tags = h('input', { value: (dev.tags || []).join(', '), placeholder: 'tags, comma separated' });
+  dr.replaceChildren(h('div', { class: 'row', style: 'justify-content:space-between' }, h('h2', {}, flag(dev.country) + ' Device ' + dev.device_id.slice(0, 8)), act('Close', async function () { dr.classList.remove('open'); }, 'alt')),
+    h('p', { class: 'small mute' }, dev.device_id), 
+    table([['Field', function (r) { return r[0]; }], ['Value', function (r) { return r[1]; }]], [['App', dev.app_version + (dev.version_code ? ' (code ' + dev.version_code + ')' : '')], ['Android', dev.android_os_ver], ['RAM', dev.ram_mb + ' MB'], ['Launches', N(dev.boot_count)], ['First seen', new Date(dev.first_seen).toLocaleString()], ['Last seen', new Date(dev.last_seen).toLocaleString()], ['Status', dev.blocked ? 'BLOCKED: ' + (dev.blocked_reason || '') : 'active']]),
+    h('h3', {}, 'Activity (30 days)'), bars(d.sessions.slice().reverse().map(function (s) { return { label: s.day, value: s.session_count }; })),
+    h('h3', {}, 'Ads'), table([['Event', function (r) { return r.event_type; }], ['Count', function (r) { return N(r.n); }], ['Revenue', function (r) { return money(Number(r.micros) / 1e6); }]], d.ads),
+    h('h3', {}, 'Health and savings reported'), table([['Kind', function (r) { return r.kind; }], ['Total', function (r) { return N(r.total); }]], d.health),
+    h('h3', {}, 'Sharing'), table([['Action', function (r) { return r.action; }], ['Channel', function (r) { return r.channel; }], ['Count', function (r) { return r.n; }]], d.shares),
+    h('h3', {}, 'Control'), h('div', { class: 'row' }, h('label', {}, 'Block reason', reason)),
+    h('div', { class: 'row', style: 'margin-top:8px' }, dev.blocked ? act('Unblock device', async function () { await api('/devices/' + dev.device_id + '/block', { method: 'POST', body: { blocked: false } }); toast('Unblocked'); dr.classList.remove('open'); show('users'); }) : act('Block device', async function () { await api('/devices/' + dev.device_id + '/block', { method: 'POST', body: { blocked: true, reason: reason.value } }); toast('Blocked'); dr.classList.remove('open'); show('users'); }, 'red')),
+    h('h3', {}, 'Notes and tags'), tags, h('div', { style: 'margin:6px 0' }, notes),
+    h('div', { class: 'row' }, act('Save notes', async function () { await api('/devices/' + dev.device_id + '/note', { method: 'POST', body: { notes: notes.value, tags: tags.value.split(',') } }); toast('Saved'); }, 'alt'),
+      act('Erase device data', async function () { if (!confirm('Permanently erase this device and all its records?')) return; await api('/devices/' + dev.device_id, { method: 'DELETE' }); toast('Erased'); dr.classList.remove('open'); show('users'); }, 'red')));
+  dr.classList.add('open');
+}
+
+views.ads = async function (el) {
+  await loadCfg();
+  var days = S.adDays || 30, a = await api('/analytics/ads?days=' + days), c = S.cfg, ap = c.ads_policy || {}, pl = ap.placements || {};
+  var admob = h('input', { type: 'checkbox', checked: c.admob_enabled });
+  var dis = h('input', { value: (ap.disabled_countries || []).join(', '), placeholder: 'e.g. US, GB' }), only = h('input', { value: (ap.only_countries || []).join(', '), placeholder: 'empty = all countries' });
+  var pls = ['banner', 'native', 'interstitial', 'rewarded', 'app_open'].map(function (k) { return [k, h('input', { type: 'checkbox', checked: pl[k] !== undefined ? pl[k] : k === 'banner' })]; });
+  var inter = h('input', { type: 'number', min: 30, max: 3600, value: ap.interstitial_min_interval_seconds || 180 }), refresh = h('input', { type: 'number', min: 30, max: 300, value: ap.banner_refresh_seconds || 60 });
+  var maxs = h('input', { type: 'number', min: 0, max: 100, value: ap.max_ads_per_session != null ? ap.max_ads_per_session : 6 }), lowram = h('input', { type: 'checkbox', checked: ap.low_ram_no_heavy_ads !== false });
+  var promos = (c.promos || []).map(function (p) { return Object.assign({}, p); });
+  var plist = h('div');
+  function drawPromos() {
+    plist.replaceChildren();
+    promos.forEach(function (p, i) {
+      var f = function (k, ph, w, num) { return h('input', { value: p[k] == null ? '' : p[k], placeholder: ph, style: 'width:' + w + 'px', onchange: function (e) { p[k] = num ? Number(e.target.value) : e.target.value; } }); };
+      plist.append(h('div', { class: 'card', style: 'margin-bottom:8px' }, h('div', { class: 'row' }, h('label', {}, 'ID', f('id', 'chatme-ph', 120)), h('label', {}, 'Title', f('title', 'ChatMe', 140)), h('label', {}, 'Text', f('text', 'short line', 220)), h('label', {}, 'URL (https)', f('url', 'https://', 240))),
+        h('div', { class: 'row', style: 'margin-top:6px' }, h('label', {}, 'Countries (empty=all)', h('input', { value: (p.countries || []).join(', '), style: 'width:140px', onchange: function (e) { p.countries = csvList(e.target.value); } })), h('label', {}, 'Weight 1-100', f('weight', '10', 80, true)),
+          h('label', {}, 'Start (ISO)', f('start_at', '2026-12-01T00:00:00Z', 190)), h('label', {}, 'End (ISO)', f('end_at', '', 190)),
+          h('label', { class: 'ck' }, h('input', { type: 'checkbox', checked: p.active !== false, onchange: function (e) { p.active = e.target.checked; } }), 'Active'), act('Remove', async function () { promos.splice(i, 1); drawPromos(); }, 'red'))));
+    });
+  }
+  drawPromos();
+  var camp = {}; a.by_campaign.forEach(function (x) { camp[x.campaign] = x; });
+  el.append(
+    h('div', { class: 'card' }, h('h2', {}, 'Advertising controls'), h('p', { class: 'small mute' }, 'Free tier shows ads; Pro never does. Ads also stay off on any build that still uses Google test ad IDs, and in the EEA/UK/CH until consent is given.'),
+      h('label', { class: 'ck' }, admob, 'AdMob master switch (turns all ads on or off for every device)'),
+      h('div', { class: 'row', style: 'margin-top:10px' }, h('label', {}, 'Never show ads in these countries', dis), h('label', {}, 'Only show ads in these countries', only)),
+      h('h3', {}, 'Placements'), h('div', { class: 'row' }, pls.map(function (p) { return h('label', { class: 'ck' }, p[1], p[0]); })),
+      h('div', { class: 'row', style: 'margin-top:10px' }, h('label', {}, 'Min seconds between interstitials', inter), h('label', {}, 'Banner refresh seconds', refresh), h('label', {}, 'Max ads per session', maxs), h('label', { class: 'ck' }, lowram, 'No heavy ad formats on low-RAM phones')),
+      h('div', { style: 'margin-top:12px' }, act('Publish ad policy to all apps', async function () {
+        var placements = {}; pls.forEach(function (p) { placements[p[0]] = p[1].checked; });
+        await publish({ admob_enabled: admob.checked, ads_policy: { disabled_countries: csvList(dis.value), only_countries: csvList(only.value), placements: placements, interstitial_min_interval_seconds: Number(inter.value), banner_refresh_seconds: Number(refresh.value), max_ads_per_session: Number(maxs.value), low_ram_no_heavy_ads: lowram.checked } }, 'ad policy'); show('ads'); }))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Promotions and house campaigns'), h('p', { class: 'small mute' }, 'Your own promos (for example ChatMe) or paid partner placements, targeted by country and dates. Impressions and clicks are counted when the app reports them with ad unit “campaign:<id>”.'),
+      plist, h('div', { class: 'row' }, act('Add campaign', async function () { promos.push({ id: '', title: '', text: '', url: 'https://', countries: [], weight: 10, active: true, placement: 'start_page' }); drawPromos(); }, 'alt'),
+        act('Publish campaigns', async function () { await publish({ promos: promos.map(function (p) { var o = Object.assign({}, p); o.id = String(o.id || '').toLowerCase(); o.start_at = o.start_at || null; o.end_at = o.end_at || null; return o; }) }, 'campaigns'); show('ads'); })),
+      h('h3', {}, 'Campaign results'), table([['Campaign', function (r) { return r.id + (r.active === false ? ' (paused)' : ''); }], ['Impressions', function (r) { return N((camp[r.id] || {}).impressions); }], ['Clicks', function (r) { return N((camp[r.id] || {}).clicks); }], ['CTR', function (r) { return pct((camp[r.id] || {}).ctr || 0); }]], c.promos || [])),
+    h('div', { class: 'row', style: 'margin:14px 0 6px' }, h('h2', { style: 'margin:0' }, 'Ad performance'), h('select', { onchange: function (e) { S.adDays = Number(e.target.value); show('ads'); } }, [7, 30, 90, 365].map(function (d) { return h('option', { value: d, selected: d === days }, 'Last ' + d + ' days'); }))),
+    h('div', { class: 'grid g4' }, kpi('Impressions', N(a.impressions)), kpi('Clicks', N(a.clicks), 'CTR ' + pct(a.ctr)), kpi('Revenue', money(a.revenue), 'as reported by the ad SDK'), kpi('eCPM', money(a.ecpm))),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'Impressions per day'), bars(a.by_day.map(function (d) { return { label: d.day, value: d.impressions }; }))),
+      h('div', { class: 'card' }, h('h2', {}, 'By format'), table([['Format', function (r) { return r.ad_format; }], ['Impr.', function (r) { return N(r.impressions); }], ['CTR', function (r) { return pct(r.ctr); }], ['Revenue', function (r) { return money(r.revenue); }]], a.by_format))),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'By country'), table([['Country', function (r) { return flag(r.country) + ' ' + r.country; }], ['Impr.', function (r) { return N(r.impressions); }], ['CTR', function (r) { return pct(r.ctr); }], ['Revenue', function (r) { return money(r.revenue); }], ['eCPM', function (r) { return money(r.ecpm); }]], a.by_country)),
+      h('div', { class: 'card' }, h('h2', {}, 'By network'), table([['Network', function (r) { return r.network; }], ['Impr.', function (r) { return N(r.impressions); }], ['Revenue', function (r) { return money(r.revenue); }]], a.by_network), h('p', { class: 'small mute' }, a.revenue_note))));
+};
+
+views.updates = async function (el) {
+  await loadCfg();
+  var c = S.cfg, up = c.update_policy || {}, fleet = await api('/analytics/fleet');
+  var f = {}; ['latest_version_code', 'latest_version_name', 'min_version_code', 'message', 'update_url'].forEach(function (k) { f[k] = h('input', { value: up[k] == null ? '' : up[k], style: 'width:100%' }); });
+  var roll = h('input', { type: 'range', min: 0, max: 100, value: up.rollout_percent != null ? up.rollout_percent : 100 }), rv = h('b', {}, (roll.value) + '%');
+  roll.addEventListener('input', function () { rv.textContent = roll.value + '%'; });
+  var feats = Object.keys(c.features || {}).map(function (k) { return [k, c.features[k]]; }), flist = h('div');
+  function drawFlags() {
+    flist.replaceChildren();
+    feats.forEach(function (p, i) { flist.append(h('div', { class: 'row', style: 'margin-bottom:6px' }, h('input', { value: p[0], placeholder: 'flag_name', onchange: function (e) { p[0] = e.target.value.trim(); } }), h('input', { value: String(p[1]), placeholder: 'true / false / number / text', onchange: function (e) { p[1] = e.target.value; } }), act('Remove', async function () { feats.splice(i, 1); drawFlags(); }, 'red'))); });
+  }
+  drawFlags();
+  var an = c.announcement || {}, at = h('input', { value: an.text || '', placeholder: 'Message shown to users', style: 'width:100%' }), aid = h('input', { value: an.id || '', placeholder: 'id e.g. maint-1126' }), aurl = h('input', { value: an.url || '', placeholder: 'optional https link' });
+  var alv = h('select', {}, ['info', 'warning'].map(function (v) { return h('option', { value: v, selected: an.level === v }, v); })), actry = h('input', { value: (an.countries || []).join(', '), placeholder: 'empty = everyone' }), aexp = h('input', { value: an.expires_at || '', placeholder: 'ISO expiry, optional' });
+  var onLatest = 0, total = 0; fleet.versions.forEach(function (v) { total += v.devices; });
+  el.append(
+    h('div', { class: 'card' }, h('h2', {}, 'App updates'), h('p', { class: 'small mute' }, 'Apps ask the signed /v1/device/status endpoint. “Force” = devices below the minimum code must update. Staged rollout picks a stable slice of devices by hashed ID.'),
+      h('div', { class: 'row' }, h('label', {}, 'Latest version code', f.latest_version_code), h('label', {}, 'Latest version name', f.latest_version_name), h('label', {}, 'Minimum allowed code (force)', f.min_version_code)),
+      h('div', { class: 'row', style: 'margin-top:8px' }, h('label', {}, 'Update message', f.message), h('label', {}, 'Update URL (https) e.g. Play listing or yeehaw.pro/get', f.update_url)),
+      h('div', { class: 'row', style: 'margin-top:8px;align-items:center' }, h('span', {}, 'Staged rollout:'), roll, rv),
+      h('div', { style: 'margin-top:12px' }, act('Publish update policy', async function () { await publish({ update_policy: { latest_version_code: Number(f.latest_version_code.value || 0), latest_version_name: f.latest_version_name.value, min_version_code: Number(f.min_version_code.value || 0), rollout_percent: Number(roll.value), message: f.message.value, update_url: f.update_url.value } }, 'update policy'); show('updates'); })),
+      h('h3', {}, 'Installed versions across the fleet'), table([['Version', function (r) { return r.app_version; }], ['Devices', function (r) { return N(r.devices); }], ['Share', function (r) { return pct(total ? r.devices / total : 0); }]], fleet.versions)),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' },
+      h('div', { class: 'card' }, h('h2', {}, 'Feature flags and kill switches'), h('p', { class: 'small mute' }, 'Turn features on or off for every device without an update. Names: lowercase letters, digits, underscore.'), flist,
+        h('div', { class: 'row' }, act('Add flag', async function () { feats.push(['', 'true']); drawFlags(); }, 'alt'), act('Publish flags', async function () {
+          var o = {}; feats.forEach(function (p) { if (!p[0]) return; var v = String(p[1]).trim(); o[p[0]] = v === 'true' ? true : v === 'false' ? false : (v !== '' && !isNaN(Number(v)) ? Number(v) : v); });
+          await publish({ features: o }, 'feature flags'); show('updates'); }))),
+      h('div', { class: 'card' }, h('h2', {}, 'Announcement to users'), h('p', { class: 'small mute' }, 'One message at a time, optionally by country, with an expiry. Clear the text and publish to remove it.'),
+        h('div', { class: 'row' }, h('label', {}, 'ID', aid), h('label', {}, 'Level', alv)), h('label', { style: 'margin-top:8px' }, 'Text', at), h('div', { class: 'row', style: 'margin-top:8px' }, h('label', {}, 'Link', aurl), h('label', {}, 'Countries', actry), h('label', {}, 'Expires', aexp)),
+        h('div', { class: 'row', style: 'margin-top:12px' }, act('Publish announcement', async function () {
+          if (!at.value.trim()) { await publish({ announcement: null }, 'announcement cleared'); } else { await publish({ announcement: { id: aid.value || ('msg-' + Date.now().toString(36)), text: at.value, url: aurl.value, level: alv.value, countries: csvList(actry.value), expires_at: aexp.value || null } }, 'announcement'); } show('updates'); })))));
+};
+
+views.ops = async function (el) {
+  var days = S.opDays || 30, hl = await api('/analytics/health?days=' + days), geo = await api('/analytics/geo'), fl = await api('/analytics/fleet');
+  var sv = hl.savings;
+  el.append(
+    h('div', { class: 'row', style: 'margin-bottom:8px' }, h('h2', { style: 'margin:0' }, 'Global operations'), h('select', { onchange: function (e) { S.opDays = Number(e.target.value); show('ops'); } }, [7, 30, 90].map(function (d) { return h('option', { value: d, selected: d === days }, 'Last ' + d + ' days'); }))),
+    h('div', { class: 'grid g4' }, kpi('Crashes recovered', N(hl.crashes), N(hl.reporting_devices) + ' devices reporting'), kpi('UI freezes', N(hl.freezes)), kpi('Pages rescued', N(hl.render_rescues), 'renderer restarts'), kpi('Store repairs', N(hl.store_repairs)),
+      kpi('Requests skipped', N(sv.skipped_requests), 'exact count'), kpi('Data avoided (est.)', bytes(sv.est_bytes_avoided), 'estimate, not a measurement'), kpi('Time in weak signal', dur(sv.low_signal_seconds), 'all devices'), kpi('App data received', bytes(sv.data_received_bytes), 'measured')),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'Crashes per day'), bars(hl.trend.map(function (d) { return { label: d.day, value: d.crash }; }), { color: '#ff7a7a' })),
+      h('div', { class: 'card' }, h('h2', {}, 'Crashes by version'), table([['Version', function (r) { return r.app_version; }], ['Crashes', function (r) { return N(r.crashes); }], ['Devices', function (r) { return N(r.devices); }]], hl.by_version))),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'Retention'), h('div', { class: 'grid g4' }, kpi('Day 1', pct(fl.retention.d1), 'n=' + N(fl.retention.cohort.d1)), kpi('Day 7', pct(fl.retention.d7), 'n=' + N(fl.retention.cohort.d7)), kpi('Day 30', pct(fl.retention.d30), 'n=' + N(fl.retention.cohort.d30))),
+      h('h3', {}, 'New installs (30 days)'), bars(fl.installs_30d.map(function (d) { return { label: d.day, value: d.n }; }))),
+      h('div', { class: 'card' }, h('h2', {}, 'Fleet hardware'), h('h3', {}, 'RAM'), table([['Tier', function (r) { return r.tier; }], ['Devices', function (r) { return N(r.devices); }]], fl.ram_tiers), h('h3', {}, 'Android versions'), table([['Android', function (r) { return r.android_os_ver; }], ['Devices', function (r) { return N(r.devices); }]], fl.android))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'World map by country'), table([['Country', function (r) { return flag(r.country) + ' ' + r.country; }], ['Devices', function (r) { return N(r.devices); }], ['Active 7d', function (r) { return N(r.active_7d); }], ['New 7d', function (r) { return N(r.new_7d); }], ['Low-RAM', function (r) { return pct(r.devices ? r.low_ram / r.devices : 0); }]], geo.countries)));
+};
+
+views.config = async function (el) {
+  await loadCfg();
+  var c = S.cfg, url = h('input', { value: c.default_search_url, style: 'width:100%' }), tag = h('input', { value: c.affiliate_tag }), bl = h('textarea'); bl.value = (c.blacklisted_domains || []).join('\n');
+  var sd = (c.speed_dial || []).map(function (e) { return Object.assign({}, e); }), sl = h('div');
+  function drawSd() { sl.replaceChildren(); sd.forEach(function (e, i) { sl.append(h('div', { class: 'row', style: 'margin-bottom:6px' }, h('input', { value: e.title, placeholder: 'Title', style: 'width:150px', onchange: function (x) { e.title = x.target.value; } }), h('input', { value: e.url, placeholder: 'https://', style: 'flex:1;min-width:200px', onchange: function (x) { e.url = x.target.value; } }), h('label', { class: 'ck' }, h('input', { type: 'checkbox', checked: e.sponsored, onchange: function (x) { e.sponsored = x.target.checked; } }), 'Sponsored'), act('Remove', async function () { sd.splice(i, 1); drawSd(); }, 'red'))); }); }
+  drawSd();
+  el.append(
+    h('div', { class: 'card' }, h('h2', {}, 'Search routing and affiliate tag'), h('label', {}, 'Search URL template (must contain {query} once; {tag} optional)', url), h('label', { style: 'margin-top:8px' }, 'Affiliate / partner tag', tag),
+      h('div', { style: 'margin-top:10px' }, act('Publish search settings', async function () { await publish({ default_search_url: url.value, affiliate_tag: tag.value }, 'search routing'); show('config'); }))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Start page speed dial (up to 12)'), sl, h('div', { class: 'row' }, act('Add shortcut', async function () { if (sd.length < 12) { sd.push({ title: '', url: 'https://', sponsored: false }); drawSd(); } }, 'alt'), act('Publish speed dial', async function () { await publish({ speed_dial: sd }, 'speed dial'); show('config'); }))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Emergency domain blocklist'), h('p', { class: 'small mute' }, 'One domain per line. Applies to every device at its next config refresh.'), bl, h('div', { style: 'margin-top:8px' }, act('Publish blocklist', async function () { await publish({ blacklisted_domains: bl.value.split(/\s+/).filter(Boolean) }, 'blocklist'); show('config'); }))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Config history'), h('p', { class: 'small mute' }, 'Signing key fingerprint: ' + S.fp + '. Rolling back publishes the old values as a new version.'),
+      table([['Version', function (r) { return 'v' + r.version + (r.is_active ? ' (live)' : ''); }], ['Note', function (r) { return r.note || ''; }], ['When', function (r) { return new Date(r.created_at).toLocaleString(); }], ['', function (r) { return r.is_active ? '' : act('Roll back', async function () { if (!confirm('Publish v' + r.version + ' as the live config?')) return; await api('/config/rollback', { method: 'POST', body: { version: r.version } }); toast('Rolled back'); show('config'); }, 'alt'); }]], S.hist)));
+};
+
+views.system = async function (el) {
+  var s = await api('/system'), a = await api('/audit?limit=100');
+  el.append(h('div', { class: 'grid g4' }, kpi('Database latency', s.db_latency_ms + ' ms'), kpi('Database size', bytes(s.db_bytes)), kpi('Live config', 'v' + s.active_config_version), kpi('Blocked devices', N(s.counts.blocked))),
+    h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'Records'), table([['Table', function (r) { return r[0]; }], ['Rows', function (r) { return N(r[1]); }]], Object.keys(s.counts).map(function (k) { return [k, s.counts[k]]; })), h('p', { class: 'small mute' }, 'Signing key ' + s.signing_key_fingerprint + ' | Node ' + s.node)),
+      h('div', { class: 'card' }, h('h2', {}, 'Audit log (every change you make)'), table([['When', function (r) { return ago(r.at); }], ['Action', function (r) { return r.action; }], ['Detail', function (r) { return JSON.stringify(r.detail).slice(0, 90); }]], a.entries))));
+};
+
+/* ---------------- shell */
+var TABS = [['overview', 'Overview'], ['users', 'Users'], ['ads', 'Advertising'], ['updates', 'Updates & flags'], ['ops', 'Operations'], ['config', 'Search & blocklist'], ['system', 'System & audit']];
+async function show(tab, quiet) {
+  S.tab = tab; $('#drawer').classList.remove('open');
+  var main = $('#main'); if (!main) return;
+  S.timers.forEach(clearInterval); S.timers = [];
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.t === tab); });
+  var next = h('div'); try { await views[tab](next); } catch (e) { next = h('div', { class: 'card' }, 'Could not load: ' + e.message); }
+  if (S.tab === tab) main.replaceChildren(next);
+}
+function render() {
+  var app = $('#app'); app.replaceChildren();
+  if (!tok()) {
+    var t = h('input', { type: 'password', placeholder: 'Admin token', autocomplete: 'off' });
+    var go = async function () { setTok(t.value.trim()); try { await api('/system'); render(); } catch (e) { setTok(''); toast(e.message === 'Signed out' ? 'Wrong token' : e.message, true); } };
+    t.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+    app.append(h('div', { class: 'login' }, h('div', { class: 'brand', style: 'font-size:1.6rem;margin-bottom:12px' }, 'yee', h('span', {}, 'Haw™'), ' console'), h('div', { class: 'card' }, h('div', { class: 'mute small' }, 'Founder access only'), t, h('button', { class: 'b', onclick: go }, 'Sign in'))));
+    return;
+  }
+  app.append(h('header', {}, h('div', { class: 'brand' }, 'yee', h('span', {}, 'Haw™'), ' console'), h('nav', {}, TABS.map(function (t) { return h('button', { 'data-t': t[0], onclick: function () { show(t[0]); } }, t[1]); })), h('button', { class: 'b alt', onclick: function () { setTok(''); render(); } }, 'Sign out')), h('main', { id: 'main' }));
+  show(S.tab);
+}
+render();
+})();
+</script>
+</body>
+</html>

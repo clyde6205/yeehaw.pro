@@ -1,0 +1,21 @@
+{
+  "name": "yeehaw-console-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "YeeHaw back-office: telemetry, remote config, ad events and founder console API",
+  "type": "commonjs",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "migrate": "node scripts/migrate.js",
+    "keys": "node scripts/gen-keys.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js"
+  },
+  "dependencies": {
+    "express": "4.21.2",
+    "express-rate-limit": "7.5.0",
+    "helmet": "8.0.0",
+    "pg": "8.13.1"
+  }
+}
