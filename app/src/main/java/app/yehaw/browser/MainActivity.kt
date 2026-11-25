@@ -979,6 +979,11 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Blocked unsupported download URL.", Toast.LENGTH_SHORT).show()
             return
         }
+        // Never fill a nearly-full phone. Nothing is deleted: the download is simply not started.
+        if (StorageGuard.level(this) == StorageGuard.Level.CRITICAL) {
+            Toast.makeText(this, "Not enough free space to download (${StorageGuard.format(StorageGuard.freeBytes(this))} left). Free some space first.", Toast.LENGTH_LONG).show()
+            return
+        }
         try {
             val filename = safeDownloadFilename(URLUtil.guessFileName(url, contentDisposition, mimeType))
             val request = DownloadManager.Request(uri)
@@ -1438,11 +1443,27 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(if (bookmarks) "Bookmarks" else "Recent history")
             .setItems(labels) { _, index ->
-                val url = items[index].url
-                currentWebView()?.loadUrl(url) ?: createTab(url)
+                val item = items[index]
+                AlertDialog.Builder(this)
+                    .setTitle(item.title.ifBlank { item.url }.take(80))
+                    .setMessage(item.url.take(200))
+                    .setPositiveButton("Open") { _, _ -> currentWebView()?.loadSaving(item.url) ?: createTab(item.url) }
+                    .setNeutralButton("Remove this one") { _, _ ->
+                        if (bookmarks) browserStore.deleteBookmark(item.url) else browserStore.deleteHistoryEntry(item.url)
+                        Toast.makeText(this, "Removed.", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
             .setNeutralButton(if (bookmarks) "Clear bookmarks" else "Clear history") { _, _ ->
-                if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
+                AlertDialog.Builder(this)
+                    .setTitle(if (bookmarks) "Delete ALL bookmarks?" else "Delete ALL history?")
+                    .setMessage("This cannot be undone.")
+                    .setPositiveButton("Delete all") { _, _ ->
+                        if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
+                    }
+                    .setNegativeButton("Keep them", null)
+                    .show()
             }
             .setNegativeButton("Close", null).show()
     }

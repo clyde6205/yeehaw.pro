@@ -177,6 +177,8 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
         return rows
     }
 
+    fun deleteBookmark(url: String) { writableDatabase.delete("bookmarks", "url = ?", arrayOf(url)) }
+    fun deleteHistoryEntry(url: String) { writableDatabase.delete("history", "url = ?", arrayOf(url)) }
     fun clearHistory() { writableDatabase.delete("history", null, null) }
     fun clearBookmarks() { writableDatabase.delete("bookmarks", null, null) }
 
