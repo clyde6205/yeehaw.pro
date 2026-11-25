@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#080d18">
   <link rel="canonical" href="https://yeehaw.pro/">
-  <meta name="description" content="Yehaw is a lightweight Android web browser designed to make everyday browsing practical on memory-constrained phones.">
-  <meta property="og:title" content="Yehaw — Browse more. Carry less.">
+  <meta name="description" content="YeeHaw™ is a lightweight Android web browser designed to make everyday browsing practical on memory-constrained phones.">
+  <meta property="og:type" content="website"><meta property="og:url" content="https://yeehaw.pro/"><meta property="og:image" content="https://yeehaw.pro/icons/icon-512.png"><meta name="twitter:card" content="summary"><meta property="og:title" content="YeeHaw™ — Browse more. Carry less.">
   <meta property="og:description" content="A lightweight Android browser focused on useful controls, session recovery and low-memory devices.">
-  <title>Yehaw — Lightweight Android Browser</title>
+  <title>YeeHaw™ — Lightweight Android Browser</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icons/icon-192.png">
   <style>
@@ -22,15 +22,16 @@
     .split{display:grid;grid-template-columns:1fr 1fr;gap:45px;align-items:center}.panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:28px}.list{padding:0;margin:18px 0 0;list-style:none}.list li{padding:12px 0;border-bottom:1px solid #ffffff12;color:var(--muted);font-size:.92rem}.list li:last-child{border:0}.list li:before{content:"✓";color:var(--lime);font-weight:900;margin-right:11px}.status{display:inline-flex;padding:6px 10px;border:1px solid #b8f36b55;color:var(--lime);border-radius:99px;font-size:.73rem;font-weight:800}.callout{background:linear-gradient(120deg,#172b39,#132238);border:1px solid #46604a;border-radius:22px;padding:36px;display:flex;align-items:center;justify-content:space-between;gap:28px}.callout h2{font-size:clamp(1.8rem,3vw,2.6rem);line-height:1.08;letter-spacing:-.05em;margin:8px 0}.callout p{color:var(--muted);margin:0;max-width:620px}.footer{border-top:1px solid #ffffff18;padding:30px 0 44px;color:#8999b0;font-size:.8rem}.footer-inner{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.footer a{color:#c9d6e8;text-decoration:none}.menu{display:none;background:none;border:1px solid #ffffff35;color:var(--ink);padding:8px 11px;border-radius:9px}
     @media(max-width:800px){.hero{grid-template-columns:1fr;padding:64px 0 45px;gap:20px}.device-stage{min-height:420px}.phone{transform:scale(.88)}.trust-grid{grid-template-columns:1fr}.feature-grid{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}.callout{display:block}.callout .btn{margin-top:22px}.nav{gap:14px}}@media(max-width:560px){.wrap{width:min(var(--max),calc(100% - 30px))}.top{height:66px}.menu{display:block}.nav{display:none;position:absolute;top:65px;left:0;right:0;background:#101a2a;padding:18px 22px;z-index:5;border-bottom:1px solid var(--line)}.nav.open{display:grid;gap:13px}.hero{padding-top:48px}h1{font-size:3.35rem}.lead{font-size:1rem}.feature-grid{grid-template-columns:1fr}.device-stage{min-height:390px}.phone{transform:scale(.78)}section.content{padding:62px 0}.callout{padding:25px}.actions .btn{width:100%}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+  .hsearch{display:flex;gap:8px;margin:18px 0 6px;max-width:460px}.hsearch input{flex:1;min-width:0;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}.hsearch button{padding:0 20px;border-radius:14px;border:0;background:var(--lime);color:#101b0b;font-weight:800;font:inherit;cursor:pointer}.hsearch input:focus,.hsearch button:focus-visible{outline:2px solid var(--lime);outline-offset:2px}.footer a{color:var(--muted)}
   </style>
 </head>
 <body>
   <header class="top wrap">
-    <a class="brand" href="/" aria-label="Yehaw home"><span class="mark">Y</span><span>yehaw</span></a>
+    <a class="brand" href="/" aria-label="YeeHaw home"><span class="mark">Y</span><span>YeeHaw™</span></a>
     <button class="menu" id="menu" aria-expanded="false" aria-controls="nav">Menu</button>
     <nav class="nav" id="nav" aria-label="Main navigation">
-      <a href="#features">Features</a><a href="#lightweight">Why Yehaw</a><a href="#status">Development</a>
-      <a class="nav-cta" href="https://github.com/clyde6205/yeehaw.pro" target="_blank" rel="noopener">Source repository ↗</a>
+      <a href="#features">Features</a><a href="#lightweight">Why YeeHaw</a><a href="#status">Status</a>
+      <a class="nav-cta" href="#download">Get YeeHaw</a>
     </nav>
   </header>
   <main>
@@ -38,14 +39,15 @@
       <div>
         <div class="eyebrow">The Android browser project</div>
         <h1>Browse more.<br><em>Carry less.</em></h1>
-        <p class="lead">Yehaw is being built as a practical, lightweight Android web browser—with useful everyday controls and careful attention to phones that have limited memory.</p>
+        <p class="lead">YeeHaw™ is a practical, lightweight Android web browser—with useful everyday controls and careful attention to phones that have limited memory.</p>
         <div class="actions">
           <a class="btn btn-primary" href="#download">Get YeeHaw free <span aria-hidden="true">→</span></a>
-          <a class="btn btn-secondary" href="https://github.com/clyde6205/yeehaw.pro" target="_blank" rel="noopener">Explore the project ↗</a>
+          <a class="btn btn-secondary" href="#features">See features</a>
         </div>
+        <form class="hsearch" action="https://duckduckgo.com/" method="get" role="search"><input type="search" name="q" aria-label="Search the web" placeholder="Search the web" autocomplete="off" enterkeyhint="search"><button type="submit">Search</button></form>
         <p class="fine">Free Android browser. Public APK download is being prepared and will appear here once the signed release is verified.</p>
       </div>
-      <div class="device-stage" aria-label="Illustrative Yehaw browser interface">
+      <div class="device-stage" aria-label="Illustrative YeeHaw browser interface">
         <div class="glow"></div><div class="phone">
           <div class="notch"></div><div class="screen-top"><span>9:41</span><span>● ● ▰</span></div>
           <div class="search">⌕ &nbsp; Search or enter website address</div>
@@ -82,11 +84,11 @@
       <div class="callout"><div><div class="kicker">Free Android download</div><h2>The public installer is being prepared.</h2><p>We will publish the download here only after the APK is verified and signed for safe installation. No broken links, expired build artifacts or misleading download buttons.</p></div><span class="status">Release verification pending</span></div>
     </section>
     <section class="content wrap" id="status">
-      <div class="callout"><div><div class="kicker">Development status</div><h2>Building and validating in the open.</h2><p>The Android app is already running on test devices. The public release still needs a verified signed installer, device compatibility checks and final security review.</p></div><a class="btn btn-primary" href="https://github.com/clyde6205/yeehaw.pro/actions" target="_blank" rel="noopener">View build checks ↗</a></div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px"><a class="btn btn-secondary" href="https://github.com/clyde6205/yeehaw.pro" target="_blank" rel="noopener">GitHub repository ↗</a><a class="btn btn-secondary" href="https://github.com/clyde6205/yeehaw.pro/releases" target="_blank" rel="noopener">Release page ↗</a></div>
+      <div class="callout"><div><div class="kicker">Development status</div><h2>Being tested on real phones.</h2><p>The public release still needs a verified signed installer, device compatibility checks and final security review.</p></div></div>
+      
     </section>
   </main>
-  <footer class="footer"><div class="wrap footer-inner"><span>© <span id="year"></span> Yehaw. Android browser project.</span><span>Built with a focus on practical browsing and responsible release validation.</span></div></footer>
+  <footer class="footer"><div class="wrap footer-inner"><span>© <span id="year"></span> YeeHaw™. Android browser.</span><span><a href="/privacy/">Privacy</a> · <a href="/terms/">Terms</a> · <a href="/support/">Support</a></span></div></footer>
   <script>
     const menu=document.getElementById('menu'),nav=document.getElementById('nav');
     menu.addEventListener('click',()=>{const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));});
