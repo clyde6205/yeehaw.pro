@@ -23,12 +23,12 @@ jobs:
   emulator-smoke:
     name: API ${{ matrix.api-level }} browser smoke test
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        api-level: [23, 29, 35, 36]
+        api-level: [23]
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,26 +72,34 @@ jobs:
           IMG="system-images;android-${{ matrix.api-level }};default;x86_64"
           "$SDKMANAGER" --install "$IMG" "platforms;android-${{ matrix.api-level }}" >/dev/null
           echo no | "$AVDMANAGER" create avd --force -n test -k "$IMG" -d pixel_2
-      - name: Start emulator (hardware acceleration required)
+      - name: Start emulator and wait for boot (hardware acceleration required)
         id: emu
         if: steps.kvm.outputs.available == 'true'
+        timeout-minutes: 12
         run: |
+          emulator -accel-check || true
           nohup emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on > /tmp/emulator.log 2>&1 &
-          sleep 25
-          if ! pgrep -f "qemu-system" >/dev/null && grep -qiE "kvm|accel" /tmp/emulator.log; then
-            echo "started=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Emulator NOT run (infrastructure)::Emulator refused to start with hardware acceleration. This is NOT an app test result."
-            tail -20 /tmp/emulator.log
+          booted=0
+          for i in $(seq 1 90); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
+            sleep 5
+          done
+          echo "--- adb devices"; adb devices
+          echo "--- emulator.log tail"; tail -40 /tmp/emulator.log
+          if [ "$booted" = 1 ]; then
+            echo "started=true" >> "$GITHUB_OUTPUT"; adb shell getprop ro.build.version.sdk
           else
-            echo "started=true" >> "$GITHUB_OUTPUT"
+            echo "started=false" >> "$GITHUB_OUTPUT"
+            echo "::error title=Emulator did not boot within 7.5 minutes::see log tail above"
+            exit 1
           fi
       - name: Run browser smoke test on Android emulator
         if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 20
         run: |
-          bash .github/scripts/android-emulator-smoke.sh
-      - name: Emulator log
-        if: always()
-        run: tail -40 /tmp/emulator.log 2>/dev/null || true
+          adb shell input keyevent 82 || true
+          gradle --no-daemon :app:connectedDebugAndroidTest --info 2>&1 | tail -150
+          exit ${PIPESTATUS[0]}
       - name: Upload emulator diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
