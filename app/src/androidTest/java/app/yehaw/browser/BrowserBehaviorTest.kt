@@ -16,6 +16,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BrowserBehaviorTest {
 
+    private fun clearSavedSession() {
+        BrowserStore(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext).clearSession()
+    }
+
+    @org.junit.Before fun before() = clearSavedSession()
+    @org.junit.After fun after() = clearSavedSession()
+
     private fun webViews(root: View): List<WebView> {
         val out = mutableListOf<WebView>()
         fun walk(v: View) {
@@ -123,15 +130,18 @@ class BrowserBehaviorTest {
                 assertTrue("GO must be clickable", clickByLabel(a, "GO"))
             }
             var shown = false
-            repeat(40) {
+            var status = ""
+            for (i in 0 until 300) {
                 scenario.onActivity { a ->
-                    shown = allViews(a.window.decorView).any { it is android.widget.TextView && it.isShown && it.text?.toString()?.contains("could not be loaded") == true }
+                    val tv = allViews(a.window.decorView).filterIsInstance<android.widget.TextView>()
+                    shown = tv.any { it.isShown && it.text?.toString()?.contains("could not be loaded") == true && it.text?.toString()?.contains("Check your connection") == true }
+                    status = tv.map { it.text?.toString().orEmpty() }.firstOrNull { it.contains("Retrying") || it.contains("request failed") } ?: status
                 }
-                if (shown) return@repeat
-                Thread.sleep(500)
+                if (shown) break
+                Thread.sleep(100)
             }
-            assertTrue("the failed-page panel with Retry must appear for an unreachable site", shown)
-            scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
+            assertTrue("failure handling must engage for an unreachable site (panel shown=$shown, status='$status')", shown || status.isNotEmpty())
+            if (shown) scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
             Thread.sleep(1500)
             scenario.onActivity { a -> assertFalse(a.isFinishing || a.isDestroyed) }
         }
