@@ -77,5 +77,8 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 | New-account closed test (12 testers × 14 days) | BLK | Owner; public Play launch cannot be same-day |
 | Trademark search, legal review of disclaimers | BLK | Owner/lawyer |
 
+## Latest verification status
+Last fully green emulator run: 45612321317 attempts / 45615216562 (API 23, 35, 36 green with 18 instrumented tests; API 29 hit an OutOfMemoryError in the offline library, now fixed in code). The fix commit and everything after it is **unverified** because GitHub Actions stopped starting jobs (billing block, KNOWN_ISSUES #17).
+
 ## Honest bottom line
 The code builds, lints clean and passes its unit and backend tests in CI. It has **never been run on a device or emulator**, the live API is **not** on this code, and nothing about speed, memory or data savings has been **measured**. Those are the three gaps between "builds" and "ready for launch".
