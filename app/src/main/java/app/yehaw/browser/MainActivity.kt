@@ -589,9 +589,10 @@ class MainActivity : Activity() {
                     .setPositiveButton("Continue") { _, _ ->
                         pendingGeoCallback = callback
                         pendingGeoOrigin = origin
-                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                             grantPendingGeoPermission(true)
-                        } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_GEO_PERMISSION)
+                        } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_GEO_PERMISSION)
                     }
                     .setNegativeButton("Block") { _, _ -> callback.invoke(origin, false, false) }
                     .show()
@@ -1183,7 +1184,7 @@ class MainActivity : Activity() {
                     pendingWebResources = emptyArray()
                 }
             }
-            REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(granted)
+            REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(grantResults.any { it == PackageManager.PERMISSION_GRANTED })
         }
     }
 
