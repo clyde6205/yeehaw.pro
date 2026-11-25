@@ -80,6 +80,8 @@ class MainActivity : Activity() {
         var title: String = "New tab",
         var currentUrl: String = HOME_URL,
         var failed: Boolean = false,
+        /** False when the failed request was not a GET (e.g. a form POST): never re-sent automatically. */
+        var failedWasGet: Boolean = true,
         var evicted: Boolean = false,
         var savedScrollY: Int = 0,
         var lastHistoryUrl: String? = null
@@ -829,11 +831,18 @@ class MainActivity : Activity() {
                 if (request?.isForMainFrame == true && view != null) {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true
+                    tab.failedWasGet = request.method.equals("GET", ignoreCase = true)
                     loadStartedAt.remove(view)
                     signalMonitor.recordLoad(0, false)
                     if (view === currentWebView()) showTab(activeTabIndex)
-                    statusText.text = "Page could not be loaded. Retrying automatically…"
-                    retryScheduler.schedule(view) { retryTab(tab) }
+                    if (tab.failedWasGet) {
+                        statusText.text = "Page could not be loaded. Retrying automatically…"
+                        retryScheduler.schedule(view) { retryTab(tab) }
+                    } else {
+                        // A form or other non-GET request failed. Re-sending it could repeat an order or payment,
+                        // so it is never retried automatically; the user decides.
+                        statusText.text = "That request failed. It was not re-sent automatically."
+                    }
                 }
             }
         }
@@ -1038,7 +1047,7 @@ class MainActivity : Activity() {
                 tab.failed = false
                 pageContainer.removeAllViews()
                 pageContainer.addView(tab.webView)
-                tab.webView.reload()
+                reloadSafely(tab)
             })
             pageContainer.addView(errorPanel, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1378,7 +1387,13 @@ class MainActivity : Activity() {
             pageContainer.removeAllViews()
             pageContainer.addView(tab.webView)
         }
-        tab.webView.reload()
+        reloadSafely(tab)
+    }
+
+    /** Reload a page without ever re-sending a POST: a failed non-GET is replaced by a plain GET of its address. */
+    private fun reloadSafely(tab: BrowserTab) {
+        if (tab.failedWasGet) tab.webView.reload() else tab.webView.loadSaving(tab.currentUrl)
+        tab.failedWasGet = true
     }
 
     private fun formatDataBytes(bytes: Long): String = when {
