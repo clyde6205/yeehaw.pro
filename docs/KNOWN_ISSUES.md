@@ -4,7 +4,7 @@ Category key: APP = application defect, BUILD, INFRA, PROVIDER config, OWNER (ne
 
 | # | Issue | Category | Status / shortest path |
 |---|-------|----------|------------------------|
-| 1 | Emulator tests cannot run on GitHub-hosted runners (no KVM; "hardware acceleration is not available"). Runs 45578021287, 45578784748, 45579043449. | ENV | Use Firebase Test Lab or a self-hosted KVM runner; API 23 needs its own device row. Not an app failure. |
+| 1 | Emulator tests cannot run on GitHub-hosted runners (no KVM; "hardware acceleration is not available"). Runs 45578021287, 45578784748, 45579043449. | ENV | Repo is private, so GitHub gives no KVM on standard runners (KVM is offered on public-repo standard runners and on paid larger runners); the x86-only emulator action cannot fall back to software emulation (tried, run 45587739979). Options: Firebase Test Lab (real API 23 devices, needs a Google Cloud service account), a paid larger runner, or a self-hosted KVM runner; API 23 needs its own device row. Not an app failure. |
 | 2 | No physical-device measurements exist (cold start, RSS, data use, 2G/3G, airplane mode). | ENV/OWNER | Owner runs the test on a 2 GB phone, or a device farm. Nothing in DEVICE_TEST_RESULTS.md may be filled in until measured. |
 | 3 | Live Vercel API (`yeehaw-api`) still serves old code; git-source deploy failed with `incorrect_git_source_info`. | PROVIDER | Link GitHub repo to the Vercel project (owner OAuth) or deploy from an uploaded build. |
 | 4 | `entitlements` migration not applied to live Neon. | OWNER/PROVIDER | Additive `CREATE TABLE IF NOT EXISTS`; apply after taking a Neon branch/snapshot. No data reset. |
