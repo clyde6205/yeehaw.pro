@@ -26,12 +26,24 @@ class BrowserBehaviorTest {
         return out
     }
 
-    private fun clickByLabel(activity: MainActivity, label: String): Boolean {
-        val found = ArrayList<View>()
-        activity.window.decorView.findViewsWithText(found, label, View.FIND_VIEWS_WITH_TEXT or View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
-        val v = found.firstOrNull { it.isShown && it.isEnabled } ?: return false
-        return v.performClick()
+    private fun allViews(root: View): List<View> {
+        val out = mutableListOf<View>()
+        fun walk(v: View) {
+            out.add(v)
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(root)
+        return out
     }
+
+    /** Finds a control by text or contentDescription regardless of visibility (the toolbar is hidden on the start page by design). */
+    private fun findControl(activity: MainActivity, label: String): View? =
+        allViews(activity.window.decorView).firstOrNull {
+            (it is android.widget.TextView && it.text?.toString() == label) || it.contentDescription?.toString() == label
+        }
+
+    private fun clickByLabel(activity: MainActivity, label: String): Boolean =
+        findControl(activity, label)?.performClick() ?: false
 
     @Test
     fun startPageLoadsFromBundledAssets() {
@@ -54,10 +66,12 @@ class BrowserBehaviorTest {
     @Test
     fun openingMoreTabsThanTheCapNeverCrashes() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var clicked = 0
             repeat(15) {
-                scenario.onActivity { a -> clickByLabel(a, "New tab") }
+                scenario.onActivity { a -> if (clickByLabel(a, "New tab")) clicked++ }
                 Thread.sleep(150)
             }
+            assertTrue("the New tab control must be found and clickable (clicked=$clicked)", clicked == 15)
             scenario.onActivity { a ->
                 assertFalse("activity must stay alive", a.isFinishing || a.isDestroyed)
                 val live = webViews(a.window.decorView)
@@ -70,10 +84,12 @@ class BrowserBehaviorTest {
     @Test
     fun criticalMemoryPressureKeepsTheBrowserUsable() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            var clicked = 0
             repeat(5) {
-                scenario.onActivity { a -> clickByLabel(a, "New tab") }
+                scenario.onActivity { a -> if (clickByLabel(a, "New tab")) clicked++ }
                 Thread.sleep(150)
             }
+            assertTrue("the New tab control must be found and clickable (clicked=$clicked)", clicked == 5)
             scenario.onActivity { a ->
                 a.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL)
                 a.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
@@ -93,9 +109,7 @@ class BrowserBehaviorTest {
             scenario.recreate()
             Thread.sleep(500)
             scenario.onActivity { a ->
-                val found = ArrayList<View>()
-                a.window.decorView.findViewsWithText(found, "More", View.FIND_VIEWS_WITH_TEXT)
-                assertTrue("More control must exist after recreate", found.isNotEmpty())
+                assertNotNull("More control must exist after recreate", findControl(a, "More"))
             }
         }
     }
