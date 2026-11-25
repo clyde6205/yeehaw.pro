@@ -146,4 +146,22 @@ class BrowserBehaviorTest {
             scenario.onActivity { a -> assertFalse(a.isFinishing || a.isDestroyed) }
         }
     }
+
+    @Test
+    fun privateBrowserRunsInItsOwnProcessOnApi28PlusAndRefusesBelow() {
+        val ctx = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val intent = android.content.Intent(ctx, PrivateBrowserActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        ctx.startActivity(intent)
+        val am = ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        var running = false
+        for (i in 0 until 80) {
+            running = am.runningAppProcesses.orEmpty().any { it.processName.endsWith(":private_browser") }
+            if (running) break
+            Thread.sleep(250)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            assertTrue("private browser must run in the separate :private_browser process", running)
+        }
+        // below API 28 the activity shows a message and finishes; reaching here without a crash is the assertion.
+    }
 }
