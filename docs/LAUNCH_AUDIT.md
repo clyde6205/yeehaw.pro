@@ -23,8 +23,8 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 ## 2. Core browser (P2)
 | Requirement | Status | Evidence / gap |
 |---|---|---|
-| Low-memory tab policy (live-tab cap by RAM class, eviction, restore, 12-tab ceiling) | IV | Logic unit-tested; behaviour on a 2 GB device not run |
-| `onTrimMemory` / renderer-death rescue | IV | Code audited; no forced-kill device test |
+| Low-memory tab policy (live-tab cap by RAM class, eviction, restore, 12-tab ceiling) | PC | Logic unit-tested. Emulator (API 23/29/35/36, run 45610859057): 15 rapid new-tab clicks and critical `onTrimMemory` keep the app alive with a visible WebView. Not tested on a real 2 GB phone |
+| `onTrimMemory` / renderer-death rescue | PC | `onTrimMemory` verified on emulator; renderer-death rescue has no forced-kill test |
 | Weak-network retry (GET-only, capped backoff), failed-page panel | IV | Backoff logic unit-tested; no throttled-network run. POST auto-retry duplicate-submit bug fixed |
 | Data Saver (Save-Data header on page requests, request skipping, honest counters) | PC | Mechanism implemented; **no measured savings exist**; WebView cannot add headers to subresources (documented) |
 | Savings meter reports measured vs estimated separately | IV | Reviewed; needs comparison with TrafficStats on device |
@@ -57,6 +57,7 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 ## 5. Site, i18n, accessibility, sharing, privacy (P5)
 | Requirement | Status | Evidence / gap |
 |---|---|---|
+| Start page loads from bundled assets on API 23/29/35/36 | CV | `startPageLoadsFromBundledAssets` passes in run 45610859057 |
 | Start page layout preserved, only additive icons | IV | Reviewed against v0.4.6 layout; no screenshot comparison |
 | Marketing site, privacy, terms, support pages | CV (build) | Static checks pass; live rendering not checked from sandbox |
 | Public site shows no GitHub repo/Actions links | CV | Removed; static check passes |
