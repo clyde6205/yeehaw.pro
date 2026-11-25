@@ -23,6 +23,8 @@ jobs:
   emulator-smoke:
     name: API ${{ matrix.api-level }} browser smoke test
     runs-on: ubuntu-24.04
+    env:
+      ANDROID_AVD_HOME: /home/runner/.android/avd
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -70,8 +72,10 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           AVDMANAGER="$(command -v avdmanager || find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager | head -n 1)"
           IMG="system-images;android-${{ matrix.api-level }};default;x86_64"
-          "$SDKMANAGER" --install "$IMG" "platforms;android-${{ matrix.api-level }}" >/dev/null
+          "$SDKMANAGER" --install "$IMG" >/dev/null
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | "$AVDMANAGER" create avd --force -n test -k "$IMG" -d pixel_2
+          emulator -list-avds
       - name: Start emulator and wait for boot (hardware acceleration required)
         id: emu
         if: steps.kvm.outputs.available == 'true'
