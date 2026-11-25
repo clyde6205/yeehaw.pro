@@ -17,7 +17,7 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 | Backend tests with Postgres in CI | CV | backend-tests workflow success on f6033ff; re-run on later commits via workflow |
 | Static site build + checks in CI | CV | "Static product site checks" success on 8d0f69ce |
 | Dependency vulnerability audit | PC | npm audit gate (high+) in backend CI after express 4.21.2→4.22.3 fixed 3 high advisories; site has 0. Gradle dependency audit not yet added |
-| Emulator / API 23 instrumented tests | BLK | Private repo has no KVM on standard runners; software emulation unsupported by the action. Needs Firebase Test Lab (GCP service account), larger paid runner, self-hosted KVM, or public repo. Workflow honestly reports "NOT run (infrastructure)" |
+| Emulator instrumented tests API 23/29/35/36 | CV | Run 45605985490: all four pass 12 tests each (store, offline library, session cap, memory policy, launch with core controls). Emulator, not a physical phone |
 | Signed release APK/AAB | BLK | No keystore secrets supplied |
 
 ## 2. Core browser (P2)
