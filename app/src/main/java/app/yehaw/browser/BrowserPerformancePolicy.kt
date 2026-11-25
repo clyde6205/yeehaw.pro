@@ -7,6 +7,9 @@ package app.yehaw.browser
  * page content, disables JavaScript, or changes a user's explicit saved preference.
  */
 internal object BrowserPerformancePolicy {
+    /** Upper bound on open tabs; only [maxLiveTabs] of them keep a live WebView. */
+    const val MAX_TOTAL_TABS = 12
+
     fun defaultMemorySaver(isLowRamDevice: Boolean, memoryClassMb: Int): Boolean =
         isLowRamDevice || memoryClassMb <= 128
 

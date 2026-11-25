@@ -58,3 +58,22 @@ class LogicTest {
         assertFalse(DataSaverPolicy.shouldBlockHeavy(true, SignalLevel.GOOD, false))
     }
 }
+
+class PerformancePolicyTest {
+    @Test fun liveTabsShrinkOnLowMemory() {
+        assertEquals(2, BrowserPerformancePolicy.maxLiveTabs(true, 256))
+        assertEquals(2, BrowserPerformancePolicy.maxLiveTabs(false, 128))
+        assertEquals(3, BrowserPerformancePolicy.maxLiveTabs(false, 192))
+        assertEquals(4, BrowserPerformancePolicy.maxLiveTabs(false, 256))
+    }
+
+    @Test fun totalTabsExceedLiveTabs() {
+        assertTrue(BrowserPerformancePolicy.MAX_TOTAL_TABS > BrowserPerformancePolicy.maxLiveTabs(false, 512))
+    }
+
+    @Test fun lowMemoryDevicesDefaultToMemorySaver() {
+        assertTrue(BrowserPerformancePolicy.defaultMemorySaver(true, 512))
+        assertTrue(BrowserPerformancePolicy.defaultMemorySaver(false, 128))
+        assertFalse(BrowserPerformancePolicy.defaultMemorySaver(false, 256))
+    }
+}

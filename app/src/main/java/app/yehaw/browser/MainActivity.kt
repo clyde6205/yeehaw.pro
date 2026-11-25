@@ -132,8 +132,19 @@ class MainActivity : Activity() {
     private lateinit var quickPaste: QuickPasteStore
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
-    private val maxTabs: Int by lazy {
+    /** How many tabs may keep a live WebView (and its renderer memory) at once. */
+    private val liveTabLimit: Int by lazy {
         BrowserPerformancePolicy.maxLiveTabs(activityManager.isLowRamDevice, activityManager.memoryClass)
+    }
+    /** Total tabs allowed. Suspended tabs hold only a URL, title and scroll offset, so this can be generous. */
+    private val maxTabs = BrowserPerformancePolicy.MAX_TOTAL_TABS
+
+    /** Suspend the oldest background tabs until no more than [liveTabLimit] WebViews are alive. Nothing is deleted. */
+    private fun enforceLiveTabLimit() {
+        while (tabs.count { !it.evicted } > liveTabLimit) {
+            val victim = tabs.filterIndexed { i, t -> !t.evicted && i != activeTabIndex }.firstOrNull() ?: return
+            discardTabForMemory(victim)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -438,6 +449,7 @@ class MainActivity : Activity() {
         configureWebView(webView)
         tabs.add(BrowserTab(webView = webView, currentUrl = url))
         showTab(tabs.lastIndex)
+        enforceLiveTabLimit()
         webView.loadUrl(url)
     }
 
@@ -612,6 +624,7 @@ class MainActivity : Activity() {
                 configureWebView(popup)
                 tabs.add(BrowserTab(webView = popup))
                 showTab(tabs.lastIndex)
+                enforceLiveTabLimit()
                 transport.webView = popup
                 message.sendToTarget()
                 return true
@@ -1008,6 +1021,7 @@ class MainActivity : Activity() {
             tab.evicted = false
         }
         tab.webView.onResume()
+        if (restoreUrl != null) enforceLiveTabLimit()
         if (tab.failed) {
             val errorPanel = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -1097,7 +1111,12 @@ class MainActivity : Activity() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW && tabs.size > 1) {
+        // Suspend background tabs only under real memory pressure (running low/critical, or the process is
+        // a background candidate). TRIM_MEMORY_UI_HIDDEN just means the app left the screen: save state only.
+        val pressure = level in ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW..ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+        if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) persistSession()
+        if (pressure && tabs.size > 1) {
             tabs.forEachIndexed { index, tab ->
                 if (index != activeTabIndex) discardTabForMemory(tab)
             }
