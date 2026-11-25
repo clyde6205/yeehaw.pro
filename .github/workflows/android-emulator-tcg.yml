@@ -5,6 +5,9 @@ name: Android emulator smoke (software emulation, no KVM)
 # this workflow are emulator results, never physical-device results.
 on:
   workflow_dispatch:
+  push:
+    branches: ["integration/reconcile-main"]
+    paths: [".github/workflows/android-emulator-tcg.yml"]
 
 permissions:
   contents: read
