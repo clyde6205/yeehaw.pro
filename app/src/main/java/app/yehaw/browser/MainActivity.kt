@@ -268,7 +268,7 @@ class MainActivity : Activity() {
             if (index == activeIndex) {
                 activeTabIndex = index
                 pageContainer.addView(restoredView)
-                restoredView.loadUrl(entry.url)
+                restoredView.loadSaving(entry.url)
             } else {
                 restoredView.destroy()
                 tab.evicted = true
@@ -450,7 +450,7 @@ class MainActivity : Activity() {
         tabs.add(BrowserTab(webView = webView, currentUrl = url))
         showTab(tabs.lastIndex)
         enforceLiveTabLimit()
-        webView.loadUrl(url)
+        webView.loadSaving(url)
     }
 
     private fun configureWebView(webView: WebView) {
@@ -894,14 +894,14 @@ class MainActivity : Activity() {
             }
             candidate
         }
-        currentWebView()?.loadUrl(destination) ?: createTab(destination)
+        currentWebView()?.loadSaving(destination) ?: createTab(destination)
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         if (uri.scheme == "http" || uri.scheme == "https") {
-            if (tabs.isEmpty()) createTab(uri.toString()) else currentWebView()?.loadUrl(uri.toString())
+            if (tabs.isEmpty()) createTab(uri.toString()) else currentWebView()?.loadSaving(uri.toString())
         }
     }
 
@@ -1046,7 +1046,7 @@ class MainActivity : Activity() {
             ))
         } else {
             pageContainer.addView(tab.webView)
-            if (restoreUrl != null) tab.webView.loadUrl(restoreUrl)
+            if (restoreUrl != null) tab.webView.loadSaving(restoreUrl)
         }
         addressBar.setText(displayUrl(tab.currentUrl))
         addressBar.setSelection(addressBar.text.length)
@@ -1084,6 +1084,16 @@ class MainActivity : Activity() {
             showTab((activeTabIndex - 1).coerceAtLeast(0))
         }
         persistSession()
+    }
+
+    /**
+     * Loads [url]; when any data-saving mode is on, asks the site for its lighter version with the standard
+     * `Save-Data: on` request header (honoured by many sites; ignored by the rest). Only the page request can
+     * carry it: WebView does not let an app add headers to the sub-resources the page then fetches.
+     */
+    private fun WebView.loadSaving(url: String) {
+        val saving = memorySaver || turboMode || systemSaverOn || (adaptiveSaver && signalMonitor.level.textFirst)
+        if (saving && isWebUrl(url) && Uri.parse(url).host != START_HOST) loadUrl(url, mapOf("Save-Data" to "on")) else loadUrl(url)
     }
 
     private fun loadHome() {
