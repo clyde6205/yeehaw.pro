@@ -1,6 +1,6 @@
 # Low-signal mode, Guardian self-repair, live savings readout (v0.5.0)
 
-Additive: no redesign. The start page keeps its tiles and bottom nav; two small stat rows were added under the existing data line.
+Additive: no redesign. The start page is pixel-identical by default. Tapping the existing stats line cycles it through: Data used / Saved offline, then Signal / Skipped / Avoided (est.), then Weak-signal time / Auto-repairs.
 
 ## What each piece really does
 - `core/SignalMonitor` - reads OS network state/bandwidth estimate plus *measured* page-load times and failures. Downgrades at once, upgrades after 8 s stable. It never claims to improve signal.
