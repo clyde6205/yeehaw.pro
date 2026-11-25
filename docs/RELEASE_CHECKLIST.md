@@ -1,0 +1,17 @@
+# Release checklist
+- [x] Integration branch builds in CI (run 45585817533)
+- [x] JVM unit tests pass in CI
+- [ ] PR #12 reviewed and merged into main
+- [ ] Emulator smoke API 23 (software emulation) result recorded
+- [ ] Emulator or device smoke on a modern API
+- [ ] Physical 2 GB device run recorded in DEVICE_TEST_RESULTS.md
+- [ ] Release keystore secrets added by owner (GitHub Settings); signed APK/AAB built
+- [ ] APK/AAB inspected (size, permissions, debug artifacts)
+- [ ] Vercel API deployed from this branch; /health and /v1/pro/verify smoke tested
+- [ ] entitlements migration applied to Neon (additive, after a snapshot)
+- [ ] Play service account configured; test purchase verified end to end
+- [ ] api.yeehaw.pro CNAME live
+- [ ] Cloudflare build settings confirmed (npm ci && npm run build, output ./public)
+- [ ] Play listing, Data Safety form, screenshots, release notes
+- [ ] Closed test: 12 testers x 14 days (new personal accounts)
+- [ ] Ads remain OFF until real AdMob IDs and consent flow exist
