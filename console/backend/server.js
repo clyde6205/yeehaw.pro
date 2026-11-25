@@ -6,12 +6,13 @@ const rateLimit = require('express-rate-limit');
 const { makePool, migrate } = require('./db');
 const V = require('./lib/validate');
 const { loadSigner, safeEqual } = require('./lib/sign');
+const { makePlayVerifier } = require('./lib/play');
 
 const crypto = require('node:crypto');
 const CONFIG_TTL_SECONDS = 3600;
 const bucketOf = (id) => parseInt(crypto.createHash('sha256').update(id).digest('hex').slice(0, 8), 16) % 100;
 
-function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1 }) {
+function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null }) {
   if (!pool) throw new Error('pool is required');
   if (!adminToken || adminToken.length < 32) throw new Error('ADMIN_TOKEN must be at least 32 characters');
   if (!signingKeyPem) throw new Error('CONFIG_SIGNING_KEY_PEM is required');
@@ -136,6 +137,33 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       update_required: required, update_available: required || available,
       latest_version_name: up.latest_version_name || '', update_url: up.update_url || '', update_message: up.message || '',
       checked_at: new Date().toISOString(),
+    }), 'utf8');
+    res.set({ 'X-Config-Signature': signer.sign(body), 'Cache-Control': 'no-store' });
+    res.type('application/json').send(body);
+  }));
+
+
+  // Server-side Pro check. The app sends a Play purchase token; the server asks Google Play and returns a SIGNED answer.
+  // Fails closed: with no Play credentials configured it answers 503 and the app stays on the free tier.
+  app.post('/v1/pro/verify', limiter(60_000, 12), small, wrap(async (req, res) => {
+    const b = req.body || {};
+    const id = String(b.device_id || '').toLowerCase();
+    if (!V.UUID_RE.test(id)) throw new V.ValidationError('device_id: must be a UUID', 'device_id');
+    const product = String(b.product_id || '');
+    if (!/^[a-z0-9_.]{3,64}$/.test(product)) throw new V.ValidationError('product_id: invalid', 'product_id');
+    const tokenIn = String(b.purchase_token || '');
+    if (tokenIn.length < 20 || tokenIn.length > 2048) throw new V.ValidationError('purchase_token: invalid', 'purchase_token');
+    if (!playVerify) return res.status(503).json({ error: 'verification_not_configured' });
+    let result;
+    try { result = await playVerify(tokenIn); } catch (e) { return res.status(502).json({ error: 'play_unavailable' }); }
+    const hash = crypto.createHash('sha256').update(tokenIn).digest('hex');
+    await pool.query(
+      `INSERT INTO entitlements (device_id, product_id, token_hash, state, active, expires_at, verified_at)
+       VALUES ($1,$2,$3,$4,$5,$6, now())
+       ON CONFLICT (device_id) DO UPDATE SET product_id=$2, token_hash=$3, state=$4, active=$5, expires_at=$6, verified_at=now()`,
+      [id, product, hash, result.state, result.active, result.expiresAt]);
+    const body = Buffer.from(JSON.stringify({
+      device_id: id, pro: !!result.active, expires_at: result.expiresAt, state: result.state, checked_at: new Date().toISOString(),
     }), 'utf8');
     res.set({ 'X-Config-Signature': signer.sign(body), 'Cache-Control': 'no-store' });
     res.type('application/json').send(body);
@@ -495,6 +523,7 @@ if (require.main === module) {
       adminToken: process.env.ADMIN_TOKEN,
       signingKeyPem: process.env.CONFIG_SIGNING_KEY_PEM,
       trustProxy: Number(process.env.TRUST_PROXY ?? 1),
+      playVerify: makePlayVerifier({ serviceAccountJson: process.env.PLAY_SERVICE_ACCOUNT_JSON, packageName: process.env.PLAY_PACKAGE_NAME || 'app.yehaw.browser' }),
     });
     const port = Number(process.env.PORT || 8080);
     const server = app.listen(port, () => console.log(`yeehaw-console-api listening on :${port}`));

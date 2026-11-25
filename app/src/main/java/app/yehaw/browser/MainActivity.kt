@@ -34,7 +34,21 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import app.yehaw.browser.console.ConsoleBootstrap
+import app.yehaw.browser.console.DeviceStatusManager
+import app.yehaw.browser.console.HealthReporter
+import app.yehaw.browser.console.ProEntitlement
+import app.yehaw.browser.console.RemoteConfigManager
+import app.yehaw.browser.console.SearchRoutingEngine
+import app.yehaw.browser.console.ShareManager
+import app.yehaw.browser.console.TelemetryManager
+import app.yehaw.browser.core.ClipboardWatcher
+import app.yehaw.browser.core.DataSaverPolicy
 import app.yehaw.browser.core.Guardian
+import app.yehaw.browser.core.MarkupScreen
+import app.yehaw.browser.core.QuickPasteStore
+import app.yehaw.browser.core.ScreenshotTool
+import app.yehaw.browser.core.StorageGuard
 import app.yehaw.browser.core.RetryScheduler
 import app.yehaw.browser.core.SavingsMeter
 import app.yehaw.browser.core.SignalLevel
@@ -111,6 +125,10 @@ class MainActivity : Activity() {
     private val retryScheduler = RetryScheduler()
     private val loadStartedAt = java.util.WeakHashMap<WebView, Long>()
     private var startedSafe = false
+    private var adaptiveSaver = true
+    private var systemSaverOn = false
+    private lateinit var clipboardWatcher: ClipboardWatcher
+    private lateinit var quickPaste: QuickPasteStore
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
     private val maxTabs: Int by lazy {
@@ -134,6 +152,11 @@ class MainActivity : Activity() {
         memorySaver = browserPreferences.getBoolean("memory_saver", false)
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
         turboMode = browserPreferences.getBoolean("turbo_mode", true)
+        adaptiveSaver = browserPreferences.getBoolean("adaptive_saver", true)
+        clipboardWatcher = ClipboardWatcher(this)
+        quickPaste = QuickPasteStore(this)
+        ConsoleBootstrap.init(this)
+        window.decorView.post { maybeAskAnalyticsConsent() }
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
@@ -193,6 +216,9 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         Guardian.setForeground(true)
+        systemSaverOn = DataSaverPolicy.systemDataSaverOn(this)
+        ConsoleBootstrap.onResume()
+        reportHealthAndStatus()
         currentWebView()?.onResume()
         statsHandler.removeCallbacks(statsTicker)
         statsHandler.post(statsTicker)
@@ -355,7 +381,7 @@ class MainActivity : Activity() {
         libraryControls.addView(actionButton("Save offline") { saveOfflinePage() })
         libraryControls.addView(actionButton("Offline") { showOfflinePages() })
         libraryControls.addView(actionButton("Downloads") { openDownloads() })
-        libraryControls.addView(actionButton("Apps") { showSisterApps() })
+        libraryControls.addView(actionButton("Apps") { showAppsHub() })
         libraryControls.addView(actionButton("More") { showBrowserMenu() })
         libraryControlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -627,7 +653,10 @@ class MainActivity : Activity() {
                         null
                     }
                 }
-                if ((turboMode || signalMonitor.level.textFirst) && request?.isForMainFrame != true) {
+                if (RemoteConfigManager.shouldBlock(request?.url)) {
+                    return RemoteConfigManager.blockedResponse(request?.url?.host, request?.isForMainFrame == true)
+                }
+                if ((turboMode || signalMonitor.level.textFirst || DataSaverPolicy.shouldBlockHeavy(adaptiveSaver, signalMonitor.level, systemSaverOn)) && request?.isForMainFrame != true) {
                     val path = (uri.path ?: "").lowercase()
                     if (SavingsMeter.isHeavyAsset(path)) {
                         savings.recordSkipped(path)
@@ -693,6 +722,7 @@ class MainActivity : Activity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                if (view != null) ConsoleBootstrap.onPageFinished(view, url)
                 val tab = tabs.firstOrNull { it.webView === view }
                 if (view != null && tab != null && !tab.failed) {
                     val started = loadStartedAt.remove(view)
@@ -829,8 +859,8 @@ class MainActivity : Activity() {
             "save" -> saveBookmark()
             "offline" -> showOfflinePages()
             "more" -> showBrowserMenu()
-            "apps" -> showSisterApps()
-            "shareapp" -> shareYeeHaw()
+            "apps" -> showAppsHub()
+            "shareapp" -> showShareMenu()
             else -> loadHome()
         }
     }
@@ -839,7 +869,8 @@ class MainActivity : Activity() {
         val raw = addressBar.text?.toString()?.trim().orEmpty()
         if (raw.isBlank()) return
         val destination = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
-            SEARCH_ENGINES.getValue(searchEngine) + Uri.encode(raw)
+            val userChose = browserPreferences.contains("search_engine")
+            SearchRoutingEngine.resolve(raw, if (userChose) SEARCH_ENGINES.getValue(searchEngine) + "{query}" else null)
         } else {
             val candidate = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "https://$raw"
             val parsed = Uri.parse(candidate)
@@ -1159,7 +1190,7 @@ class MainActivity : Activity() {
         Toast.makeText(this, "ChatMe is not installed yet — opening chatme.pro to get it.", Toast.LENGTH_LONG).show()
     }
 
-    private fun isProMode(): Boolean = browserPreferences.getBoolean("pro_mode", false)
+    private fun isProMode(): Boolean = ProEntitlement.isPro(this)
 
     /** YeeHaw Pro tier: one-time purchase through Google Play Billing. Free tier stays fully functional forever. */
     private fun openProUpgrade() {
@@ -1192,8 +1223,7 @@ class MainActivity : Activity() {
         if (billingClient != null) return
         val purchasesUpdatedListener = com.android.billingclient.api.PurchasesUpdatedListener { result, purchases ->
             if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK && !purchases.isNullOrEmpty()) {
-                browserPreferences.edit().putBoolean("pro_mode", true).apply()
-                Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off forever.", Toast.LENGTH_LONG).show()
+                handlePurchases(purchases)
             }
         }
         billingClient = com.android.billingclient.api.BillingClient.newBuilder(this)
@@ -1204,7 +1234,7 @@ class MainActivity : Activity() {
             .build()
         billingClient?.startConnection(object : com.android.billingclient.api.BillingClientStateListener {
             override fun onBillingSetupFinished(result: com.android.billingclient.api.BillingResult) {
-                if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) queryProProduct()
+                if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) { queryProProduct(); restorePurchases() }
             }
 
             override fun onBillingServiceDisconnected() {
@@ -1387,6 +1417,10 @@ class MainActivity : Activity() {
         val pageUrl = webView.url ?: tab.currentUrl
         if (!isWebUrl(pageUrl) || isStartPageUrl(pageUrl)) {
             Toast.makeText(this, "Only normal web pages can be saved.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!StorageGuard.canWrite(this, 2L * 1024 * 1024)) {
+            Toast.makeText(this, "Storage is almost full. Free some space on your phone, then save this page.", Toast.LENGTH_LONG).show()
             return
         }
         statusText.text = "Saving offline reading copy…"
@@ -1643,11 +1677,302 @@ class MainActivity : Activity() {
         pendingWebPermission = null
         pendingGeoCallback?.invoke(pendingGeoOrigin, false, false)
         pendingGeoCallback = null
+        ConsoleBootstrap.onDestroy()
         retryScheduler.cancelAll()
         signalMonitor.stop()
         savings.flush()
         browserStore.close()
         super.onDestroy()
+    }
+
+
+
+    /** Pro unlocks only after the server confirms the purchase with Google Play; the purchase is acknowledged after that. */
+    private fun handlePurchases(purchases: List<com.android.billingclient.api.Purchase>) {
+        purchases.filter { it.purchaseState == com.android.billingclient.api.Purchase.PurchaseState.PURCHASED }.forEach { purchase ->
+            val product = purchase.products.firstOrNull() ?: PRODUCT_ID_PRO
+            ProEntitlement.verify(this, product, purchase.purchaseToken) { verified ->
+                when (verified) {
+                    true -> {
+                        if (!purchase.isAcknowledged) {
+                            val ack = com.android.billingclient.api.AcknowledgePurchaseParams.newBuilder().setPurchaseToken(purchase.purchaseToken).build()
+                            billingClient?.acknowledgePurchase(ack) { }
+                        }
+                        Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off.", Toast.LENGTH_LONG).show()
+                    }
+                    false -> Toast.makeText(this, "Google Play did not confirm this purchase.", Toast.LENGTH_LONG).show()
+                    null -> Toast.makeText(this, "Purchase received. Pro will activate when YeeHaw can reach its server.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    /** Restores Pro on a new phone or after a failed check: asks Play for current subscriptions and re-verifies. */
+    private fun restorePurchases() {
+        val client = billingClient ?: return
+        if (!client.isReady) return
+        val params = com.android.billingclient.api.QueryPurchasesParams.newBuilder()
+            .setProductType(com.android.billingclient.api.BillingClient.ProductType.SUBS).build()
+        client.queryPurchasesAsync(params) { result, list ->
+            if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
+                runOnUiThread { handlePurchases(list) }
+            }
+        }
+    }
+
+    private fun reportHealthAndStatus() {
+        val totals = mapOf(
+            "crash" to Guardian.totalCrashesRecovered(this).toLong(),
+            "render_rescue" to Guardian.totalRepairs(this).toLong(),
+            "skipped_requests" to savings.skippedRequests,
+            "est_bytes_avoided" to savings.estimatedBytesAvoided,
+            "low_signal_seconds" to savings.lowSignalSecs,
+            "data_received_bytes" to sessionDataUsed
+        )
+        HealthReporter.maybeReport(this, totals)
+        val versionCode = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+            else @Suppress("DEPRECATION") packageManager.getPackageInfo(packageName, 0).versionCode
+        } catch (_: Exception) { 0 }
+        DeviceStatusManager.check(this, versionCode) { status ->
+            if (isFinishing) return@check
+            if (status.blocked) {
+                AlertDialog.Builder(this)
+                    .setTitle("YeeHaw is paused for this device")
+                    .setMessage(status.blockedReason.ifBlank { "Contact support at yeehaw.pro." })
+                    .setCancelable(false)
+                    .setPositiveButton("Close") { _, _ -> finish() }
+                    .show()
+            } else if (status.updateAvailable && status.updateUrl.isNotEmpty()) {
+                val key = "update_prompt_" + status.latestVersionName
+                if (status.updateRequired || !browserPreferences.getBoolean(key, false)) {
+                    browserPreferences.edit().putBoolean(key, true).apply()
+                    val builder = AlertDialog.Builder(this)
+                        .setTitle(if (status.updateRequired) "Update required" else "Update available")
+                        .setMessage(status.message.ifBlank { "A newer YeeHaw (${status.latestVersionName}) is ready." })
+                        .setPositiveButton("Update") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(status.updateUrl))) }
+                    if (!status.updateRequired) builder.setNegativeButton("Later", null) else builder.setCancelable(false)
+                    builder.show()
+                }
+            }
+        }
+        if (ProEntitlement.needsRecheck(this)) {
+            ProEntitlement.storedToken(this)?.let { (product, token) -> ProEntitlement.verify(this, product, token) { } }
+        }
+    }
+
+    private fun maybeAskAnalyticsConsent() {
+        if (!TelemetryManager.isConsentRequired() || browserPreferences.getBoolean("consent_asked", false)) return
+        AlertDialog.Builder(this)
+            .setTitle("Help improve YeeHaw?")
+            .setMessage("Share anonymous app health (crashes, app version, phone memory, region). No browsing data, no ads ID. You can delete it anytime from Tools.")
+            .setCancelable(false)
+            .setPositiveButton("Share") { _, _ -> TelemetryManager.setConsent(this, true); browserPreferences.edit().putBoolean("consent_asked", true).apply() }
+            .setNegativeButton("No thanks") { _, _ -> TelemetryManager.setConsent(this, false); browserPreferences.edit().putBoolean("consent_asked", true).apply() }
+            .show()
+    }
+
+    private fun showShareMenu() {
+        val canApk = ShareManager.canShareApk(this)
+        val labels = mutableListOf("QR code (works with no data)", "WhatsApp", "Messenger", "Telegram", "Viber", "SMS", "Other apps…")
+        if (canApk) labels.add("Send the app by Bluetooth / Nearby (no data)")
+        AlertDialog.Builder(this)
+            .setTitle("Share YeeHaw")
+            .setItems(labels.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> ShareManager.showQrDialog(this)
+                    1 -> ShareManager.shareVia(this, ShareManager.Channel.WHATSAPP)
+                    2 -> ShareManager.shareVia(this, ShareManager.Channel.MESSENGER)
+                    3 -> ShareManager.shareVia(this, ShareManager.Channel.TELEGRAM)
+                    4 -> ShareManager.shareVia(this, ShareManager.Channel.VIBER)
+                    5 -> ShareManager.shareVia(this, ShareManager.Channel.SMS)
+                    6 -> ShareManager.shareVia(this, ShareManager.Channel.SYSTEM)
+                    else -> ShareManager.shareApk(this)
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun confirmForgetMe() {
+        AlertDialog.Builder(this)
+            .setTitle("Stop sharing and delete my data")
+            .setMessage("This deletes YeeHaw's anonymous app-health record for this phone from our server and stops sharing it. Your bookmarks and pages stay on your phone.")
+            .setPositiveButton("Delete") { _, _ ->
+                TelemetryManager.forgetMe(this) { ok ->
+                    runOnUiThread { Toast.makeText(this, if (ok) "Deleted. Nothing more will be shared." else "Could not reach the server. Try again with a connection.", Toast.LENGTH_LONG).show() }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // ---------------------------------------------------------------- Apps hub (tools)
+
+    private fun toggleMemorySaver() {
+        memorySaver = !memorySaver
+        browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
+        tabs.forEachIndexed { index, tab ->
+            if (!tab.evicted) {
+                tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                if (index != activeTabIndex) tab.webView.onPause() else tab.webView.onResume()
+            }
+        }
+        Toast.makeText(this, if (memorySaver) "Memory Saver on." else "Memory Saver off.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showAppsHub() {
+        val onOff = { value: Boolean -> if (value) "ON" else "OFF" }
+        val labels = arrayOf(
+            "Memory Saver — ${onOff(memorySaver)}",
+            "Adaptive Data Saver — ${onOff(adaptiveSaver)}",
+            "Storage Protection",
+            "Quick Paste",
+            "Clipboard Convenience — ${onOff(clipboardWatcher.enabled)}",
+            "Screenshot & Markup",
+            "Offline Reading",
+            "Stop sharing & delete my data",
+            "YeeHaw family apps"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("YeeHaw tools")
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> toggleMemorySaver()
+                    1 -> {
+                        adaptiveSaver = !adaptiveSaver
+                        browserPreferences.edit().putBoolean("adaptive_saver", adaptiveSaver).apply()
+                        Toast.makeText(
+                            this,
+                            if (adaptiveSaver) "Adaptive Data Saver on: images and video are skipped on weak signal or when Android Data Saver is on."
+                            else "Adaptive Data Saver off.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    2 -> showStorageProtection()
+                    3 -> showQuickPaste()
+                    4 -> {
+                        clipboardWatcher.enabled = !clipboardWatcher.enabled
+                        Toast.makeText(
+                            this,
+                            if (clipboardWatcher.enabled) "Clipboard Convenience on: when you copy a link, YeeHaw offers to open it. Nothing is sent anywhere."
+                            else "Clipboard Convenience off.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    5 -> startScreenshotMarkup()
+                    6 -> AlertDialog.Builder(this)
+                        .setTitle("Offline Reading")
+                        .setItems(arrayOf("Save this page for offline reading", "Open my offline library")) { _, choice ->
+                            if (choice == 0) saveOfflinePage() else showOfflinePages()
+                        }
+                        .setNegativeButton("Close", null)
+                        .show()
+                    7 -> confirmForgetMe()
+                    else -> showSisterApps()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showStorageProtection() {
+        val level = StorageGuard.level(this)
+        val status = when (level) {
+            StorageGuard.Level.OK -> "Healthy"
+            StorageGuard.Level.LOW -> "Low — consider freeing space"
+            StorageGuard.Level.CRITICAL -> "Almost full — YeeHaw will not save new offline pages"
+        }
+        val message = "Phone free space: ${StorageGuard.format(StorageGuard.freeBytes(this))} of ${StorageGuard.format(StorageGuard.totalBytes(this))}\n" +
+            "Status: $status\n\n" +
+            "YeeHaw data (bookmarks, history, saved pages): ${StorageGuard.format(StorageGuard.appDataBytes(this))}\n" +
+            "Temporary cache: ${StorageGuard.format(StorageGuard.appCacheBytes(this))}\n\n" +
+            "YeeHaw never deletes your saved pages, bookmarks or history by itself. Clearing the cache only removes temporary files; sites may load a little slower once."
+        AlertDialog.Builder(this)
+            .setTitle("Storage Protection")
+            .setMessage(message)
+            .setPositiveButton("Clear temporary cache") { _, _ ->
+                tabs.filterNot { it.evicted }.forEach { it.webView.clearCache(true) }
+                Toast.makeText(this, "Temporary cache cleared. Your saved data is untouched.", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showQuickPaste() {
+        val items = quickPaste.list()
+        val labels = mutableListOf("＋ Add from clipboard")
+        labels.addAll(items.map { if (it.length > 60) it.take(60) + "…" else it })
+        AlertDialog.Builder(this)
+            .setTitle("Quick Paste — tap to insert, hold to delete")
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    val clip = try {
+                        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+                            ?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val added = !clip.isNullOrBlank() && quickPaste.add(clip)
+                    Toast.makeText(
+                        this,
+                        if (added) "Saved to Quick Paste." else "Nothing to add (copy some text first; the list holds ${QuickPasteStore.MAX_ITEMS}).",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    insertQuickPaste(items[which - 1])
+                }
+            }
+            .setNegativeButton("Close", null)
+            .create().also { dialog ->
+                dialog.listView.setOnItemLongClickListener { _, _, position, _ ->
+                    if (position > 0) {
+                        quickPaste.remove(position - 1)
+                        dialog.dismiss()
+                        Toast.makeText(this, "Removed.", Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                }
+                dialog.show()
+            }
+    }
+
+    private fun insertQuickPaste(text: String) {
+        val web = currentWebView()
+        if (web == null) {
+            copyForPaste(text)
+            return
+        }
+        web.evaluateJavascript(QuickPasteStore.insertScript(text)) { result ->
+            if (result != "true") copyForPaste(text)
+        }
+    }
+
+    private fun copyForPaste(text: String) {
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Quick Paste", text))
+        Toast.makeText(this, "Tap a text box first. Copied — long-press the box and choose Paste.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun startScreenshotMarkup() {
+        val web = currentWebView()
+        val shot = if (web != null) ScreenshotTool.capture(web) else null
+        if (shot == null) {
+            Toast.makeText(this, "Could not take a screenshot right now.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        MarkupScreen.show(this, shot) { message -> Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) return
+        val link = clipboardWatcher.pendingLink() ?: return
+        AlertDialog.Builder(this)
+            .setTitle("Open copied link?")
+            .setMessage(if (link.length > 120) link.take(120) + "…" else link)
+            .setPositiveButton("Open") { _, _ -> createTab(link) }
+            .setNegativeButton("No thanks", null)
+            .show()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

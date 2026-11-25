@@ -28,7 +28,7 @@ before(async () => {
 });
 after(async () => { server.close(); await pool.end(); });
 beforeEach(async () => {
-  await pool.query('TRUNCATE share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
   await migrate(pool); // re-seed the default config (version 1)
 });
 
@@ -387,4 +387,25 @@ test('new admin routes require the token', async () => {
   for (const p of ['/devices', '/analytics/ads', '/analytics/health', '/system', '/audit']) {
     assert.equal((await fetch(base + '/v1/admin' + p)).status, 401, p);
   }
+});
+
+test('pro verify: fails closed without Play credentials, signed answer with a verifier', async () => {
+  const id = uuid(), tok = 'x'.repeat(40);
+  let r = await post('/v1/pro/verify', { device_id: id, product_id: 'yeehaw_pro', purchase_token: tok });
+  assert.equal(r.status, 503);
+  const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false,
+    playVerify: async (t) => (t === tok ? { active: true, expiresAt: '2030-01-01T00:00:00Z', state: 'SUBSCRIPTION_STATE_ACTIVE' } : { active: false, expiresAt: null, state: 'invalid' }) });
+  const s2 = app2.listen(0); const b2 = 'http://127.0.0.1:' + s2.address().port;
+  try {
+    const send = (token) => fetch(b2 + '/v1/pro/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ device_id: id, product_id: 'yeehaw_pro', purchase_token: token }) });
+    r = await send(tok);
+    assert.equal(r.status, 200);
+    const raw = Buffer.from(await r.arrayBuffer());
+    assert.ok(signer.verify ? signer.verify(raw, r.headers.get('x-config-signature')) : r.headers.get('x-config-signature'));
+    assert.equal(JSON.parse(raw.toString()).pro, true);
+    r = await send('y'.repeat(40));
+    assert.equal(JSON.parse(await r.text()).pro, false);
+    r = await fetch(b2 + '/v1/pro/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ device_id: 'nope', product_id: 'yeehaw_pro', purchase_token: tok }) });
+    assert.equal(r.status, 400);
+  } finally { s2.close(); }
 });
