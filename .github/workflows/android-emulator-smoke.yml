@@ -123,6 +123,22 @@ jobs:
           done
           sleep 8
           adb shell dumpsys meminfo $PKG | grep -E "TOTAL|Java Heap|Native Heap" | head -6
+      - name: Private browser process and crash scan
+        if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 5
+        run: |
+          PKG=app.yehaw.browser.debug
+          adb logcat -c
+          adb shell am start -n $PKG/app.yehaw.browser.PrivateBrowserActivity
+          sleep 8
+          echo "--- processes"; adb shell ps -A 2>/dev/null | grep app.yehaw || adb shell ps | grep app.yehaw || true
+          if [ "${{ matrix.api-level }}" -ge 28 ]; then
+            adb shell ps -A | grep -q "$PKG:private_browser" && echo "private browser process running (API>=28): OK" || { echo "::error::private browser process not running on API ${{ matrix.api-level }}"; adb logcat -d | tail -60; exit 1; }
+          else
+            echo "API ${{ matrix.api-level }} < 28: private browsing is intentionally unavailable"
+          fi
+          if adb logcat -d | grep -E "FATAL EXCEPTION|ANR in app.yehaw"; then echo "::error::crash or ANR in logcat"; adb logcat -d | grep -B2 -A15 "FATAL EXCEPTION" | head -60; exit 1; fi
+          echo "no crash/ANR in logcat"
       - name: Upload emulator diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

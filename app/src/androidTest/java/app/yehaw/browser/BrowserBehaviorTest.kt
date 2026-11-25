@@ -113,4 +113,27 @@ class BrowserBehaviorTest {
             }
         }
     }
+
+    @Test
+    fun unreachableSiteShowsTheRetryPanelAndRetryDoesNotCrash() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                val edit = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first()
+                edit.setText("https://yehaw-unreachable.invalid/")
+                assertTrue("GO must be clickable", clickByLabel(a, "GO"))
+            }
+            var shown = false
+            repeat(40) {
+                scenario.onActivity { a ->
+                    shown = allViews(a.window.decorView).any { it is android.widget.TextView && it.isShown && it.text?.toString()?.contains("could not be loaded") == true }
+                }
+                if (shown) return@repeat
+                Thread.sleep(500)
+            }
+            assertTrue("the failed-page panel with Retry must appear for an unreachable site", shown)
+            scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
+            Thread.sleep(1500)
+            scenario.onActivity { a -> assertFalse(a.isFinishing || a.isDestroyed) }
+        }
+    }
 }
