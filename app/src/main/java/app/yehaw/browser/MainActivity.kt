@@ -120,6 +120,7 @@ class MainActivity : Activity() {
             statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
         }
     }
+    private val activityManager by lazy { getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager }
     private lateinit var signalMonitor: SignalMonitor
     private lateinit var savings: SavingsMeter
     private val retryScheduler = RetryScheduler()
@@ -132,12 +133,7 @@ class MainActivity : Activity() {
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
     private val maxTabs: Int by lazy {
-        val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
-        when {
-            memoryClass <= 128 -> 2
-            memoryClass <= 192 -> 3
-            else -> 4
-        }
+        BrowserPerformancePolicy.maxLiveTabs(activityManager.isLowRamDevice, activityManager.memoryClass)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,9 +145,13 @@ class MainActivity : Activity() {
         sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
         sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
-        memorySaver = browserPreferences.getBoolean("memory_saver", false)
+        memorySaver = browserPreferences.getBoolean(
+            "memory_saver",
+            BrowserPerformancePolicy.defaultMemorySaver(activityManager.isLowRamDevice, activityManager.memoryClass)
+        )
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
-        turboMode = browserPreferences.getBoolean("turbo_mode", true)
+        // Turbo (blocks all network images) is opt-in; Adaptive Data Saver (default on) skips heavy assets only on weak signal or Android Data Saver.
+        turboMode = browserPreferences.getBoolean("turbo_mode", false)
         adaptiveSaver = browserPreferences.getBoolean("adaptive_saver", true)
         clipboardWatcher = ClipboardWatcher(this)
         quickPaste = QuickPasteStore(this)
@@ -450,15 +450,16 @@ class MainActivity : Activity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = false
-            loadsImagesAutomatically = !memorySaver
-            blockNetworkImage = false
+            loadsImagesAutomatically = !memorySaver && !turboMode
+            blockNetworkImage = turboMode
             cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
             setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             mediaPlaybackRequiresUserGesture = true
-            offscreenPreRaster = true
+            // Pre-rasterizing off-screen content increases memory use; keep it disabled for low-RAM phones.
+            offscreenPreRaster = false
             setSupportMultipleWindows(true)
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
@@ -1047,7 +1048,8 @@ class MainActivity : Activity() {
         pageContainer.removeView(tab.webView)
         tab.webView.stopLoading()
         tab.webView.onPause()
-        tab.webView.clearCache(false)
+        // Avoid purging WebView's in-memory resource cache during tab eviction.
+        // The disk cache remains managed by Android System WebView.
         tab.webView.destroy()
         tab.evicted = true
     }
@@ -1192,7 +1194,11 @@ class MainActivity : Activity() {
 
     private fun isProMode(): Boolean = ProEntitlement.isPro(this)
 
-    /** YeeHaw Pro tier: one-time purchase through Google Play Billing. Free tier stays fully functional forever. */
+    /**
+     * YeeHaw Pro: a Google Play subscription. Pro is granted ONLY after the YeeHaw server confirms the
+     * purchase token with Google Play (signed answer); no local flag or client callback unlocks it.
+     * The free tier keeps every tool working.
+     */
     private fun openProUpgrade() {
         if (isProMode()) {
             Toast.makeText(this, "YeeHaw Pro is active on this device.", Toast.LENGTH_SHORT).show()
@@ -1214,7 +1220,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("YeeHaw Pro")
-            .setMessage("Pro removes all ads forever and funds free development. The free tier keeps every tool working forever — nothing is paywalled.\n\nA small monthly subscription, automatically priced for your country by Google Play: UPI in India, M-Pesa in Africa, cards and local wallets worldwide. Cancel anytime in Play Store settings.\n\nPro activates automatically once the store listing is live.")
+            .setMessage("Pro is not available to buy yet. The free browser keeps every tool working. Pro opens only after Google Play confirms a purchase with the YeeHaw server.")
             .setPositiveButton("OK", null)
             .show()
     }
@@ -1541,10 +1547,10 @@ class MainActivity : Activity() {
             if (memorySaver) "Disable memory saver" else "Enable memory saver",
             if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
             "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
-            if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
-            if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
+            "YeeHaw Pro — not yet available",
+            if (turboMode) "Turbo mode — ON (blocks network images)" else "Turbo mode — OFF (full images)"
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.7").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.6.0").setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
@@ -1559,7 +1565,7 @@ class MainActivity : Activity() {
                     browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
                     tabs.forEachIndexed { index, tab ->
                         if (!tab.evicted) {
-                            tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                            tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
                             if (index != activeTabIndex) tab.webView.onPause()
                             else tab.webView.onResume()
                         }
@@ -1627,8 +1633,17 @@ class MainActivity : Activity() {
                 10 -> {
                     turboMode = !turboMode
                     browserPreferences.edit().putBoolean("turbo_mode", turboMode).apply()
+                    tabs.filterNot { it.evicted }.forEach { tab ->
+                        tab.webView.settings.blockNetworkImage = turboMode
+                        tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
+                    }
                     currentWebView()?.reload()
-                    Toast.makeText(this, if (turboMode) "Turbo: images and video blocked for the fastest loads." else "Turbo off: full sites with images.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        if (turboMode) "Turbo blocks network images to reduce data use. Some pages may look incomplete; turn Turbo off for full images."
+                        else "Turbo off: websites can load images normally.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }.show()
