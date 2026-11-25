@@ -7,7 +7,7 @@ Status key: ✅ done+evidenced · 🟡 written, unverified · ❌ not done. **Ve
 - ❌ Unit/instrumented tests for core/ (SignalMonitor hysteresis, RetryScheduler, Guardian crash-loop).
 - ❌ Lint/R8/ProGuard release check; APK size on release.
 ## B. Low-memory claim (core promise)
-- 🟡 Emulator smoke test (CI, API 23/29/35/36) being re-run on a KVM runner; result in Actions. ❌ Real-device test on 2 GB phone: cold start, RSS, jank. Evidence: logs + numbers.
+- ❌ Emulator smoke tests (API 23/29/35/36) cannot run on these GitHub runners: logs say "hardware acceleration is not available" (no KVM; typical for private repos) and the emulator action fails before any app test starts (runs 45578784748, 45579043449). Needs a real phone, Firebase Test Lab, or a KVM-enabled runner. ❌ Real-device test on 2 GB phone: cold start, RSS, jank. Evidence: logs + numbers.
 - ❌ Throttled 2G/3G + airplane-mode runs.
 - 🟡 Savings meter: exact counters vs ESTIMATED avoided bytes. Evidence: compare against `TrafficStats` on device.
 - ❌ Low-RAM behaviour (`onTrimMemory`, tab discard) verified.
