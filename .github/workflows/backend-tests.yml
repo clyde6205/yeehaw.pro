@@ -37,6 +37,6 @@ jobs:
         run: |
           npm ci
           npm test
-      - name: Dependency audit (report only)
+      - name: Dependency audit (fails on high or critical)
         working-directory: console/backend
-        run: npm audit --omit=dev || true
+        run: npm audit --omit=dev --audit-level=high

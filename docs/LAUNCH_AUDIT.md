@@ -16,7 +16,7 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 | Android lint blocks regressions | CV | Added to CI this session. It caught two real defects (Base64 API 26 call reachable on API 23–25; fine-only location request broken on Android 12+); both fixed, lint now green |
 | Backend tests with Postgres in CI | CV | backend-tests workflow success on f6033ff; re-run on later commits via workflow |
 | Static site build + checks in CI | CV | "Static product site checks" success on 8d0f69ce |
-| Dependency vulnerability audit (npm / Gradle) | NI | Not in CI yet |
+| Dependency vulnerability audit | PC | npm audit gate (high+) in backend CI after express 4.21.2→4.22.3 fixed 3 high advisories; site has 0. Gradle dependency audit not yet added |
 | Emulator / API 23 instrumented tests | BLK | Private repo has no KVM on standard runners; software emulation unsupported by the action. Needs Firebase Test Lab (GCP service account), larger paid runner, self-hosted KVM, or public repo. Workflow honestly reports "NOT run (infrastructure)" |
 | Signed release APK/AAB | BLK | No keystore secrets supplied |
 
