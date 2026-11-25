@@ -216,12 +216,9 @@ class BrowserSmokeTest {
         val store = BrowserStore(context)
         val prefix = "https://example.com/yeehaw-offline-budget-" + System.currentTimeMillis()
         try {
+            val big = "x".repeat(BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
             repeat(40) { index ->
-                store.saveOfflinePage(
-                    "$prefix/$index",
-                    "Offline $index",
-                    "x".repeat(BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
-                )
+                store.saveOfflinePage("$prefix/$index", "Offline $index", big)
             }
             assertTrue(
                 "Offline text storage must stay within the 8 MiB library budget",
@@ -229,11 +226,11 @@ class BrowserSmokeTest {
             )
             assertTrue(
                 "The newest offline reading copy must be retained",
-                store.offlinePages().any { it.url == "$prefix/39" }
+                store.offlinePageSummaries().any { it.url == "$prefix/39" }
             )
             assertTrue(
                 "Oldest pages must be evicted when the storage budget is full",
-                store.offlinePages().none { it.url == "$prefix/0" }
+                store.offlinePageSummaries().none { it.url == "$prefix/0" }
             )
         } finally {
             store.clearOfflinePages()

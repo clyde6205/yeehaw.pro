@@ -139,6 +139,18 @@ class BrowserStore(context: Context) : SQLiteOpenHelper(context, "yehaw-browser.
             null
         ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
 
+    /** List entries without page text (content = ""), so opening the library never loads megabytes of text into memory. */
+    fun offlinePageSummaries(): List<OfflinePage> {
+        val rows = mutableListOf<OfflinePage>()
+        readableDatabase.query("offline_pages", arrayOf("id", "url", "title", "saved_at"),
+            null, null, null, null, "saved_at DESC", MAX_OFFLINE_PAGES.toString()).use { cursor ->
+            while (cursor.moveToNext()) rows.add(OfflinePage(
+                cursor.getLong(0), cursor.getString(1), cursor.getString(2), "", cursor.getLong(3)
+            ))
+        }
+        return rows
+    }
+
     fun offlinePages(): List<OfflinePage> {
         val rows = mutableListOf<OfflinePage>()
         readableDatabase.query("offline_pages", arrayOf("id", "url", "title", "content", "saved_at"),

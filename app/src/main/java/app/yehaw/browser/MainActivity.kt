@@ -1523,7 +1523,7 @@ class MainActivity : Activity() {
     }
 
     private fun showOfflinePages() {
-        val pages = browserStore.offlinePages()
+        val pages = browserStore.offlinePageSummaries()
         if (pages.isEmpty()) {
             Toast.makeText(this, "No offline pages saved yet.", Toast.LENGTH_SHORT).show()
             return
@@ -1531,7 +1531,11 @@ class MainActivity : Activity() {
         val labels = pages.map { "${it.title}\n${it.url}" }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle("Offline reading library")
-            .setItems(labels) { _, index -> showOfflinePage(pages[index]) }
+            .setItems(labels) { _, index ->
+                // Load only the chosen page's text (low-memory safe).
+                val full = browserStore.offlinePage(pages[index].id)
+                if (full != null) showOfflinePage(full) else Toast.makeText(this, "That offline page is no longer available.", Toast.LENGTH_SHORT).show()
+            }
             .setNeutralButton("Clear all") { _, _ ->
                 AlertDialog.Builder(this)
                     .setTitle("Delete all offline pages?")
