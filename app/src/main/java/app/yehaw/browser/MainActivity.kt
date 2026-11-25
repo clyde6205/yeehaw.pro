@@ -430,6 +430,14 @@ class MainActivity : Activity() {
     private fun actionButton(label: String, action: () -> Unit): Button {
         return Button(this).apply {
             text = label
+            contentDescription = when (label) {
+                "‹" -> "Back"
+                "›" -> "Forward"
+                "↻" -> "Reload"
+                "+" -> "New tab"
+                "GO" -> "Go to address"
+                else -> null
+            }
             textSize = 11f
             isAllCaps = false
             minWidth = dp(48)
