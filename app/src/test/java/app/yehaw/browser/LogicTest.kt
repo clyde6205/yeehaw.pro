@@ -77,3 +77,35 @@ class PerformancePolicyTest {
         assertFalse(BrowserPerformancePolicy.defaultMemorySaver(false, 256))
     }
 }
+
+class ConfigRulesTest {
+    @org.junit.Test fun base64DecodesKnownVectors() {
+        fun d(s: String) = String(app.yehaw.browser.console.ConfigRules.b64(s), Charsets.UTF_8)
+        org.junit.Assert.assertEquals("", d(""))
+        org.junit.Assert.assertEquals("f", d("Zg=="))
+        org.junit.Assert.assertEquals("fo", d("Zm8="))
+        org.junit.Assert.assertEquals("foo", d("Zm9v"))
+        org.junit.Assert.assertEquals("foobar", d("Zm9vYmFy"))
+        org.junit.Assert.assertEquals("foobar", d("Zm9v\nYmFy"))
+    }
+
+    @org.junit.Test fun base64MatchesJvmDecoderOnRandomBytes() {
+        val r = java.util.Random(7)
+        repeat(50) {
+            val b = ByteArray(r.nextInt(200)).also { r.nextBytes(it) }
+            val enc = java.util.Base64.getEncoder().encodeToString(b)
+            org.junit.Assert.assertArrayEquals(b, app.yehaw.browser.console.ConfigRules.b64(enc))
+        }
+    }
+
+    @org.junit.Test fun signatureRoundTripAndTamperDetection() {
+        val kp = java.security.KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair()
+        val body = "{\"v\":1}".toByteArray()
+        val sig = java.security.Signature.getInstance("SHA256withECDSA").run { initSign(kp.private); update(body); sign() }
+        val pub = java.util.Base64.getEncoder().encodeToString(kp.public.encoded)
+        val sigB64 = java.util.Base64.getEncoder().encodeToString(sig)
+        org.junit.Assert.assertTrue(app.yehaw.browser.console.ConfigRules.verifySignature(pub, body, sigB64))
+        org.junit.Assert.assertFalse(app.yehaw.browser.console.ConfigRules.verifySignature(pub, "{\"v\":2}".toByteArray(), sigB64))
+        org.junit.Assert.assertFalse(app.yehaw.browser.console.ConfigRules.verifySignature("garbage", body, sigB64))
+    }
+}

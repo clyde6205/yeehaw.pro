@@ -70,12 +70,19 @@ jobs:
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
       - name: Android lint
         run: gradle --no-daemon :app:lintDebug
+      - name: Show lint errors
+        if: failure()
+        run: |
+          f=$(find app/build -name 'lint-results-debug.txt' | head -1)
+          [ -n "$f" ] && grep -B1 -A5 'Error:' "$f" | head -120 || echo "no lint text report found"
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lint-report
-          path: app/build/reports/lint-results-debug.*
+          path: |
+            app/build/reports/lint-results-debug.*
+            app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
           if-no-files-found: ignore
           retention-days: 7
       - name: Report APK outputs and enforce release size
