@@ -155,7 +155,7 @@ class BrowserSmokeTest {
                     }
                 }
                 collect(decor)
-                listOf("GO", "Bookmarks", "History", "More").forEach { label ->
+                listOf("GO", "Home", "Tabs", "Save", "Apps", "Downloads", "More").forEach { label ->
                     assertTrue("Expected browser control '$label' in the launched view hierarchy", label in labels)
                 }
             }
