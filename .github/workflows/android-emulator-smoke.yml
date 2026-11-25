@@ -46,6 +46,14 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Probe KVM (infrastructure check, not an app test)
+        id: kvm
+        run: |
+          if [ -w /dev/kvm ]; then echo "available=true" >> "$GITHUB_OUTPUT"; echo "KVM present"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Emulator NOT run (infrastructure)::No /dev/kvm on this runner. GitHub only offers KVM on public-repo standard runners and on larger runners; this private repo uses a standard runner. This is NOT an app test result. See docs/KNOWN_ISSUES.md and android-emulator-tcg.yml."
+          fi
       - name: Put Android platform-tools and emulator on PATH
         run: |
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
@@ -56,6 +64,7 @@ jobs:
           echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
           echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
       - name: Run browser smoke test on Android emulator
+        if: steps.kvm.outputs.available == 'true'
         uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
         with:
           api-level: ${{ matrix.api-level }}
