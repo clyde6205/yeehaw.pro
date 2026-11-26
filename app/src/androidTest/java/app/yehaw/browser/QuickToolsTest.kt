@@ -48,7 +48,7 @@ class QuickToolsTest {
     @Test fun hubListsAllSixToolsAndEachOpens() {
         launch(QuickToolsActivity::class.java).use { sc ->
             val tags = mutableListOf<Any?>()
-            sc.onActivity { a -> tags += a.all().filterIsInstance<Button>().map { it.tag }.filterNotNull() }
+            sc.onActivity { a -> tags.addAll(a.all().filterIsInstance<Button>().map { it.tag }.filterNotNull()) }
             assertEquals(toolClasses.map { it.simpleName }.toSet(), tags.map { it.toString() }.toSet())
         }
         for (c in toolClasses) launch(c).use { sc -> sc.onActivity { a -> assertFalse("${c.simpleName} must not finish itself", a.isFinishing) } }
