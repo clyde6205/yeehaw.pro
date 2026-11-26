@@ -60,6 +60,15 @@ class PrivateWipeTest {
         return server to server.localPort
     }
 
+    /** Other tests leave a private window open in the :private_browser process; start every test from a clean process. */
+    private fun killPrivateProcess() {
+        privateProcessPid()?.let { android.os.Process.killProcess(it) }
+        waitFor(15_000) { privateProcessPid() == null }
+    }
+
+    @org.junit.Before fun before() = killPrivateProcess()
+    @org.junit.After fun after() = killPrivateProcess()
+
     private val ctx get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     private fun privateProcessPid(): Int? =

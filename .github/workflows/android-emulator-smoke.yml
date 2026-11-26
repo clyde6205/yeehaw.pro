@@ -116,6 +116,12 @@ jobs:
           adb shell input keyevent 82 || true
           gradle --no-daemon :app:connectedDebugAndroidTest --info 2>&1 | tail -150
           exit ${PIPESTATUS[0]}
+      - name: Name every failed test (the Gradle log above is truncated)
+        if: failure() && steps.emu.outputs.started == 'true'
+        run: |
+          grep -rl "<failure\|<error" app/build/outputs/androidTest-results 2>/dev/null | while read f; do
+            echo "== $f"; grep -B1 -A3 "<failure\|<error" "$f" | cut -c1-400 | head -40
+          done
       - name: Emulator measurements (cold start, memory) - emulator numbers, not a phone
         if: steps.emu.outputs.started == 'true'
         timeout-minutes: 10

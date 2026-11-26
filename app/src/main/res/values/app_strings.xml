@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">YeeHaw™ Browser</string>
-    <string name="private_window_name">YeeHaw Private</string>
+    <string name="app_name" translatable="false">YeeHaw™ Browser</string>
+    <string name="private_window_name" translatable="false">YeeHaw Private</string>
 </resources>

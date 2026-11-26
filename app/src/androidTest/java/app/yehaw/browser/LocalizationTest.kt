@@ -28,6 +28,9 @@ class LocalizationTest {
     @Before fun before() { LocaleHelper.save(ctx, LocaleHelper.SYSTEM); BrowserStore(ctx).clearSession() }
     @After fun after() { LocaleHelper.save(ctx, LocaleHelper.SYSTEM); BrowserStore(ctx).clearSession() }
 
+    // Android still reports some languages by their pre-1989 ISO codes.
+    private fun legacy(l: String) = when (l) { "he" -> "iw"; "id" -> "in"; "yi" -> "ji"; else -> l }
+
     private fun allViews(root: View): List<View> {
         val out = mutableListOf<View>()
         fun walk(v: View) { out.add(v); if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }
@@ -55,7 +58,7 @@ class LocalizationTest {
                     assertTrue("$tag: '$label' touch target must be >= 48dp",
                         b.minimumWidth >= (48 * d - 1) && b.minimumHeight >= (48 * d - 1))
                 }
-                assertTrue("$lang locale applied", a.resources.configuration.locales[0].language.let { it == lang || (lang == "id" && it == "in") } || android.os.Build.VERSION.SDK_INT < 24)
+                assertTrue("$lang locale applied", legacy(a.resources.configuration.locales[0].language) == legacy(lang) || android.os.Build.VERSION.SDK_INT < 24)
             }
         }
     }
