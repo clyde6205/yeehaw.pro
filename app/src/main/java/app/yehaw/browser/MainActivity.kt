@@ -112,6 +112,7 @@ class MainActivity : Activity() {
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
     private var previousSystemUiVisibility = 0
     private var activeTabIndex = -1
+    private var pendingDownload: Array<String?>? = null
     private var lastRxSample = -1L
     private var sessionDataUsed = 0L
     private var sessionOfflineSaved = 0L
@@ -1001,17 +1002,30 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Not enough free space to download (${StorageGuard.format(StorageGuard.freeBytes(this))} left). Free some space first.", Toast.LENGTH_LONG).show()
             return
         }
+        // Android 6-9 (API 23-28) needs WRITE_EXTERNAL_STORAGE to save into the public Downloads folder; ask once.
+        if (Build.VERSION.SDK_INT in 23..28 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDownload = arrayOf(url, userAgent, contentDisposition, mimeType)
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
+            return
+        }
+        enqueueDownload(url, userAgent, contentDisposition, mimeType, publicFolder = true)
+    }
+
+    private fun enqueueDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, publicFolder: Boolean) {
         try {
             val filename = safeDownloadFilename(URLUtil.guessFileName(url, contentDisposition, mimeType))
-            val request = DownloadManager.Request(uri)
+            val request = DownloadManager.Request(Uri.parse(url))
                 .setTitle(filename)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            if (publicFolder) request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            else request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, filename) // needs no permission
             if (!userAgent.isNullOrBlank()) request.addRequestHeader("User-Agent", userAgent)
             CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
             val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             manager.enqueue(request)
-            Toast.makeText(this, "Download started.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (publicFolder) "Download started." else "Download started (saved in the app's own folder).", Toast.LENGTH_SHORT).show()
         } catch (_: Exception) {
             Toast.makeText(this, "Could not start this download.", Toast.LENGTH_SHORT).show()
         }
@@ -1211,6 +1225,12 @@ class MainActivity : Activity() {
                 }
             }
             REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(grantResults.any { it == PackageManager.PERMISSION_GRANTED })
+            REQUEST_STORAGE_PERMISSION -> {
+                val d = pendingDownload
+                pendingDownload = null
+                // Declined: still deliver the file, into the app's own folder, rather than losing the download.
+                if (d != null) enqueueDownload(d[0]!!, d[1], d[2], d[3], publicFolder = granted)
+            }
         }
     }
 
@@ -2125,6 +2145,7 @@ class MainActivity : Activity() {
         private const val STATE_TAB_TITLES = "yehaw.saved_tab_titles"
         private const val STATE_TAB_SCROLLS = "yehaw.saved_tab_scrolls"
         private const val STATE_ACTIVE_TAB = "yehaw.saved_active_tab"
+        private const val REQUEST_STORAGE_PERMISSION = 4104
         private const val REQUEST_BROWSER_ROLE = 4102
         private const val REQUEST_FILE_CHOOSER = 4103
         private const val REQUEST_SITE_PERMISSION = 4104

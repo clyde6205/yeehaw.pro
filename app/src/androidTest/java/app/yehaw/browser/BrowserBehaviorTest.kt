@@ -131,7 +131,7 @@ class BrowserBehaviorTest {
             }
             var shown = false
             var status = ""
-            for (i in 0 until 300) {
+            for (i in 0 until 600) { // the app's own stall bound is 25 s; allow slow emulators double that
                 scenario.onActivity { a ->
                     val tv = allViews(a.window.decorView).filterIsInstance<android.widget.TextView>()
                     shown = tv.any { it.isShown && it.text?.toString()?.contains("could not be loaded") == true && it.text?.toString()?.contains("Check your connection") == true }
@@ -243,6 +243,10 @@ class BrowserBehaviorTest {
                 }
             }
             return null
+        }
+        if (android.os.Build.VERSION.SDK_INT in 23..28) { // no prompt can be tapped in a test; the app asks on first download
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+                .grantRuntimePermission(ctx.packageName, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
         try {
             find()?.let { dm.remove(it.first) }
