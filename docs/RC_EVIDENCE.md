@@ -27,3 +27,19 @@ APK: 805,928 bytes, SHA-256 `4f8c7bc3608966ade9906b4619331b525d0258cc08e54a97114
 
 ## Not covered by this evidence
 Emulators only, no physical phone, no mobile-network run; no human TalkBack session; translations are machine translations not reviewed by native speakers; production signing key not supplied; data-saver savings not measured on real traffic.
+
+## Quick Tools build (code commit 8d0b26c)
+
+Six tools (Calculator, Unit Converter, QR Scanner, QR Generator, Notes, PDF Reader) added under Menu > Quick Tools. See `docs/QUICK_TOOLS.md`.
+
+| Check | Result | Run |
+|---|---|---|
+| Debug build + unit | success | https://github.com/clyde6205/yeehaw.pro/actions/runs/45783789477 |
+| Release APK smoke, API 23 and API 36, R8-minified | success, success | https://github.com/clyde6205/yeehaw.pro/actions/runs/45783789485 |
+| Emulator suite API 23, 23 lowend (1 GB, 1 core), 29, 35, 36 | first attempt: 4 success, API 29 failed (known issue 21); full rerun: all 5 success | https://github.com/clyde6205/yeehaw.pro/actions/runs/45783789513 (attempt 2) |
+
+Measured: release APK 972,583 bytes (RC without Quick Tools: 805,928), +166,655 bytes (+20.7%), covering six tools, ZXing core 3.5.3 (decode only), 110 new strings in 11 languages. SHA-256 `df27906c76e486e271dbeeab1bc05b807796e4a9fede94c464e3ebe3cbfe9424` (throwaway CI key, not production). No new permissions (CAMERA already declared, requested at runtime only). Cold-start before/after was not measured.
+
+Fixes found by CI: API 23 native crash in the platform PDF engine (header check); a failed page was announced as "Page loaded" (app fix in onPageFinished).
+
+Not covered: physical phone, real camera scan, TalkBack, native-speaker review of the new strings (machine translations).
