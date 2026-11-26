@@ -847,6 +847,7 @@ class MainActivity : Activity() {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true
                     tab.failedWasGet = request.method.equals("GET", ignoreCase = true)
+                    if (tab.failedWasGet) request.url?.toString()?.takeIf { isWebUrl(it) }?.let { tab.currentUrl = it }
                     cancelStallWatch(view)
                     loadStartedAt.remove(view)
                     signalMonitor.recordLoad(0, false)
@@ -1122,6 +1123,16 @@ class MainActivity : Activity() {
      * carry it: WebView does not let an app add headers to the sub-resources the page then fetches.
      */
     private fun WebView.loadSaving(url: String) {
+        // Start the stall timer when the load is requested, not only when the engine reports it: some WebViews never
+        // call onPageStarted for a navigation that gets no response, which is exactly the dead-connection case.
+        if (isWebUrl(url) && Uri.parse(url).host != START_HOST) {
+            tabs.firstOrNull { it.webView === this }?.let { t ->
+                t.failed = false
+                t.currentUrl = url
+                loadStartedAt[this] = android.os.SystemClock.elapsedRealtime()
+                armStallWatch(this, t)
+            }
+        }
         val saving = memorySaver || turboMode || systemSaverOn || (adaptiveSaver && signalMonitor.level.textFirst)
         if (saving && isWebUrl(url) && Uri.parse(url).host != START_HOST) loadUrl(url, mapOf("Save-Data" to "on")) else loadUrl(url)
     }
@@ -1411,17 +1422,19 @@ class MainActivity : Activity() {
         reloadSafely(tab)
     }
 
-    /** Reload a page without ever re-sending a POST: a failed non-GET is replaced by a plain GET of its address. */
     private fun cancelStallWatch(view: WebView?) {
         view ?: return
         stallWatch.remove(view)?.let { view.removeCallbacks(it) }
     }
 
-    private fun armStallWatch(view: WebView, tab: BrowserTab) {
+    private fun armStallWatch(view: WebView, tab: BrowserTab, lastProgress: Int = -1) {
         cancelStallWatch(view)
         val r = Runnable {
             stallWatch.remove(view)
             if (isFinishing || isDestroyed || tab.failed || view.progress >= 100 || !loadStartedAt.containsKey(view)) return@Runnable
+            // A slow but advancing load (2G, heavy page) is not a stall: only give up when no progress was made.
+            if (view.progress > lastProgress && lastProgress >= 0) { armStallWatch(view, tab, view.progress); return@Runnable }
+            if (lastProgress < 0 && view.progress > 10) { armStallWatch(view, tab, view.progress); return@Runnable }
             view.stopLoading()
             loadStartedAt.remove(view)
             tab.failed = true
@@ -1436,8 +1449,11 @@ class MainActivity : Activity() {
         view.postDelayed(r, LOAD_STALL_MS)
     }
 
+    /** Retry a failed page without ever re-sending a POST: a failed non-GET is replaced by a plain GET of its address. */
     private fun reloadSafely(tab: BrowserTab) {
-        if (tab.failedWasGet) tab.webView.reload() else tab.webView.loadSaving(tab.currentUrl)
+        // reload() would re-run the last page that actually loaded, which is the wrong page when this navigation never
+        // committed (stalled or failed first load). Always load the address that failed, as a plain GET.
+        tab.webView.loadSaving(tab.currentUrl)
         tab.failedWasGet = true
     }
 
