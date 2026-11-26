@@ -118,24 +118,23 @@ class QuickToolsTest {
     }
 
     // ---- QR scanner (camera permission paths; no real camera frames on an emulator) ----
-    private fun setCamera(grant: Boolean) {
-        val ui = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val cmd = (if (grant) "pm grant " else "pm revoke ") + ctx.packageName + " android.permission.CAMERA"
-        android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(cmd)).use { it.readBytes() }
-    }
+    private fun cameraGranted() = ctx.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
-    @Test fun scannerExplainsAndOffersPermissionWhenCameraIsNotGranted() {
-        setCamera(false)
-        launch(QrScannerActivity::class.java).use { sc ->
-            sc.onActivity { a ->
-                assertTrue(a.all().filterIsInstance<Button>().any { it.text.toString() == a.getString(R.string.qr_scan_allow_camera) && it.isShown })
-                assertTrue(a.all().filterIsInstance<TextView>().any { it.text.toString() == a.getString(R.string.qr_scan_permission_needed) })
+    /**
+     * One ordered test (revoking a permission would kill the instrumentation process, so we only ever grant): first the
+     * not-yet-granted screen, then, after granting, a real camera start, pause and resume.
+     */
+    @Test fun scannerHandlesPermissionNotGrantedThenGranted() {
+        if (!cameraGranted()) {
+            launch(QrScannerActivity::class.java).use { sc ->
+                sc.onActivity { a ->
+                    assertTrue(a.all().filterIsInstance<Button>().any { it.text.toString() == a.getString(R.string.qr_scan_allow_camera) && it.isShown })
+                    assertTrue(a.all().filterIsInstance<TextView>().any { it.text.toString() == a.getString(R.string.qr_scan_permission_needed) })
+                }
             }
+            val ui = InstrumentationRegistry.getInstrumentation().uiAutomation
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand("pm grant " + ctx.packageName + " android.permission.CAMERA")).use { it.readBytes() }
         }
-    }
-
-    @Test fun scannerStartsWithoutCrashWhenCameraIsGranted() {
-        setCamera(true)
         launch(QrScannerActivity::class.java).use { sc ->
             Thread.sleep(2500)
             sc.onActivity { a -> assertFalse(a.isFinishing) }

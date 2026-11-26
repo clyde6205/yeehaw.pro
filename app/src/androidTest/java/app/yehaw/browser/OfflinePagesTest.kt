@@ -154,40 +154,30 @@ class OfflinePagesTest {
             }
             server.close()   // origin gone: any attempt to re-fetch would fail
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                // Espresso refuses to act on a window that never gets focus (seen on the API 36 emulator when a system
-                // window briefly holds focus). Retry the whole open-and-tap a few times, closing the dialog in between.
-                var opened = false
-                var focusProblem: Throwable? = null
-                for (attempt in 0 until 4) {
-                    scenario.onActivity { a ->
-                        val label = a.getString(R.string.label_offline)
-                        allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == label }.performClick()
-                    }
-                    try {
-                        onView(withText(containsString("Offline Test Page"))).inRoot(isDialog()).perform(click())
-                        opened = true; break
-                    } catch (t: Throwable) {
-                        focusProblem = t
-                        val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
-                        for (c in listOf("cmd statusbar collapse", "input keyevent 4")) android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(c)).use { it.readBytes() }
-                        Thread.sleep(1500)
-                    }
+                // Drive the real library dialog and reader through their own views. (Espresso needs window focus, which the
+                // API 36 emulator sometimes withholds from dialogs; the dialogs themselves are the real UI under test.)
+                scenario.onActivity { a ->
+                    val label = a.getString(R.string.label_offline)
+                    allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == label }.performClick()
                 }
-                if (!opened) {
-                    val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
-                    val win = String(android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand("dumpsys window windows")).use { it.readBytes() })
-                        .lines().filter { it.contains("mCurrentFocus") || it.contains("mFocusedApp") || it.contains("mFocusedWindow") }.joinToString(" | ")
-                    throw AssertionError("library entry could not be tapped after 4 attempts; focus: $win", focusProblem)
+                var library: android.app.Dialog? = null
+                assertTrue("library dialog must open", waitFor { scenario.onActivity { a -> library = a.offlineDialogForTest }; library?.isShowing == true })
+                var firstEntry = ""
+                scenario.onActivity { _ ->
+                    val lv = (library as android.app.AlertDialog).listView
+                    firstEntry = lv.adapter.getItem(0).toString()
+                    lv.performItemClick(null, 0, lv.adapter.getItemId(0))
                 }
+                assertTrue("library entry shows the saved title: $firstEntry", firstEntry.contains("Offline Test Page"))
                 // The reader is a native text view fed from SQLite: it shows the saved words without the origin.
-                // The list dialog is dismissed asynchronously, so poll until the reader window is the one Espresso sees.
-                var last: Throwable? = null
-                var ok = false
-                for (i in 0 until 50) {
-                    try { onView(withText(containsString(marker))).inRoot(isDialog()).check(matches(isDisplayed())); ok = true; break }
-                    catch (t: Throwable) { last = t; Thread.sleep(200) }
-                }
-                if (!ok) throw AssertionError("saved text never appeared in the reader", last)
+                var readerText = ""
+                assertTrue("saved text never appeared in the reader", waitFor {
+                    scenario.onActivity { a ->
+                        val d = a.offlineDialogForTest
+                        readerText = if (d != null && d !== library && d.isShowing) allViews(d.window!!.decorView).filterIsInstance<android.widget.TextView>().joinToString("|") { it.text } else ""
+                    }
+                    readerText.contains(marker)
+                })
             }
         } finally { try { server.close() } catch (_: Exception) {} }
     }

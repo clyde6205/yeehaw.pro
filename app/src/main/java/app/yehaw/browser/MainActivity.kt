@@ -1595,6 +1595,9 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Test hook: the offline library / reader dialog currently on screen (lets tests act without needing window focus). */
+    internal var offlineDialogForTest: android.app.Dialog? = null
+
     private fun showOfflinePages() {
         val pages = browserStore.offlinePageSummaries()
         if (pages.isEmpty()) {
@@ -1621,7 +1624,7 @@ class MainActivity : Activity() {
                     .show()
             }
             .setNegativeButton(getString(R.string.btn_close), null)
-            .show()
+            .create().also { offlineDialogForTest = it }.show()
     }
 
     private fun showOfflinePage(page: BrowserStore.OfflinePage) {
@@ -1649,7 +1652,7 @@ class MainActivity : Activity() {
                 currentWebView()?.loadUrl(page.url) ?: createTab(page.url)
             }
             .setNegativeButton(getString(R.string.btn_close), null)
-            .show()
+            .create().also { offlineDialogForTest = it }.show()
     }
 
     private fun findOnPage() {
