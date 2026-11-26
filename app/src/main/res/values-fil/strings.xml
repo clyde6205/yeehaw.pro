@@ -141,7 +141,7 @@
     <string name="storage_low">Mababa — isaalang-alang ang pagbakante ng espasyo</string>
     <string name="tab_new">Bagong tab</string>
     <string name="tab_restored">Naibalik na tab</string>
-    <string name="tab_start_page">Start page</string>
+    <string name="tab_start_page">Panimulang page</string>
     <string name="tab_untitled">Page na walang pamagat</string>
     <string name="title_bookmarks">Mga Bookmark</string>
     <string name="title_browser_engine">Makina ng browser</string>
@@ -247,12 +247,12 @@
     <string name="toast_yeehaw_is_already_the_default_browse">Ang YeeHaw na ang default na browser.</string>
     <string name="toast_yeehaw_is_now_the_default_browser">Ang YeeHaw na ngayon ang default na browser.</string>
     <string name="toast_yeehaw_pro_is_active_on_this">Aktibo ang YeeHaw Pro sa device na ito.</string>
-    <string name="tools_adaptive_saver">Adaptive Data Saver — %1$s</string>
-    <string name="tools_clipboard">Clipboard Convenience — %1$s</string>
+    <string name="tools_adaptive_saver">Madaptibong Tipid sa Data — %1$s</string>
+    <string name="tools_clipboard">Kaginhawaan ng Clipboard — %1$s</string>
     <string name="tools_family_apps">Mga app ng pamilya ng YeeHaw</string>
-    <string name="tools_memory_saver">Memory Saver — %1$s</string>
+    <string name="tools_memory_saver">Tipid sa Memory — %1$s</string>
     <string name="tools_offline_reading">Offline na Pagbabasa</string>
-    <string name="tools_quick_paste">Quick Paste</string>
+    <string name="tools_quick_paste">Mabilis na Paste</string>
     <string name="tools_screenshot">Screenshot at Markup</string>
     <string name="tools_stop_sharing">Itigil ang pagbabahagi at burahin ang data ko</string>
     <string name="tools_storage_protection">Proteksyon sa Storage</string>
