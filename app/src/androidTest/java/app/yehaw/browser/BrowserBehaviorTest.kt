@@ -147,6 +147,17 @@ class BrowserBehaviorTest {
         }
     }
 
+    private fun dump(scenario: ActivityScenario<MainActivity>): String {
+        var out = ""
+        scenario.onActivity { a ->
+            val root = a.window.decorView
+            val texts = allViews(root).filterIsInstance<android.widget.TextView>().filter { it.isShown }.map { it.text?.toString().orEmpty() }.filter { it.isNotBlank() }
+            val wv = webViews(root).joinToString { "[url=${it.url} progress=${it.progress} title=${it.title} shown=${it.isShown}]" }
+            out = "texts=$texts webviews=$wv"
+        }
+        return out
+    }
+
     @Test
     fun stalledConnectionTimesOutThenRecoversWhenTheNetworkComes_back() {
         val held = java.util.Collections.synchronizedList(mutableListOf<java.net.Socket>())
@@ -186,7 +197,7 @@ class BrowserBehaviorTest {
                     if (shown) break
                     Thread.sleep(100)
                 }
-                assertTrue("a connection that never answers must end in the Retry panel, not spin forever", shown)
+                assertTrue("a connection that never answers must end in the Retry panel, not spin forever; " + dump(scenario), shown)
                 respond.set(true) // the network "comes back"
                 synchronized(held) { held.forEach { try { it.close() } catch (_: Exception) {} }; held.clear() }
                 scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
@@ -196,7 +207,7 @@ class BrowserBehaviorTest {
                     if (title == "YH-OK") break
                     Thread.sleep(100)
                 }
-                assertTrue("after the network returns, Retry must load the page (title='$title')", title == "YH-OK")
+                assertTrue("after the network returns, Retry must load the page (title='$title'); " + dump(scenario), title == "YH-OK")
             }
         } finally {
             try { server.close() } catch (_: Exception) {}
