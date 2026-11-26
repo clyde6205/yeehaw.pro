@@ -123,6 +123,9 @@ class PdfReaderActivity : ToolActivity() {
         worker.execute {
             var error = 0
             try {
+                // A real PDF starts with "%PDF-" near the top. Anything else is refused without ever reaching the platform PDF engine,
+                // which on Android 6 can crash the whole app after it has been handed a file it cannot parse.
+                if (!looksLikePdf(u)) throw java.io.IOException("not a pdf")
                 val fd = try { contentResolver.openFileDescriptor(u, "r") } catch (e: Exception) { null }
                 var r: PdfRenderer? = null
                 if (fd != null) r = try { PdfRenderer(fd) } catch (e: java.io.IOException) { null } catch (e: SecurityException) { error = R.string.pdf_password; null }
@@ -240,6 +243,14 @@ class PdfReaderActivity : ToolActivity() {
             }
         }
     }
+
+    private fun looksLikePdf(u: Uri): Boolean = try {
+        contentResolver.openInputStream(u)?.use { ins ->
+            val b = ByteArray(1024); var n = 0
+            while (n < b.size) { val r = ins.read(b, n, b.size - n); if (r < 0) break; n += r }
+            String(b, 0, n, Charsets.ISO_8859_1).contains("%PDF-")
+        } ?: false
+    } catch (e: Exception) { false }
 
     private fun closeDocumentOnWorker() { try { renderer?.close() } catch (_: Exception) {}; try { pfd?.close() } catch (_: Exception) {}; renderer = null; pfd = null; tempCopy?.delete(); tempCopy = null }
 
