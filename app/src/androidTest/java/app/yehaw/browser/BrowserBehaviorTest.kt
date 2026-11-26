@@ -148,6 +148,62 @@ class BrowserBehaviorTest {
     }
 
     @Test
+    fun stalledConnectionTimesOutThenRecoversWhenTheNetworkComes_back() {
+        val held = java.util.Collections.synchronizedList(mutableListOf<java.net.Socket>())
+        @Volatile var respond = false
+        val server = java.net.ServerSocket(0, 8, java.net.InetAddress.getByName("127.0.0.1"))
+        val acceptor = Thread {
+            try {
+                while (!server.isClosed) {
+                    val sock = server.accept()
+                    if (!respond) { held.add(sock); continue } // simulates a dead link: connected, never answers
+                    Thread {
+                        try {
+                            val input = sock.getInputStream()
+                            val buf = ByteArray(4096); input.read(buf)
+                            val body = "<html><head><title>YH-OK</title></head><body>ok</body></html>".toByteArray()
+                            val out = sock.getOutputStream()
+                            out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n").toByteArray())
+                            out.write(body); out.flush(); sock.close()
+                        } catch (_: Exception) {}
+                    }.start()
+                }
+            } catch (_: Exception) {}
+        }.apply { isDaemon = true; start() }
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                val url = "http://127.0.0.1:${server.localPort}/"
+                scenario.onActivity { a ->
+                    allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first().setText(url)
+                    assertTrue("GO must be clickable", clickByLabel(a, "GO"))
+                }
+                var shown = false
+                for (i in 0 until 600) { // up to 60 s: the stall watchdog fires at 25 s
+                    scenario.onActivity { a ->
+                        shown = allViews(a.window.decorView).filterIsInstance<android.widget.TextView>()
+                            .any { it.isShown && it.text?.toString()?.contains("could not be loaded") == true }
+                    }
+                    if (shown) break
+                    Thread.sleep(100)
+                }
+                assertTrue("a connection that never answers must end in the Retry panel, not spin forever", shown)
+                respond = true // the network "comes back"
+                synchronized(held) { held.forEach { try { it.close() } catch (_: Exception) {} }; held.clear() }
+                scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
+                var title = ""
+                for (i in 0 until 300) {
+                    scenario.onActivity { a -> title = webViews(a.window.decorView).mapNotNull { it.title }.firstOrNull { it == "YH-OK" } ?: title }
+                    if (title == "YH-OK") break
+                    Thread.sleep(100)
+                }
+                assertTrue("after the network returns, Retry must load the page (title='$title')", title == "YH-OK")
+            }
+        } finally {
+            try { server.close() } catch (_: Exception) {}
+        }
+    }
+
+    @Test
     fun privateBrowserRunsInItsOwnProcessOnApi28PlusAndRefusesBelow() {
         val ctx = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val intent = android.content.Intent(ctx, PrivateBrowserActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
