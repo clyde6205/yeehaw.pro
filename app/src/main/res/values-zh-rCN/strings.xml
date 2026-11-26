@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">YeeHaw 已拦截 %1$s。</string>
+    <string name="blocked_this_site">此网站</string>
+    <string name="blocked_title">为了您的安全已拦截</string>
     <string name="btn_block">拦截</string>
     <string name="btn_cancel">取消</string>
     <string name="btn_clear">清除</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">稍后</string>
     <string name="btn_new_tab">新标签页</string>
     <string name="btn_no_thanks">不用了</string>
+    <string name="btn_ok">确定</string>
     <string name="btn_open">打开</string>
     <string name="btn_open_website">打开网站</string>
     <string name="btn_remove_this_one">移除此项</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">新标签页</string>
     <string name="cd_reload">刷新</string>
     <string name="chooser_share_page">分享页面</string>
+    <string name="chooser_share_screenshot">分享截图</string>
     <string name="chooser_share_yeehaw">分享 YeeHaw</string>
     <string name="err_page_no_readable_text">此页面没有可读取的文字。</string>
     <string name="err_page_text_unavailable">页面文字不可用。</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">离线保存</string>
     <string name="label_share">分享</string>
     <string name="label_tabs">标签页</string>
+    <string name="label_undo">撤销</string>
     <string name="language_system_default">跟随系统</string>
+    <string name="markup_black">黑色</string>
+    <string name="markup_red">红色</string>
+    <string name="markup_yellow">黄色</string>
     <string name="menu_allow_third_party_cookies">允许第三方 Cookie</string>
     <string name="menu_app_permissions">应用权限</string>
     <string name="menu_block_third_party_cookies">拦截第三方 Cookie</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">此私密页面想要打开外部应用（%1$s）。</string>
     <string name="msg_pro_is_not_available_to_buy">Pro 暂时还不能购买。免费版浏览器的所有工具仍可正常使用。只有在 Google Play 与 YeeHaw 服务器确认购买后，Pro 才会开通。</string>
     <string name="msg_saved_offline_reading_copies_will_be">已保存的离线阅读副本将从此设备上永久删除。</string>
+    <string name="msg_screenshot_saved">已保存到 %1$s</string>
+    <string name="msg_screenshot_saved_no_share">已保存到 %1$s。分享需要 Android 10 或更高版本。</string>
     <string name="msg_share_anonymous_app_health_crashes_a">分享匿名的应用运行状况（崩溃、应用版本、手机内存、地区）。不含浏览数据，不含广告 ID。您可以随时在“工具”中删除。</string>
     <string name="msg_site_wants_location">%1$s 想要访问您设备的位置。</string>
     <string name="msg_site_wants_permission">%1$s 想要使用您的%2$s。仅在您信任此网站时才继续。</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">离线库已清空。</string>
     <string name="toast_offline_page_deleted">离线页面已删除。</string>
     <string name="toast_offline_reading_copy_saved_on_this">离线阅读副本已保存到此设备。</string>
+    <string name="toast_offline_saved_partial">仅保存了这个长页面的前一部分（仅文字，不含图片）。</string>
     <string name="toast_only_normal_web_pages_can_be">只能保存普通网页。</string>
     <string name="toast_private_page_ran_out_of_memory">私密页面内存不足。请关闭后重新打开无痕浏览。</string>
     <string name="toast_private_profile_isolation_requires_a">私密配置文件隔离需要 Android 9 或更高版本。</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">已移除。</string>
     <string name="toast_safe_start_after_a_problem_your">出现问题后已安全启动。您保存的页面和书签完好无损。</string>
     <string name="toast_saved_quick_paste">已保存到快速粘贴。</string>
+    <string name="toast_screenshot_save_failed">无法保存截图。</string>
     <string name="toast_search_engine_set">搜索引擎：%1$s</string>
     <string name="toast_storage_is_almost_full_free_some">存储空间几乎已满。请先释放手机空间，然后再保存此页面。</string>
     <string name="toast_tab_limit">请先关闭一个标签页再打开新的（上限：%1$d）。</string>

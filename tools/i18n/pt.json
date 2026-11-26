@@ -240,5 +240,18 @@
  "menu_language": "Idioma",
  "title_language": "Idioma",
  "language_system_default": "Padrão do sistema",
- "toast_machine_translation_notice": "Este idioma é uma tradução automática e ainda não foi revisado por um falante nativo. Algum texto pode estar errado."
+ "toast_machine_translation_notice": "Este idioma é uma tradução automática e ainda não foi revisado por um falante nativo. Algum texto pode estar errado.",
+ "btn_ok": "OK",
+ "label_undo": "Desfazer",
+ "markup_red": "Vermelho",
+ "markup_yellow": "Amarelo",
+ "markup_black": "Preto",
+ "chooser_share_screenshot": "Compartilhar captura",
+ "msg_screenshot_saved": "Salvo em %1$s",
+ "msg_screenshot_saved_no_share": "Salvo em %1$s. Compartilhar exige Android 10 ou mais recente.",
+ "toast_screenshot_save_failed": "Não foi possível salvar a captura.",
+ "blocked_title": "Bloqueado para a sua segurança",
+ "blocked_body": "%1$s foi bloqueado pelo YeeHaw.",
+ "blocked_this_site": "este site",
+ "toast_offline_saved_partial": "Somente a primeira parte desta página longa foi salva (apenas texto, sem imagens)."
 }

@@ -240,5 +240,18 @@
  "menu_language": "Язык",
  "title_language": "Язык",
  "language_system_default": "Как в системе",
- "toast_machine_translation_notice": "Этот язык — машинный перевод, ещё не проверенный носителем языка. Часть текста может быть неточной."
+ "toast_machine_translation_notice": "Этот язык — машинный перевод, ещё не проверенный носителем языка. Часть текста может быть неточной.",
+ "btn_ok": "ОК",
+ "label_undo": "Отменить",
+ "markup_red": "Красный",
+ "markup_yellow": "Жёлтый",
+ "markup_black": "Чёрный",
+ "chooser_share_screenshot": "Поделиться снимком экрана",
+ "msg_screenshot_saved": "Сохранено: %1$s",
+ "msg_screenshot_saved_no_share": "Сохранено: %1$s. Для отправки нужен Android 10 или новее.",
+ "toast_screenshot_save_failed": "Не удалось сохранить снимок экрана.",
+ "blocked_title": "Заблокировано для вашей безопасности",
+ "blocked_body": "YeeHaw заблокировал %1$s.",
+ "blocked_this_site": "этот сайт",
+ "toast_offline_saved_partial": "Сохранена только первая часть этой длинной страницы (только текст, без изображений)."
 }

@@ -240,5 +240,18 @@
  "menu_language": "زبان",
  "title_language": "زبان",
  "language_system_default": "سسٹم ڈیفالٹ",
- "toast_machine_translation_notice": "یہ زبان مشینی ترجمہ ہے اور اسے ابھی کسی مادری زبان بولنے والے نے نہیں جانچا۔ کچھ متن غلط ہو سکتا ہے۔"
+ "toast_machine_translation_notice": "یہ زبان مشینی ترجمہ ہے اور اسے ابھی کسی مادری زبان بولنے والے نے نہیں جانچا۔ کچھ متن غلط ہو سکتا ہے۔",
+ "btn_ok": "ٹھیک ہے",
+ "label_undo": "واپس کریں",
+ "markup_red": "سرخ",
+ "markup_yellow": "پیلا",
+ "markup_black": "سیاہ",
+ "chooser_share_screenshot": "اسکرین شاٹ شیئر کریں",
+ "msg_screenshot_saved": "%1$s میں محفوظ ہو گیا",
+ "msg_screenshot_saved_no_share": "%1$s میں محفوظ ہو گیا۔ شیئر کرنے کے لیے Android 10 یا نیا درکار ہے۔",
+ "toast_screenshot_save_failed": "اسکرین شاٹ محفوظ نہیں ہو سکا۔",
+ "blocked_title": "آپ کی حفاظت کے لیے بلاک کیا گیا",
+ "blocked_body": "YeeHaw نے %1$s کو بلاک کر دیا۔",
+ "blocked_this_site": "یہ سائٹ",
+ "toast_offline_saved_partial": "اس لمبے صفحے کا صرف پہلا حصہ محفوظ ہوا (صرف متن، تصاویر نہیں)۔"
 }

@@ -110,14 +110,14 @@ object RemoteConfigManager {
      * Drop-in response for WebViewClient.shouldInterceptRequest. Main-frame navigations get a readable
      * "blocked for your safety" page, sub-resources get an empty 403.
      */
-    fun blockedResponse(host: String?, isMainFrame: Boolean): WebResourceResponse {
+    fun blockedResponse(context: android.content.Context, host: String?, isMainFrame: Boolean): WebResourceResponse {
         if (!isMainFrame) {
             return WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
         }
-        val safe = android.text.TextUtils.htmlEncode(host ?: "this site")
-        val html = "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>" +
+        val safe = android.text.TextUtils.htmlEncode(host ?: context.getString(app.yehaw.browser.R.string.blocked_this_site))
+        val html = "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>" +
             "<body style='font:16px system-ui;background:#080d18;color:#f3f7ff;padding:32px;text-align:center'>" +
-            "<h2>Blocked for your safety</h2><p style='color:#a5b4ca'>$safe was blocked by YeeHaw.</p></body>"
+            "<h2>${android.text.TextUtils.htmlEncode(context.getString(app.yehaw.browser.R.string.blocked_title))}</h2><p style='color:#a5b4ca'>${android.text.TextUtils.htmlEncode(context.getString(app.yehaw.browser.R.string.blocked_body, safe))}</p></body>"
         return WebResourceResponse("text/html", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(html.toByteArray()))
     }
 }

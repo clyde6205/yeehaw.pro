@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">حظر YeeHaw الموقع %1$s.</string>
+    <string name="blocked_this_site">هذا الموقع</string>
+    <string name="blocked_title">محظور من أجل سلامتك</string>
     <string name="btn_block">حظر</string>
     <string name="btn_cancel">إلغاء</string>
     <string name="btn_clear">مسح</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">لاحقًا</string>
     <string name="btn_new_tab">علامة تبويب جديدة</string>
     <string name="btn_no_thanks">لا، شكرًا</string>
+    <string name="btn_ok">حسنًا</string>
     <string name="btn_open">فتح</string>
     <string name="btn_open_website">فتح الموقع</string>
     <string name="btn_remove_this_one">إزالة هذا العنصر</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">علامة تبويب جديدة</string>
     <string name="cd_reload">إعادة تحميل</string>
     <string name="chooser_share_page">مشاركة الصفحة</string>
+    <string name="chooser_share_screenshot">مشاركة لقطة الشاشة</string>
     <string name="chooser_share_yeehaw">مشاركة YeeHaw</string>
     <string name="err_page_no_readable_text">لا تحتوي هذه الصفحة على نص قابل للقراءة.</string>
     <string name="err_page_text_unavailable">نص الصفحة غير متوفر.</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">حفظ للاستخدام دون اتصال</string>
     <string name="label_share">مشاركة</string>
     <string name="label_tabs">علامات التبويب</string>
+    <string name="label_undo">تراجع</string>
     <string name="language_system_default">افتراضي النظام</string>
+    <string name="markup_black">أسود</string>
+    <string name="markup_red">أحمر</string>
+    <string name="markup_yellow">أصفر</string>
     <string name="menu_allow_third_party_cookies">السماح بملفات تعريف الارتباط لجهات خارجية</string>
     <string name="menu_app_permissions">أذونات التطبيق</string>
     <string name="menu_block_third_party_cookies">حظر ملفات تعريف الارتباط لجهات خارجية</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">تريد هذه الصفحة الخاصة فتح تطبيق خارجي (%1$s).</string>
     <string name="msg_pro_is_not_available_to_buy">Pro غير متاح للشراء بعد. يواصل المتصفح المجاني عمل جميع الأدوات. لا يُفتح Pro إلا بعد أن يؤكد Google Play عملية الشراء مع خادم YeeHaw.</string>
     <string name="msg_saved_offline_reading_copies_will_be">ستتم إزالة نسخ القراءة دون اتصال المحفوظة نهائيًا من هذا الجهاز.</string>
+    <string name="msg_screenshot_saved">تم الحفظ في %1$s</string>
+    <string name="msg_screenshot_saved_no_share">تم الحفظ في %1$s. تتطلب المشاركة Android 10 أو أحدث.</string>
     <string name="msg_share_anonymous_app_health_crashes_a">شارك بيانات مجهولة عن سلامة التطبيق (الأعطال، إصدار التطبيق، ذاكرة الهاتف، المنطقة). لا بيانات تصفح ولا معرّف إعلانات. يمكنك حذفها في أي وقت من الأدوات.</string>
     <string name="msg_site_wants_location">يريد %1$s الوصول إلى موقع جهازك.</string>
     <string name="msg_site_wants_permission">يريد %1$s استخدام %2$s لديك. تابع فقط إذا كنت تثق بهذا الموقع.</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">تم مسح المكتبة دون اتصال.</string>
     <string name="toast_offline_page_deleted">تم حذف الصفحة المحفوظة دون اتصال.</string>
     <string name="toast_offline_reading_copy_saved_on_this">تم حفظ نسخة القراءة دون اتصال على هذا الجهاز.</string>
+    <string name="toast_offline_saved_partial">تم حفظ الجزء الأول فقط من هذه الصفحة الطويلة (نص فقط، بدون صور).</string>
     <string name="toast_only_normal_web_pages_can_be">يمكن حفظ صفحات الويب العادية فقط.</string>
     <string name="toast_private_page_ran_out_of_memory">نفدت ذاكرة الصفحة الخاصة. أغلق التصفح الخاص وأعد فتحه.</string>
     <string name="toast_private_profile_isolation_requires_a">عزل الملف الشخصي الخاص يتطلب Android 9 أو أحدث.</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">تمت الإزالة.</string>
     <string name="toast_safe_start_after_a_problem_your">بدء آمن بعد حدوث مشكلة. صفحاتك المحفوظة وإشاراتك المرجعية لم تتأثر.</string>
     <string name="toast_saved_quick_paste">تم الحفظ في اللصق السريع.</string>
+    <string name="toast_screenshot_save_failed">تعذّر حفظ لقطة الشاشة.</string>
     <string name="toast_search_engine_set">محرك البحث: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">مساحة التخزين شبه ممتلئة. أخلِ بعض المساحة على هاتفك ثم احفظ هذه الصفحة.</string>
     <string name="toast_tab_limit">أغلق علامة تبويب قبل فتح أخرى (الحد الأقصى: %1$d).</string>

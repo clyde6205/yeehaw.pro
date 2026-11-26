@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- English source strings. Generated from tools/i18n/en.json - edit that file, then run tools/i18n/generate.py. -->
 <resources>
+    <string name="blocked_body">%1$s was blocked by YeeHaw.</string>
+    <string name="blocked_this_site">this site</string>
+    <string name="blocked_title">Blocked for your safety</string>
     <string name="btn_block">Block</string>
     <string name="btn_cancel">Cancel</string>
     <string name="btn_clear">Clear</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">Later</string>
     <string name="btn_new_tab">New tab</string>
     <string name="btn_no_thanks">No thanks</string>
+    <string name="btn_ok">OK</string>
     <string name="btn_open">Open</string>
     <string name="btn_open_website">Open website</string>
     <string name="btn_remove_this_one">Remove this one</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">New tab</string>
     <string name="cd_reload">Reload</string>
     <string name="chooser_share_page">Share page</string>
+    <string name="chooser_share_screenshot">Share screenshot</string>
     <string name="chooser_share_yeehaw">Share YeeHaw</string>
     <string name="err_page_no_readable_text">This page has no readable text.</string>
     <string name="err_page_text_unavailable">Page text was unavailable.</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">Save offline</string>
     <string name="label_share">Share</string>
     <string name="label_tabs">Tabs</string>
+    <string name="label_undo">Undo</string>
     <string name="language_system_default">System default</string>
+    <string name="markup_black">Black</string>
+    <string name="markup_red">Red</string>
+    <string name="markup_yellow">Yellow</string>
     <string name="menu_allow_third_party_cookies">Allow third-party cookies</string>
     <string name="menu_app_permissions">App permissions</string>
     <string name="menu_block_third_party_cookies">Block third-party cookies</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">This private page wants to open an external application (%1$s).</string>
     <string name="msg_pro_is_not_available_to_buy">Pro is not available to buy yet. The free browser keeps every tool working. Pro opens only after Google Play confirms a purchase with the YeeHaw server.</string>
     <string name="msg_saved_offline_reading_copies_will_be">Saved offline reading copies will be permanently removed from this device.</string>
+    <string name="msg_screenshot_saved">Saved to %1$s</string>
+    <string name="msg_screenshot_saved_no_share">Saved to %1$s. Sharing needs Android 10 or newer.</string>
     <string name="msg_share_anonymous_app_health_crashes_a">Share anonymous app health (crashes, app version, phone memory, region). No browsing data, no ads ID. You can delete it anytime from Tools.</string>
     <string name="msg_site_wants_location">%1$s wants access to your device location.</string>
     <string name="msg_site_wants_permission">%1$s wants to use your %2$s. Continue only if you trust this website.</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">Offline library cleared.</string>
     <string name="toast_offline_page_deleted">Offline page deleted.</string>
     <string name="toast_offline_reading_copy_saved_on_this">Offline reading copy saved on this device.</string>
+    <string name="toast_offline_saved_partial">Saved only the first part of this long page (text only, no images).</string>
     <string name="toast_only_normal_web_pages_can_be">Only normal web pages can be saved.</string>
     <string name="toast_private_page_ran_out_of_memory">Private page ran out of memory. Close and reopen private browsing.</string>
     <string name="toast_private_profile_isolation_requires_a">Private profile isolation requires Android 9 or later.</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">Removed.</string>
     <string name="toast_safe_start_after_a_problem_your">Safe start after a problem. Your saved pages and bookmarks are untouched.</string>
     <string name="toast_saved_quick_paste">Saved to Quick Paste.</string>
+    <string name="toast_screenshot_save_failed">Could not save the screenshot.</string>
     <string name="toast_search_engine_set">Search engine: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">Storage is almost full. Free some space on your phone, then save this page.</string>
     <string name="toast_tab_limit">Close a tab before opening another (limit: %1$d).</string>

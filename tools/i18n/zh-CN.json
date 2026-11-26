@@ -240,5 +240,18 @@
  "menu_language": "语言",
  "title_language": "语言",
  "language_system_default": "跟随系统",
- "toast_machine_translation_notice": "此语言为机器翻译，尚未经过母语者审校。部分文字可能有误。"
+ "toast_machine_translation_notice": "此语言为机器翻译，尚未经过母语者审校。部分文字可能有误。",
+ "btn_ok": "确定",
+ "label_undo": "撤销",
+ "markup_red": "红色",
+ "markup_yellow": "黄色",
+ "markup_black": "黑色",
+ "chooser_share_screenshot": "分享截图",
+ "msg_screenshot_saved": "已保存到 %1$s",
+ "msg_screenshot_saved_no_share": "已保存到 %1$s。分享需要 Android 10 或更高版本。",
+ "toast_screenshot_save_failed": "无法保存截图。",
+ "blocked_title": "为了您的安全已拦截",
+ "blocked_body": "YeeHaw 已拦截 %1$s。",
+ "blocked_this_site": "此网站",
+ "toast_offline_saved_partial": "仅保存了这个长页面的前一部分（仅文字，不含图片）。"
 }

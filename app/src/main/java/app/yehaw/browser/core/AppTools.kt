@@ -1,6 +1,7 @@
 package app.yehaw.browser.core
 
 import android.app.Activity
+import app.yehaw.browser.R
 import android.app.Dialog
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -255,7 +256,7 @@ object ScreenshotTool {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        activity.startActivity(Intent.createChooser(send, "Share screenshot"))
+        activity.startActivity(Intent.createChooser(send, activity.getString(R.string.chooser_share_screenshot)))
     }
 }
 
@@ -361,22 +362,22 @@ object MarkupScreen {
                 setOnClickListener { action() }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
-        button("Red") { view.setPenColor(Color.RED) }
-        button("Yellow") { view.setPenColor(Color.YELLOW) }
-        button("Black") { view.setPenColor(Color.BLACK) }
-        button("Undo") { view.undo() }
-        button("Save") {
+        button(activity.getString(R.string.markup_red)) { view.setPenColor(Color.RED) }
+        button(activity.getString(R.string.markup_yellow)) { view.setPenColor(Color.YELLOW) }
+        button(activity.getString(R.string.markup_black)) { view.setPenColor(Color.BLACK) }
+        button(activity.getString(R.string.label_undo)) { view.undo() }
+        button(activity.getString(R.string.label_save)) {
             val bmp = view.render()
             val saved = bmp?.let { ScreenshotTool.save(activity, it) }
-            toast(if (saved != null) "Saved to ${saved.where}" else "Could not save the screenshot.")
+            toast(if (saved != null) activity.getString(R.string.msg_screenshot_saved, saved.where) else activity.getString(R.string.toast_screenshot_save_failed))
         }
-        button("Share") {
+        button(activity.getString(R.string.label_share)) {
             val bmp = view.render()
             val saved = bmp?.let { ScreenshotTool.save(activity, it) }
             if (saved?.uri != null) ScreenshotTool.share(activity, saved.uri)
-            else toast(if (saved != null) "Saved to ${saved.where}. Sharing needs Android 10 or newer." else "Could not save the screenshot.")
+            else toast(if (saved != null) activity.getString(R.string.msg_screenshot_saved_no_share, saved.where) else activity.getString(R.string.toast_screenshot_save_failed))
         }
-        button("Close") { dialog.dismiss() }
+        button(activity.getString(R.string.btn_close)) { dialog.dismiss() }
         root.addView(bar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         dialog.setContentView(root)
         dialog.show()

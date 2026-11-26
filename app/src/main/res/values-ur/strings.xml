@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">YeeHaw نے %1$s کو بلاک کر دیا۔</string>
+    <string name="blocked_this_site">یہ سائٹ</string>
+    <string name="blocked_title">آپ کی حفاظت کے لیے بلاک کیا گیا</string>
     <string name="btn_block">بلاک کریں</string>
     <string name="btn_cancel">منسوخ کریں</string>
     <string name="btn_clear">صاف کریں</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">بعد میں</string>
     <string name="btn_new_tab">نیا ٹیب</string>
     <string name="btn_no_thanks">نہیں، شکریہ</string>
+    <string name="btn_ok">ٹھیک ہے</string>
     <string name="btn_open">کھولیں</string>
     <string name="btn_open_website">ویب سائٹ کھولیں</string>
     <string name="btn_remove_this_one">اسے ہٹائیں</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">نیا ٹیب</string>
     <string name="cd_reload">ری لوڈ</string>
     <string name="chooser_share_page">صفحہ شیئر کریں</string>
+    <string name="chooser_share_screenshot">اسکرین شاٹ شیئر کریں</string>
     <string name="chooser_share_yeehaw">YeeHaw شیئر کریں</string>
     <string name="err_page_no_readable_text">اس صفحے پر پڑھنے کے قابل متن نہیں ہے۔</string>
     <string name="err_page_text_unavailable">صفحے کا متن دستیاب نہیں تھا۔</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">آف لائن محفوظ کریں</string>
     <string name="label_share">شیئر کریں</string>
     <string name="label_tabs">ٹیبز</string>
+    <string name="label_undo">واپس کریں</string>
     <string name="language_system_default">سسٹم ڈیفالٹ</string>
+    <string name="markup_black">سیاہ</string>
+    <string name="markup_red">سرخ</string>
+    <string name="markup_yellow">پیلا</string>
     <string name="menu_allow_third_party_cookies">تھرڈ پارٹی کوکیز کی اجازت دیں</string>
     <string name="menu_app_permissions">ایپ کی اجازتیں</string>
     <string name="menu_block_third_party_cookies">تھرڈ پارٹی کوکیز بلاک کریں</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">یہ نجی صفحہ ایک بیرونی ایپلیکیشن (%1$s) کھولنا چاہتا ہے۔</string>
     <string name="msg_pro_is_not_available_to_buy">Pro ابھی خریدنے کے لیے دستیاب نہیں ہے۔ مفت براؤزر میں تمام ٹولز کام کرتے رہتے ہیں۔ Pro صرف اس وقت کھلتا ہے جب Google Play، YeeHaw سرور کے ساتھ خریداری کی تصدیق کر دے۔</string>
     <string name="msg_saved_offline_reading_copies_will_be">محفوظ کی گئی آف لائن مطالعہ کاپیاں اس ڈیوائس سے مستقل طور پر ہٹا دی جائیں گی۔</string>
+    <string name="msg_screenshot_saved">%1$s میں محفوظ ہو گیا</string>
+    <string name="msg_screenshot_saved_no_share">%1$s میں محفوظ ہو گیا۔ شیئر کرنے کے لیے Android 10 یا نیا درکار ہے۔</string>
     <string name="msg_share_anonymous_app_health_crashes_a">ایپ کی صحت کی گمنام معلومات (کریشز، ایپ ورژن، فون میموری، علاقہ) شیئر کریں۔ کوئی براؤزنگ ڈیٹا نہیں، کوئی اشتہاری ID نہیں۔ آپ اسے کسی بھی وقت ٹولز سے حذف کر سکتے ہیں۔</string>
     <string name="msg_site_wants_location">%1$s آپ کے ڈیوائس کے مقام تک رسائی چاہتی ہے۔</string>
     <string name="msg_site_wants_permission">%1$s آپ کا %2$s استعمال کرنا چاہتی ہے۔ صرف اسی صورت میں جاری رکھیں جب آپ کو اس ویب سائٹ پر بھروسا ہو۔</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">آف لائن لائبریری صاف ہو گئی۔</string>
     <string name="toast_offline_page_deleted">آف لائن صفحہ حذف ہو گیا۔</string>
     <string name="toast_offline_reading_copy_saved_on_this">آف لائن پڑھنے کی کاپی اس ڈیوائس پر محفوظ ہو گئی۔</string>
+    <string name="toast_offline_saved_partial">اس لمبے صفحے کا صرف پہلا حصہ محفوظ ہوا (صرف متن، تصاویر نہیں)۔</string>
     <string name="toast_only_normal_web_pages_can_be">صرف عام ویب صفحات محفوظ کیے جا سکتے ہیں۔</string>
     <string name="toast_private_page_ran_out_of_memory">نجی صفحے کی میموری ختم ہو گئی۔ نجی براؤزنگ بند کر کے دوبارہ کھولیں۔</string>
     <string name="toast_private_profile_isolation_requires_a">نجی پروفائل کی علیحدگی کے لیے Android 9 یا اس سے نیا ورژن درکار ہے۔</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">ہٹا دیا گیا۔</string>
     <string name="toast_safe_start_after_a_problem_your">مسئلے کے بعد محفوظ آغاز۔ آپ کے محفوظ کردہ صفحات اور بک مارکس محفوظ ہیں۔</string>
     <string name="toast_saved_quick_paste">کوئیک پیسٹ میں محفوظ ہو گیا۔</string>
+    <string name="toast_screenshot_save_failed">اسکرین شاٹ محفوظ نہیں ہو سکا۔</string>
     <string name="toast_search_engine_set">سرچ انجن: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">اسٹوریج تقریباً بھر چکی ہے۔ اپنے فون میں جگہ خالی کریں، پھر یہ صفحہ محفوظ کریں۔</string>
     <string name="toast_tab_limit">دوسرا ٹیب کھولنے سے پہلے ایک ٹیب بند کریں (حد: %1$d)۔</string>

@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">%1$s diblokir oleh YeeHaw.</string>
+    <string name="blocked_this_site">situs ini</string>
+    <string name="blocked_title">Diblokir demi keamanan Anda</string>
     <string name="btn_block">Blokir</string>
     <string name="btn_cancel">Batal</string>
     <string name="btn_clear">Hapus</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">Nanti</string>
     <string name="btn_new_tab">Tab baru</string>
     <string name="btn_no_thanks">Tidak, terima kasih</string>
+    <string name="btn_ok">OK</string>
     <string name="btn_open">Buka</string>
     <string name="btn_open_website">Buka situs web</string>
     <string name="btn_remove_this_one">Hapus yang ini</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">Tab baru</string>
     <string name="cd_reload">Muat ulang</string>
     <string name="chooser_share_page">Bagikan halaman</string>
+    <string name="chooser_share_screenshot">Bagikan tangkapan layar</string>
     <string name="chooser_share_yeehaw">Bagikan YeeHaw</string>
     <string name="err_page_no_readable_text">Halaman ini tidak memiliki teks yang dapat dibaca.</string>
     <string name="err_page_text_unavailable">Teks halaman tidak tersedia.</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">Simpan offline</string>
     <string name="label_share">Bagikan</string>
     <string name="label_tabs">Tab</string>
+    <string name="label_undo">Urungkan</string>
     <string name="language_system_default">Default sistem</string>
+    <string name="markup_black">Hitam</string>
+    <string name="markup_red">Merah</string>
+    <string name="markup_yellow">Kuning</string>
     <string name="menu_allow_third_party_cookies">Izinkan cookie pihak ketiga</string>
     <string name="menu_app_permissions">Izin aplikasi</string>
     <string name="menu_block_third_party_cookies">Blokir cookie pihak ketiga</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">Halaman pribadi ini ingin membuka aplikasi eksternal (%1$s).</string>
     <string name="msg_pro_is_not_available_to_buy">Pro belum tersedia untuk dibeli. Browser gratis tetap menjalankan semua alat. Pro hanya dibuka setelah Google Play mengonfirmasi pembelian ke server YeeHaw.</string>
     <string name="msg_saved_offline_reading_copies_will_be">Salinan bacaan offline yang tersimpan akan dihapus permanen dari perangkat ini.</string>
+    <string name="msg_screenshot_saved">Disimpan di %1$s</string>
+    <string name="msg_screenshot_saved_no_share">Disimpan di %1$s. Berbagi memerlukan Android 10 atau lebih baru.</string>
     <string name="msg_share_anonymous_app_health_crashes_a">Bagikan kondisi aplikasi anonim (crash, versi aplikasi, memori ponsel, wilayah). Tanpa data penjelajahan, tanpa ID iklan. Anda dapat menghapusnya kapan saja dari Alat.</string>
     <string name="msg_site_wants_location">%1$s ingin mengakses lokasi perangkat Anda.</string>
     <string name="msg_site_wants_permission">%1$s ingin menggunakan %2$s Anda. Lanjutkan hanya jika Anda memercayai situs web ini.</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">Pustaka offline dikosongkan.</string>
     <string name="toast_offline_page_deleted">Halaman offline dihapus.</string>
     <string name="toast_offline_reading_copy_saved_on_this">Salinan bacaan offline disimpan di perangkat ini.</string>
+    <string name="toast_offline_saved_partial">Hanya bagian awal halaman panjang ini yang disimpan (hanya teks, tanpa gambar).</string>
     <string name="toast_only_normal_web_pages_can_be">Hanya halaman web biasa yang dapat disimpan.</string>
     <string name="toast_private_page_ran_out_of_memory">Halaman pribadi kehabisan memori. Tutup dan buka kembali penjelajahan pribadi.</string>
     <string name="toast_private_profile_isolation_requires_a">Isolasi profil pribadi memerlukan Android 9 atau lebih baru.</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">Dihapus.</string>
     <string name="toast_safe_start_after_a_problem_your">Mulai aman setelah ada masalah. Halaman tersimpan dan bookmark Anda tidak berubah.</string>
     <string name="toast_saved_quick_paste">Disimpan ke Tempel Cepat.</string>
+    <string name="toast_screenshot_save_failed">Tidak dapat menyimpan tangkapan layar.</string>
     <string name="toast_search_engine_set">Mesin telusur: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">Penyimpanan hampir penuh. Kosongkan ruang di ponsel Anda, lalu simpan halaman ini.</string>
     <string name="toast_tab_limit">Tutup satu tab sebelum membuka yang lain (batas: %1$d).</string>

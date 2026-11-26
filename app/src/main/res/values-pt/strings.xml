@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">%1$s foi bloqueado pelo YeeHaw.</string>
+    <string name="blocked_this_site">este site</string>
+    <string name="blocked_title">Bloqueado para a sua segurança</string>
     <string name="btn_block">Bloquear</string>
     <string name="btn_cancel">Cancelar</string>
     <string name="btn_clear">Limpar</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">Depois</string>
     <string name="btn_new_tab">Nova aba</string>
     <string name="btn_no_thanks">Não, obrigado</string>
+    <string name="btn_ok">OK</string>
     <string name="btn_open">Abrir</string>
     <string name="btn_open_website">Abrir site</string>
     <string name="btn_remove_this_one">Remover este</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">Nova aba</string>
     <string name="cd_reload">Recarregar</string>
     <string name="chooser_share_page">Compartilhar página</string>
+    <string name="chooser_share_screenshot">Compartilhar captura</string>
     <string name="chooser_share_yeehaw">Compartilhar o YeeHaw</string>
     <string name="err_page_no_readable_text">Esta página não tem texto legível.</string>
     <string name="err_page_text_unavailable">O texto da página não estava disponível.</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">Salvar offline</string>
     <string name="label_share">Compartilhar</string>
     <string name="label_tabs">Abas</string>
+    <string name="label_undo">Desfazer</string>
     <string name="language_system_default">Padrão do sistema</string>
+    <string name="markup_black">Preto</string>
+    <string name="markup_red">Vermelho</string>
+    <string name="markup_yellow">Amarelo</string>
     <string name="menu_allow_third_party_cookies">Permitir cookies de terceiros</string>
     <string name="menu_app_permissions">Permissões do app</string>
     <string name="menu_block_third_party_cookies">Bloquear cookies de terceiros</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">Esta página privada quer abrir um aplicativo externo (%1$s).</string>
     <string name="msg_pro_is_not_available_to_buy">O Pro ainda não está disponível para compra. O navegador gratuito mantém todas as ferramentas funcionando. O Pro só é liberado depois que o Google Play confirmar a compra com o servidor do YeeHaw.</string>
     <string name="msg_saved_offline_reading_copies_will_be">As cópias de leitura offline salvas serão removidas permanentemente deste dispositivo.</string>
+    <string name="msg_screenshot_saved">Salvo em %1$s</string>
+    <string name="msg_screenshot_saved_no_share">Salvo em %1$s. Compartilhar exige Android 10 ou mais recente.</string>
     <string name="msg_share_anonymous_app_health_crashes_a">Compartilhe dados anônimos de funcionamento do app (falhas, versão do app, memória do celular, região). Sem dados de navegação e sem ID de publicidade. Você pode excluí-los a qualquer momento em Ferramentas.</string>
     <string name="msg_site_wants_location">%1$s quer acessar a localização do seu dispositivo.</string>
     <string name="msg_site_wants_permission">%1$s quer usar sua %2$s. Continue apenas se você confiar neste site.</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">Biblioteca offline limpa.</string>
     <string name="toast_offline_page_deleted">Página offline excluída.</string>
     <string name="toast_offline_reading_copy_saved_on_this">Cópia para leitura offline salva neste dispositivo.</string>
+    <string name="toast_offline_saved_partial">Somente a primeira parte desta página longa foi salva (apenas texto, sem imagens).</string>
     <string name="toast_only_normal_web_pages_can_be">Só é possível salvar páginas web normais.</string>
     <string name="toast_private_page_ran_out_of_memory">A página privada ficou sem memória. Feche e reabra a navegação privada.</string>
     <string name="toast_private_profile_isolation_requires_a">O isolamento do perfil privado exige Android 9 ou superior.</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">Removido.</string>
     <string name="toast_safe_start_after_a_problem_your">Início seguro após um problema. Suas páginas salvas e favoritos estão intactos.</string>
     <string name="toast_saved_quick_paste">Salvo na Colagem rápida.</string>
+    <string name="toast_screenshot_save_failed">Não foi possível salvar a captura.</string>
     <string name="toast_search_engine_set">Mecanismo de busca: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">O armazenamento está quase cheio. Libere espaço no celular e salve esta página novamente.</string>
     <string name="toast_tab_limit">Feche uma aba antes de abrir outra (limite: %1$d).</string>

@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">Na-block ng YeeHaw ang %1$s.</string>
+    <string name="blocked_this_site">ang site na ito</string>
+    <string name="blocked_title">Na-block para sa iyong kaligtasan</string>
     <string name="btn_block">I-block</string>
     <string name="btn_cancel">Kanselahin</string>
     <string name="btn_clear">I-clear</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">Mamaya</string>
     <string name="btn_new_tab">Bagong tab</string>
     <string name="btn_no_thanks">Hindi, salamat</string>
+    <string name="btn_ok">OK</string>
     <string name="btn_open">Buksan</string>
     <string name="btn_open_website">Buksan ang website</string>
     <string name="btn_remove_this_one">Alisin ito</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">Bagong tab</string>
     <string name="cd_reload">I-reload</string>
     <string name="chooser_share_page">I-share ang page</string>
+    <string name="chooser_share_screenshot">Ibahagi ang screenshot</string>
     <string name="chooser_share_yeehaw">I-share ang YeeHaw</string>
     <string name="err_page_no_readable_text">Walang nababasang teksto ang page na ito.</string>
     <string name="err_page_text_unavailable">Hindi available ang teksto ng page.</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">I-save offline</string>
     <string name="label_share">I-share</string>
     <string name="label_tabs">Mga Tab</string>
+    <string name="label_undo">I-undo</string>
     <string name="language_system_default">Default ng system</string>
+    <string name="markup_black">Itim</string>
+    <string name="markup_red">Pula</string>
+    <string name="markup_yellow">Dilaw</string>
     <string name="menu_allow_third_party_cookies">Payagan ang third-party cookies</string>
     <string name="menu_app_permissions">Mga pahintulot ng app</string>
     <string name="menu_block_third_party_cookies">I-block ang third-party cookies</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">Gustong magbukas ng pribadong page na ito ng panlabas na application (%1$s).</string>
     <string name="msg_pro_is_not_available_to_buy">Hindi pa mabibili ang Pro. Gumagana pa rin ang lahat ng tool sa libreng browser. Magbubukas lang ang Pro kapag nakumpirma ng Google Play ang pagbili sa server ng YeeHaw.</string>
     <string name="msg_saved_offline_reading_copies_will_be">Permanenteng aalisin sa device na ito ang mga naka-save na kopya para sa offline na pagbabasa.</string>
+    <string name="msg_screenshot_saved">Na-save sa %1$s</string>
+    <string name="msg_screenshot_saved_no_share">Na-save sa %1$s. Kailangan ng Android 10 o mas bago para makapagbahagi.</string>
     <string name="msg_share_anonymous_app_health_crashes_a">Magbahagi ng anonymous na kalusugan ng app (mga crash, bersyon ng app, memory ng telepono, rehiyon). Walang data sa pagba-browse, walang ads ID. Maaari mo itong burahin anumang oras mula sa Mga Tool.</string>
     <string name="msg_site_wants_location">Gustong ma-access ng %1$s ang lokasyon ng device mo.</string>
     <string name="msg_site_wants_permission">Gustong gamitin ng %1$s ang iyong %2$s. Magpatuloy lang kung pinagkakatiwalaan mo ang website na ito.</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">Na-clear ang offline na aklatan.</string>
     <string name="toast_offline_page_deleted">Nabura ang offline na page.</string>
     <string name="toast_offline_reading_copy_saved_on_this">Na-save ang kopya para sa offline na pagbabasa sa device na ito.</string>
+    <string name="toast_offline_saved_partial">Unang bahagi lang ng mahabang pahinang ito ang na-save (teksto lang, walang larawan).</string>
     <string name="toast_only_normal_web_pages_can_be">Mga karaniwang web page lang ang maaaring i-save.</string>
     <string name="toast_private_page_ran_out_of_memory">Naubusan ng memory ang pribadong page. Isara at buksan muli ang pribadong pagba-browse.</string>
     <string name="toast_private_profile_isolation_requires_a">Ang paghihiwalay ng pribadong profile ay nangangailangan ng Android 9 o mas bago.</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">Naalis.</string>
     <string name="toast_safe_start_after_a_problem_your">Ligtas na pagsisimula pagkatapos ng problema. Hindi nagalaw ang mga naka-save mong page at bookmark.</string>
     <string name="toast_saved_quick_paste">Na-save sa Quick Paste.</string>
+    <string name="toast_screenshot_save_failed">Hindi ma-save ang screenshot.</string>
     <string name="toast_search_engine_set">Search engine: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">Halos puno na ang storage. Magbakante ng espasyo sa telepono mo, saka i-save ang page na ito.</string>
     <string name="toast_tab_limit">Magsara ng tab bago magbukas ng isa pa (limitasyon: %1$d).</string>

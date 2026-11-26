@@ -6,6 +6,13 @@ import android.webkit.WebView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
+import org.hamcrest.Matchers.containsString
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -36,7 +43,7 @@ class OfflinePagesTest {
         walk(root); return out
     }
 
-    private fun serve(): ServerSocket {
+    private fun serve(bodyHtml: String = "<p>$marker is the readable text of this page.</p>"): ServerSocket {
         val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
         thread(isDaemon = true) {
             while (!server.isClosed) {
@@ -44,7 +51,7 @@ class OfflinePagesTest {
                 thread(isDaemon = true) {
                     try {
                         s.getInputStream().read(ByteArray(4096))
-                        val body = "<html><head><title>Offline Test Page</title></head><body><p>$marker is the readable text of this page.</p></body></html>".toByteArray()
+                        val body = "<html><head><title>Offline Test Page</title></head><body>$bodyHtml</body></html>".toByteArray()
                         s.getOutputStream().apply {
                             write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
                             write(body); flush()
@@ -133,5 +140,69 @@ class OfflinePagesTest {
         assertEquals(1, store.offlinePageSummaries().size)
         store.clearOfflinePages()
         assertEquals(0, store.offlinePageSummaries().size)
+    }
+
+    @Test fun savedPageIsReadableThroughTheLibraryScreenWithNoNetwork() {
+        val server = serve()
+        try {
+            val url = "http://127.0.0.1:${server.localPort}/"
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                navigate(scenario, url)
+                assertTrue(waitFor { pageTitle(scenario) == "Offline Test Page" })
+                tapSaveOffline(scenario)
+                assertTrue(waitFor { BrowserStore(ctx).offlinePageSummaries().isNotEmpty() })
+            }
+            server.close()   // origin gone: any attempt to re-fetch would fail
+            assertTrue("origin must really be unreachable", try { java.net.Socket("127.0.0.1", server.localPort).close(); false } catch (_: Exception) { true })
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { a ->
+                    val label = a.getString(R.string.label_offline)
+                    allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == label }.performClick()
+                }
+                onView(withText(containsString("Offline Test Page"))).inRoot(isDialog()).perform(click())
+                // The reader is a native text view fed from SQLite: it shows the saved words without the origin.
+                onView(withText(containsString(marker))).inRoot(isDialog()).check(matches(isDisplayed()))
+            }
+        } finally { try { server.close() } catch (_: Exception) {} }
+    }
+
+    @Test fun veryLongPageIsKeptAsAPrefixNotSilentlyDropped() {
+        val long = "<p>$marker start.</p>" + (1..40_000).joinToString("") { "<p>line $it filler text for a long page</p>" }
+        val server = serve(long)
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                navigate(scenario, "http://127.0.0.1:${server.localPort}/")
+                assertTrue(waitFor { pageTitle(scenario) == "Offline Test Page" })
+                tapSaveOffline(scenario)
+                assertTrue(waitFor { BrowserStore(ctx).offlinePageSummaries().isNotEmpty() })
+                val saved = BrowserStore(ctx).offlinePage(BrowserStore(ctx).offlinePageSummaries().single().id)!!.content
+                assertTrue("prefix kept", saved.startsWith(marker))
+                assertTrue("capped at the per-page ceiling", BrowserStore.utf8ByteCount(saved) <= BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
+                assertTrue("really was longer than what was kept", saved.length < 40_000 * 30)
+            }
+        } finally { server.close() }
+    }
+
+    @Test fun pageWithNoReadableTextCannotBeSavedAndStoresNothing() {
+        val server = serve("")
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                navigate(scenario, "http://127.0.0.1:${server.localPort}/")
+                assertTrue(waitFor { pageTitle(scenario) == "Offline Test Page" })
+                tapSaveOffline(scenario)
+                Thread.sleep(1500)
+                assertTrue("blank page must not create an empty entry", BrowserStore(ctx).offlinePageSummaries().isEmpty())
+            }
+        } finally { server.close() }
+    }
+
+    @Test fun multibyteTextIsClippedOnACharacterBoundary() {
+        val store = BrowserStore(ctx)
+        val text = "$marker " + "漢字é".repeat(200_000)
+        val id = store.saveOfflinePage("https://example.org/long", "Long", text)
+        val back = store.offlinePage(id)!!.content
+        assertTrue(back.startsWith(marker))
+        assertTrue(BrowserStore.utf8ByteCount(back) <= BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
+        assertTrue("no broken character at the cut", !back.contains('\uFFFD'))
     }
 }

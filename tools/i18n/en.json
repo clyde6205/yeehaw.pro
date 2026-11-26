@@ -240,5 +240,18 @@
  "menu_language": "Language",
  "title_language": "Language",
  "language_system_default": "System default",
- "toast_machine_translation_notice": "This language is a machine translation and has not yet been checked by a native speaker. Some text may be wrong."
+ "toast_machine_translation_notice": "This language is a machine translation and has not yet been checked by a native speaker. Some text may be wrong.",
+ "btn_ok": "OK",
+ "label_undo": "Undo",
+ "markup_red": "Red",
+ "markup_yellow": "Yellow",
+ "markup_black": "Black",
+ "chooser_share_screenshot": "Share screenshot",
+ "msg_screenshot_saved": "Saved to %1$s",
+ "msg_screenshot_saved_no_share": "Saved to %1$s. Sharing needs Android 10 or newer.",
+ "toast_screenshot_save_failed": "Could not save the screenshot.",
+ "blocked_title": "Blocked for your safety",
+ "blocked_body": "%1$s was blocked by YeeHaw.",
+ "blocked_this_site": "this site",
+ "toast_offline_saved_partial": "Saved only the first part of this long page (text only, no images)."
 }

@@ -240,5 +240,18 @@
  "menu_language": "Wika",
  "title_language": "Wika",
  "language_system_default": "Default ng system",
- "toast_machine_translation_notice": "Machine translation ang wikang ito at hindi pa nasusuri ng katutubong tagapagsalita. Maaaring may maling teksto."
+ "toast_machine_translation_notice": "Machine translation ang wikang ito at hindi pa nasusuri ng katutubong tagapagsalita. Maaaring may maling teksto.",
+ "btn_ok": "OK",
+ "label_undo": "I-undo",
+ "markup_red": "Pula",
+ "markup_yellow": "Dilaw",
+ "markup_black": "Itim",
+ "chooser_share_screenshot": "Ibahagi ang screenshot",
+ "msg_screenshot_saved": "Na-save sa %1$s",
+ "msg_screenshot_saved_no_share": "Na-save sa %1$s. Kailangan ng Android 10 o mas bago para makapagbahagi.",
+ "toast_screenshot_save_failed": "Hindi ma-save ang screenshot.",
+ "blocked_title": "Na-block para sa iyong kaligtasan",
+ "blocked_body": "Na-block ng YeeHaw ang %1$s.",
+ "blocked_this_site": "ang site na ito",
+ "toast_offline_saved_partial": "Unang bahagi lang ng mahabang pahinang ito ang na-save (teksto lang, walang larawan)."
 }

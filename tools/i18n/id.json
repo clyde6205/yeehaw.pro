@@ -240,5 +240,18 @@
  "menu_language": "Bahasa",
  "title_language": "Bahasa",
  "language_system_default": "Default sistem",
- "toast_machine_translation_notice": "Bahasa ini adalah terjemahan mesin dan belum diperiksa oleh penutur asli. Beberapa teks mungkin salah."
+ "toast_machine_translation_notice": "Bahasa ini adalah terjemahan mesin dan belum diperiksa oleh penutur asli. Beberapa teks mungkin salah.",
+ "btn_ok": "OK",
+ "label_undo": "Urungkan",
+ "markup_red": "Merah",
+ "markup_yellow": "Kuning",
+ "markup_black": "Hitam",
+ "chooser_share_screenshot": "Bagikan tangkapan layar",
+ "msg_screenshot_saved": "Disimpan di %1$s",
+ "msg_screenshot_saved_no_share": "Disimpan di %1$s. Berbagi memerlukan Android 10 atau lebih baru.",
+ "toast_screenshot_save_failed": "Tidak dapat menyimpan tangkapan layar.",
+ "blocked_title": "Diblokir demi keamanan Anda",
+ "blocked_body": "%1$s diblokir oleh YeeHaw.",
+ "blocked_this_site": "situs ini",
+ "toast_offline_saved_partial": "Hanya bagian awal halaman panjang ini yang disimpan (hanya teks, tanpa gambar)."
 }

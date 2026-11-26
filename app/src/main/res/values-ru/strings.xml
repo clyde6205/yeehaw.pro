@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- MACHINE TRANSLATION by Claude (Anthropic AI). NOT reviewed by a native speaker. See docs/LOCALIZATION.md. -->
 <resources>
+    <string name="blocked_body">YeeHaw заблокировал %1$s.</string>
+    <string name="blocked_this_site">этот сайт</string>
+    <string name="blocked_title">Заблокировано для вашей безопасности</string>
     <string name="btn_block">Блокировать</string>
     <string name="btn_cancel">Отмена</string>
     <string name="btn_clear">Очистить</string>
@@ -18,6 +21,7 @@
     <string name="btn_later">Позже</string>
     <string name="btn_new_tab">Новая вкладка</string>
     <string name="btn_no_thanks">Нет, спасибо</string>
+    <string name="btn_ok">ОК</string>
     <string name="btn_open">Открыть</string>
     <string name="btn_open_website">Открыть сайт</string>
     <string name="btn_remove_this_one">Удалить эту</string>
@@ -28,6 +32,7 @@
     <string name="cd_new_tab">Новая вкладка</string>
     <string name="cd_reload">Обновить</string>
     <string name="chooser_share_page">Поделиться страницей</string>
+    <string name="chooser_share_screenshot">Поделиться снимком экрана</string>
     <string name="chooser_share_yeehaw">Поделиться YeeHaw</string>
     <string name="err_page_no_readable_text">На этой странице нет читаемого текста.</string>
     <string name="err_page_text_unavailable">Текст страницы недоступен.</string>
@@ -59,7 +64,11 @@
     <string name="label_save_offline">Сохранить офлайн</string>
     <string name="label_share">Поделиться</string>
     <string name="label_tabs">Вкладки</string>
+    <string name="label_undo">Отменить</string>
     <string name="language_system_default">Как в системе</string>
+    <string name="markup_black">Чёрный</string>
+    <string name="markup_red">Красный</string>
+    <string name="markup_yellow">Жёлтый</string>
     <string name="menu_allow_third_party_cookies">Разрешить сторонние файлы cookie</string>
     <string name="menu_app_permissions">Разрешения приложения</string>
     <string name="menu_block_third_party_cookies">Блокировать сторонние файлы cookie</string>
@@ -86,6 +95,8 @@
     <string name="msg_private_wants_external_app">Эта приватная страница хочет открыть внешнее приложение (%1$s).</string>
     <string name="msg_pro_is_not_available_to_buy">Pro пока недоступен для покупки. Бесплатный браузер сохраняет все инструменты. Pro откроется только после того, как Google Play подтвердит покупку на сервере YeeHaw.</string>
     <string name="msg_saved_offline_reading_copies_will_be">Сохранённые копии для чтения офлайн будут безвозвратно удалены с этого устройства.</string>
+    <string name="msg_screenshot_saved">Сохранено: %1$s</string>
+    <string name="msg_screenshot_saved_no_share">Сохранено: %1$s. Для отправки нужен Android 10 или новее.</string>
     <string name="msg_share_anonymous_app_health_crashes_a">Отправлять анонимные данные о работе приложения (сбои, версия приложения, память телефона, регион). Без данных о просмотре и без рекламного ID. Удалить их можно в любое время в разделе «Инструменты».</string>
     <string name="msg_site_wants_location">%1$s запрашивает доступ к местоположению устройства.</string>
     <string name="msg_site_wants_permission">%1$s хочет использовать ваш доступ: %2$s. Продолжайте, только если доверяете этому сайту.</string>
@@ -210,6 +221,7 @@
     <string name="toast_offline_library_cleared">Офлайн-библиотека очищена.</string>
     <string name="toast_offline_page_deleted">Офлайн-страница удалена.</string>
     <string name="toast_offline_reading_copy_saved_on_this">Копия для чтения офлайн сохранена на этом устройстве.</string>
+    <string name="toast_offline_saved_partial">Сохранена только первая часть этой длинной страницы (только текст, без изображений).</string>
     <string name="toast_only_normal_web_pages_can_be">Можно сохранять только обычные веб-страницы.</string>
     <string name="toast_private_page_ran_out_of_memory">Приватной странице не хватило памяти. Закройте и снова откройте приватный просмотр.</string>
     <string name="toast_private_profile_isolation_requires_a">Изоляция приватного профиля требует Android 9 или новее.</string>
@@ -217,6 +229,7 @@
     <string name="toast_removed">Удалено.</string>
     <string name="toast_safe_start_after_a_problem_your">Безопасный запуск после сбоя. Сохранённые страницы и закладки не затронуты.</string>
     <string name="toast_saved_quick_paste">Сохранено в «Быструю вставку».</string>
+    <string name="toast_screenshot_save_failed">Не удалось сохранить снимок экрана.</string>
     <string name="toast_search_engine_set">Поисковая система: %1$s</string>
     <string name="toast_storage_is_almost_full_free_some">Память почти заполнена. Освободите место на телефоне и сохраните страницу снова.</string>
     <string name="toast_tab_limit">Закройте одну вкладку, прежде чем открывать другую (лимит: %1$d).</string>

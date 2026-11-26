@@ -240,5 +240,18 @@
  "menu_language": "ভাষা",
  "title_language": "ভাষা",
  "language_system_default": "সিস্টেম ডিফল্ট",
- "toast_machine_translation_notice": "এই ভাষাটি মেশিন অনুবাদ এবং এখনও কোনো মাতৃভাষী যাচাই করেননি। কিছু লেখা ভুল হতে পারে।"
+ "toast_machine_translation_notice": "এই ভাষাটি মেশিন অনুবাদ এবং এখনও কোনো মাতৃভাষী যাচাই করেননি। কিছু লেখা ভুল হতে পারে।",
+ "btn_ok": "ঠিক আছে",
+ "label_undo": "পূর্বাবস্থায় ফেরান",
+ "markup_red": "লাল",
+ "markup_yellow": "হলুদ",
+ "markup_black": "কালো",
+ "chooser_share_screenshot": "স্ক্রিনশট শেয়ার করুন",
+ "msg_screenshot_saved": "%1$s-এ সংরক্ষিত",
+ "msg_screenshot_saved_no_share": "%1$s-এ সংরক্ষিত। শেয়ার করতে Android 10 বা নতুন লাগবে।",
+ "toast_screenshot_save_failed": "স্ক্রিনশট সংরক্ষণ করা যায়নি।",
+ "blocked_title": "আপনার নিরাপত্তার জন্য ব্লক করা হয়েছে",
+ "blocked_body": "YeeHaw %1$s ব্লক করেছে।",
+ "blocked_this_site": "এই সাইট",
+ "toast_offline_saved_partial": "এই দীর্ঘ পৃষ্ঠার শুধু প্রথম অংশ সংরক্ষিত হয়েছে (শুধু লেখা, ছবি নয়)।"
 }

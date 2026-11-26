@@ -686,7 +686,7 @@ class MainActivity : Activity() {
                     }
                 }
                 if (RemoteConfigManager.shouldBlock(request?.url)) {
-                    return RemoteConfigManager.blockedResponse(request?.url?.host, request?.isForMainFrame == true)
+                    return RemoteConfigManager.blockedResponse(this@MainActivity, request?.url?.host, request?.isForMainFrame == true)
                 }
                 if ((turboMode || signalMonitor.level.textFirst || DataSaverPolicy.shouldBlockHeavy(adaptiveSaver, signalMonitor.level, systemSaverOn)) && request?.isForMainFrame != true) {
                     val path = (uri.path ?: "").lowercase()
@@ -1315,7 +1315,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_yeehaw_pro))
             .setMessage(getString(R.string.msg_pro_is_not_available_to_buy))
-            .setPositiveButton("OK", null)
+            .setPositiveButton(getString(R.string.btn_ok), null)
             .show()
     }
 
@@ -1574,7 +1574,7 @@ class MainActivity : Activity() {
             return
         }
         statusText.text = getString(R.string.status_saving_offline_reading_copy)
-        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText.slice(0,250000):''});})()") { result ->
+        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText.slice(0,250000):'',total:document.body?document.body.innerText.length:0});})()") { result ->
             try {
                 val encoded = JSONTokener(result ?: "null").nextValue() as? String
                     ?: throw IllegalStateException(getString(R.string.err_page_text_unavailable))
@@ -1583,8 +1583,11 @@ class MainActivity : Activity() {
                 if (text.isBlank()) throw IllegalStateException(getString(R.string.err_page_no_readable_text))
                 val title = snapshot.optString("title").ifBlank { tab.title.ifBlank { getString(R.string.tab_untitled) } }
                 browserStore.saveOfflinePage(pageUrl, title, text)
+                // Be honest about partial copies: the page was longer than what the library keeps (text only, capped).
+                val partial = snapshot.optInt("total", 0) > text.length ||
+                    BrowserStore.utf8ByteCount(text) > BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE
                 statusText.text = getString(R.string.status_saved_for_offline_reading)
-                Toast.makeText(this, getString(R.string.toast_offline_reading_copy_saved_on_this), Toast.LENGTH_LONG).show()
+                Toast.makeText(this, getString(if (partial) R.string.toast_offline_saved_partial else R.string.toast_offline_reading_copy_saved_on_this), Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 statusText.text = getString(R.string.status_ready)
                 Toast.makeText(this, error.message ?: getString(R.string.toast_could_not_save_this_page), Toast.LENGTH_LONG).show()
@@ -1749,7 +1752,7 @@ class MainActivity : Activity() {
                     val pkg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WebView.getCurrentWebViewPackage() else null
                     val message = if (pkg == null) getString(R.string.msg_engine_unavailable)
                         else getString(R.string.msg_engine_details, pkg.packageName, pkg.versionName)
-                    AlertDialog.Builder(this).setTitle(getString(R.string.title_browser_engine)).setMessage(message).setPositiveButton("OK", null).show()
+                    AlertDialog.Builder(this).setTitle(getString(R.string.title_browser_engine)).setMessage(message).setPositiveButton(getString(R.string.btn_ok), null).show()
                 }
                 5 -> requestDefaultBrowserRole()
                 6 -> {

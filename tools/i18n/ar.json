@@ -240,5 +240,18 @@
  "menu_language": "اللغة",
  "title_language": "اللغة",
  "language_system_default": "افتراضي النظام",
- "toast_machine_translation_notice": "هذه اللغة ترجمة آلية ولم يراجعها ناطق أصلي بعد. قد يكون بعض النص غير صحيح."
+ "toast_machine_translation_notice": "هذه اللغة ترجمة آلية ولم يراجعها ناطق أصلي بعد. قد يكون بعض النص غير صحيح.",
+ "btn_ok": "حسنًا",
+ "label_undo": "تراجع",
+ "markup_red": "أحمر",
+ "markup_yellow": "أصفر",
+ "markup_black": "أسود",
+ "chooser_share_screenshot": "مشاركة لقطة الشاشة",
+ "msg_screenshot_saved": "تم الحفظ في %1$s",
+ "msg_screenshot_saved_no_share": "تم الحفظ في %1$s. تتطلب المشاركة Android 10 أو أحدث.",
+ "toast_screenshot_save_failed": "تعذّر حفظ لقطة الشاشة.",
+ "blocked_title": "محظور من أجل سلامتك",
+ "blocked_body": "حظر YeeHaw الموقع %1$s.",
+ "blocked_this_site": "هذا الموقع",
+ "toast_offline_saved_partial": "تم حفظ الجزء الأول فقط من هذه الصفحة الطويلة (نص فقط، بدون صور)."
 }
