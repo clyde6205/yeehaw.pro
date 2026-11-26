@@ -281,7 +281,7 @@ class PrivateBrowserActivity : Activity() {
         CookieManager.getInstance().removeAllCookies {
             CookieManager.getInstance().flush()
             runOnUiThread {
-                if (!isFinishing && !isDestroyed) view.loadUrl("https://duckduckgo.com/")
+                if (!isFinishing && !isDestroyed) view.loadUrl(startUrl())
             }
         }
     }
@@ -375,8 +375,16 @@ class PrivateBrowserActivity : Activity() {
         if (ownsPrivateSession) privateSessionActive = false
         super.onDestroy()
     }
+    /** Internal start address (the activity is not exported); anything but http/https falls back to the default search page. */
+    private fun startUrl(): String {
+        val fallback = "https://duckduckgo.com/"
+        val requested = intent?.getStringExtra(EXTRA_START_URL) ?: return fallback
+        val uri = Uri.parse(requested)
+        return if ((uri.scheme == "http" || uri.scheme == "https") && !uri.host.isNullOrBlank()) requested else fallback
+    }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     companion object {
+        const val EXTRA_START_URL = "start_url"
         private var privateSessionActive = false
         private var privateDataDirectoryConfigured = false
         private const val FILE_REQUEST = 7201
