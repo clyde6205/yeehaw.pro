@@ -48,14 +48,36 @@ object LocaleHelper {
     /** Returns [base] configured for the saved language (or [base] unchanged when following the system language). */
     fun wrap(base: Context): Context {
         val tag = saved(base)
-        if (tag == SYSTEM || tag.isBlank()) return base
+        if (tag == SYSTEM || tag.isBlank() || Locale.forLanguageTag(tag).language.isEmpty()) {
+            restoreSystemDefault(base)
+            return base
+        }
         val locale = Locale.forLanguageTag(tag)
-        if (locale.language.isEmpty()) return base
         Locale.setDefault(locale)
         val config = Configuration(base.resources.configuration)
         config.setLocale(locale)
         config.setLayoutDirection(locale)
         return base.createConfigurationContext(config)
+    }
+
+    /**
+     * Choosing "system default" after another language must give the process the phone's language back. Without this,
+     * Locale.getDefault() (used by WebView for error pages and Accept-Language, and by number/date formatting) keeps
+     * the previously chosen language until the process dies.
+     */
+    private fun restoreSystemDefault(base: Context) {
+        try {
+            val cfg = base.resources.configuration
+            if (android.os.Build.VERSION.SDK_INT >= 24) {
+                val list = cfg.locales
+                if (!list.isEmpty) { android.os.LocaleList.setDefault(list); Locale.setDefault(list[0]) }
+            } else {
+                @Suppress("DEPRECATION")
+                cfg.locale?.let { Locale.setDefault(it) }
+            }
+        } catch (_: Exception) {
+            // Never let a locale housekeeping problem stop the browser from starting.
+        }
     }
 
     fun isRtl(context: Context): Boolean =

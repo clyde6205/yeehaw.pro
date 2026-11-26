@@ -114,7 +114,12 @@ class LocalizationTest {
                         if (laidOut) break
                         Thread.sleep(100)
                     }
-                    assertTrue("$tag: address bar must have a real size at 1.5x font", laidOut)
+                    var diag = ""
+                    if (!laidOut) scenario.onActivity { a ->
+                        diag = "root=${a.window.decorView.width}x${a.window.decorView.height} edits=" + allViews(a.window.decorView).filterIsInstance<android.widget.EditText>()
+                            .joinToString { "[${it.width}x${it.height} shown=${it.isShown} vis=${it.visibility}]" } + " fontScale=${a.resources.configuration.fontScale}"
+                    }
+                    assertTrue("$tag: address bar must have a real size at 1.5x font; $diag", laidOut)
                     scenario.onActivity { a ->
                         val go = allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == a.getString(R.string.label_go) }
                         assertTrue("$tag: GO must be clickable at 1.5x font", go.performClick())
@@ -124,5 +129,17 @@ class LocalizationTest {
                 }
             }
         } finally { sh("settings put system font_scale 1.0") }
+    }
+
+    @Test fun returningToSystemLanguageRestoresTheProcessDefaultLocale() {
+        val systemLang = ctx.resources.configuration.let { c -> if (android.os.Build.VERSION.SDK_INT >= 24) c.locales[0].language else @Suppress("DEPRECATION") c.locale.language }
+        LocaleHelper.save(ctx, "ar")
+        ActivityScenario.launch(MainActivity::class.java).use { sc ->
+            sc.onActivity { assertEquals("ar", java.util.Locale.getDefault().language) }
+        }
+        LocaleHelper.save(ctx, LocaleHelper.SYSTEM)
+        ActivityScenario.launch(MainActivity::class.java).use { sc ->
+            sc.onActivity { assertEquals("system default must replace the previous language in this process", systemLang, java.util.Locale.getDefault().language) }
+        }
     }
 }
