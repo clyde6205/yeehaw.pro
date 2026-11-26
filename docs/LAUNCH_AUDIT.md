@@ -25,10 +25,10 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 |---|---|---|
 | Low-memory tab policy (live-tab cap by RAM class, eviction, restore, 12-tab ceiling) | PC | Logic unit-tested. Emulator (API 23/29/35/36, run 45610859057): 15 rapid new-tab clicks and critical `onTrimMemory` keep the app alive with a visible WebView. Not tested on a real 2 GB phone |
 | `onTrimMemory` / renderer-death rescue | PC | `onTrimMemory` verified on emulator; renderer-death rescue has no forced-kill test |
-| Weak-network retry (GET-only, capped backoff), failed-page panel | IV | Backoff logic unit-tested; no throttled-network run. POST auto-retry duplicate-submit bug fixed |
+| Weak-network retry (GET-only, capped backoff), failed-page panel | PC | Unreachable-site handling engages on API 23/29/35/36 (emulator test). Throttled-network behaviour not tested.| Backoff logic unit-tested; no throttled-network run. POST auto-retry duplicate-submit bug fixed |
 | Data Saver (Save-Data header on page requests, request skipping, honest counters) | PC | Mechanism implemented; **no measured savings exist**; WebView cannot add headers to subresources (documented) |
 | Savings meter reports measured vs estimated separately | IV | Reviewed; needs comparison with TrafficStats on device |
-| Private browsing (own process, separate data dir, wiped on exit, API 28+) | IV | Manifest and code audited; not run. Unavailable below API 28 by design (message shown) |
+| Private browsing (own process, separate data dir, wiped on exit, API 28+) | CV (process isolation) | `privateBrowserRunsInItsOwnProcess…` passes on API 29/35/36; API 23 correctly refuses. Wipe-on-exit not yet tested. Unavailable below API 28 by design (message shown) |
 | Storage guard (refuse downloads when critically low) | IV | Code path added; not run on device |
 | Bookmarks/history: single delete, confirmed clear-all | IV | Implemented; unit coverage none; not run |
 | Every visible control works | PC | Audited by reading; no click-through on device |
@@ -78,7 +78,7 @@ Legend: **CV** Complete and verified · **IV** Implemented but not verified · *
 | Trademark search, legal review of disclaimers | BLK | Owner/lawyer |
 
 ## Latest verification status
-Last fully green emulator run: 45612321317 attempts / 45615216562 (API 23, 35, 36 green with 18 instrumented tests; API 29 hit an OutOfMemoryError in the offline library, now fixed in code). The fix commit and everything after it is **unverified** because GitHub Actions stopped starting jobs (billing block, KNOWN_ISSUES #17).
+Commit 2558f0b, runs 45743992354 (build, lint, 13 JVM unit tests) and 45743996237 (emulator API 23/29/35/36): all green. 19 instrumented tests per version, including start page load, 15-tab stress, critical memory pressure, unreachable-site failure handling, private-browser process isolation (API 28+) and the offline-library budget on a small-heap emulator. API 36 first attempt failed on a Maven Central HTTP 429 and passed on re-run (infrastructure, not the app).
 
 ## Honest bottom line
 The code builds, lints clean and passes its unit and backend tests in CI. It has **never been run on a device or emulator**, the live API is **not** on this code, and nothing about speed, memory or data savings has been **measured**. Those are the three gaps between "builds" and "ready for launch".

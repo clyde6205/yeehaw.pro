@@ -20,7 +20,7 @@ Rule: nothing below is filled in unless it was measured. Emulator results are la
 | 2026-11-25 | API 23 armeabi-v7a software emulation | GitHub CI, run 45587739979 | did not start: android-emulator-runner accepts only x86/x86_64, which need KVM. Infrastructure limit; workflow removed |
 
 ## Emulator measurements (NOT a physical phone; x86_64 emulator on a GitHub runner with KVM)
-Run 45610859057, debug build, app sitting on the start page after launch. 16 instrumented tests pass on every row.
+Run 45610859057 (measurements), debug build, app sitting on the start page after launch. 16 instrumented tests pass on every row.
 | Android | Emulator RAM actually granted | Cold start `ThisTime` (5 launches, ms) | App total PSS on start page |
 |---|---|---|---|
 | 6.0 (API 23) | 1.5 GB (honoured) | 979, 899, 913, 834, 920 | about 68 MB |
@@ -42,3 +42,6 @@ Re-measure on the final signed artifact.
 
 ## Fields to record per physical run
 Model, Android version, WebView version, RAM, cold start, warm start, RSS, tab switching, background/foreground recovery, memory-pressure recovery, CPU, battery, page load, data used, offline behaviour, network recovery, crashes/ANRs. Compare with another browser under the same conditions.
+
+## Latest emulator run
+2026-11-26, commit 2558f0b, run 45743996237: API 23, 29, 35, 36 all pass 19 instrumented tests (API 36 needed one re-run after a Maven Central 429).
