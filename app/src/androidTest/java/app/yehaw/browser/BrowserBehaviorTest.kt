@@ -272,6 +272,47 @@ class BrowserBehaviorTest {
     }
 
     @Test
+    fun everyButtonKeepsA48dpTouchTargetAndHasALabel() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                val d = a.resources.displayMetrics.density
+                val buttons = allViews(a.window.decorView).filterIsInstance<android.widget.Button>()
+                assertTrue("the browser must have buttons", buttons.size >= 5)
+                for (b in buttons) {
+                    val label = (b.contentDescription ?: b.text)?.toString().orEmpty()
+                    assertTrue("button '${b.text}' needs an accessible label", label.isNotBlank())
+                    assertTrue("button '$label' touch target ${b.minimumWidth / d}x${b.minimumHeight / d}dp must be >= 48dp",
+                        b.minimumWidth >= (48 * d - 1) && b.minimumHeight >= (48 * d - 1))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun browserStaysUsableAtTheLargestSystemFontScale() {
+        val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun sh(c: String) { android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(c)).use { it.readBytes() } }
+        var normalSize = 0f
+        ActivityScenario.launch(MainActivity::class.java).use { sc ->
+            sc.onActivity { a -> normalSize = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first().textSize }
+        }
+        try {
+            sh("settings put system font_scale 2.0")
+            ActivityScenario.launch(MainActivity::class.java).use { sc ->
+                sc.onActivity { a ->
+                    val edit = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first()
+                    assertTrue("text must scale with the system font setting (was $normalSize, now ${edit.textSize})", edit.textSize > normalSize * 1.5f)
+                    assertTrue("GO must still be clickable at 2x font", clickByLabel(a, "GO"))
+                }
+                Thread.sleep(1500)
+                sc.onActivity { a -> assertFalse(a.isFinishing || a.isDestroyed) }
+            }
+        } finally {
+            sh("settings put system font_scale 1.0")
+        }
+    }
+
+    @Test
     fun privateBrowserRunsInItsOwnProcessOnApi28PlusAndRefusesBelow() {
         val ctx = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val intent = android.content.Intent(ctx, PrivateBrowserActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
