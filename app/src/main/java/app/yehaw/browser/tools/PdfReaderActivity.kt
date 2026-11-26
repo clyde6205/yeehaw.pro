@@ -212,6 +212,8 @@ class PdfReaderActivity : ToolActivity() {
     private fun search() {
         val q = searchBox.text.toString().trim()
         if (renderer == null || q.isEmpty()) return
+        // Say so up front when this phone cannot search; do not touch the renderer at all in that case.
+        if (!PdfSearch.isSupported()) { status.text = getString(R.string.pdf_search_unsupported); status.setTextColor(DANGER); return }
         status.setTextColor(MUTED); status.text = getString(R.string.pdf_searching)
         val start = page
         worker.execute {
@@ -271,6 +273,11 @@ class PdfReaderActivity : ToolActivity() {
  * the app compiles and runs on every supported version; returns null when this phone cannot search, never a fake "no match".
  */
 internal object PdfSearch {
+    /** True only on a phone whose PdfRenderer.Page really has searchText (Android 15+ with the PDF extension). */
+    fun isSupported(): Boolean = android.os.Build.VERSION.SDK_INT >= 35 && try {
+        PdfRenderer.Page::class.java.getMethod("searchText", String::class.java); true
+    } catch (e: NoSuchMethodException) { false } catch (e: Exception) { false }
+
     fun search(page: PdfRenderer.Page, query: String): List<RectF>? {
         if (android.os.Build.VERSION.SDK_INT < 35) return null
         return try {

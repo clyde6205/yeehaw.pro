@@ -197,6 +197,7 @@ class QuickToolsTest {
             assertTrue(info(), waitFor { info().contains(ctx.getString(R.string.pdf_page_of, 1, 3)) })
             sc.onActivity { a -> a.all().filterIsInstance<EditText>().first { it.hint == ctx.getString(R.string.pdf_page_number) }.setText("3"); a.button(ctx.getString(R.string.pdf_go_to_page)).performClick() }
             assertTrue(info(), waitFor { info().contains(ctx.getString(R.string.pdf_page_of, 3, 3)) })
+            assertTrue("the page image must be drawn", waitFor { var ok = false; sc.onActivity { a -> ok = a.all().filterIsInstance<ImageView>().any { it.drawable != null } }; ok })
             sc.onActivity { a -> val b = (a.all().filterIsInstance<ImageView>().first { it.drawable != null }.drawable as android.graphics.drawable.BitmapDrawable).bitmap; assertTrue("page must have rendered white background with ink", b.width > 100) }
         }
     }

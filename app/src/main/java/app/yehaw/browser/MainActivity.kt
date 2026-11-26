@@ -785,7 +785,8 @@ class MainActivity : Activity() {
                     }
                 }
                 if (view === currentWebView()) {
-                    statusText.text = getString(R.string.status_ready)
+                    // A failed page also finishes loading (the error page); it must not be announced as loaded.
+                    if (tab?.failed != true) statusText.text = getString(R.string.status_ready)
                     sampleDataUsage()
                 }
             }
