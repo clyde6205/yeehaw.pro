@@ -131,6 +131,28 @@ jobs:
           LOC=$("$BT/aapt2" dump badging "$APK" | grep -c "^locales:")
           "$BT/aapt2" dump badging "$APK" | grep "^locales:" | tr ' ' '\n' | grep -E "^'(ar|bn|es|fil|hi|in|pt|ru|ur|zh-rCN)'$" | sort | tr '\n' ' '; echo
           echo "=== signature"; "$BT/apksigner" verify --verbose --print-certs "$APK" | head -12
+      - name: Record the release candidate APK (hash, full signature schemes) and keep a copy
+        if: matrix.api-level == 36
+        timeout-minutes: 5
+        run: |
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | sort -V | tail -1)
+          mkdir -p /tmp/rc
+          cp "$APK" /tmp/rc/yeehaw-release-candidate-ci-signed.apk
+          (cd /tmp/rc && sha256sum yeehaw-release-candidate-ci-signed.apk | tee SHA256SUMS)
+          "$BT/apksigner" verify --verbose --print-certs /tmp/rc/yeehaw-release-candidate-ci-signed.apk | tee /tmp/rc/apksigner.txt
+          echo "git commit: $GITHUB_SHA" | tee /tmp/rc/COMMIT.txt
+          echo "NOTE: signed with a throwaway CI key, NOT the production key. Not for distribution." | tee -a /tmp/rc/COMMIT.txt
+          # GitHub's artifact download host is not reachable from every environment, so the same bytes are also in this log.
+          echo "-----BEGIN YEEHAW APK BASE64-----"
+          base64 -w 100 /tmp/rc/yeehaw-release-candidate-ci-signed.apk
+          echo "-----END YEEHAW APK BASE64-----"
+      - name: Upload release candidate APK
+        if: matrix.api-level == 36
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-candidate-ci-signed-apk
+          path: /tmp/rc/
+          retention-days: 30
       - name: Install the release APK and cold-start it
         if: steps.emu.outputs.started == 'true'
         timeout-minutes: 10
