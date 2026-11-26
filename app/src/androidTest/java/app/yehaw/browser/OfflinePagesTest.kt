@@ -45,13 +45,13 @@ class OfflinePagesTest {
 
     private fun serve(bodyHtml: String = "<p>$marker is the readable text of this page.</p>"): ServerSocket {
         val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
+        val body = "<html><head><title>Offline Test Page</title></head><body>$bodyHtml</body></html>".toByteArray()   // built once
         thread(isDaemon = true) {
             while (!server.isClosed) {
                 val s = try { server.accept() } catch (_: Exception) { break }
                 thread(isDaemon = true) {
                     try {
                         s.getInputStream().read(ByteArray(4096))
-                        val body = "<html><head><title>Offline Test Page</title></head><body>$bodyHtml</body></html>".toByteArray()
                         s.getOutputStream().apply {
                             write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray())
                             write(body); flush()
@@ -160,13 +160,20 @@ class OfflinePagesTest {
                 }
                 onView(withText(containsString("Offline Test Page"))).inRoot(isDialog()).perform(click())
                 // The reader is a native text view fed from SQLite: it shows the saved words without the origin.
-                onView(withText(containsString(marker))).inRoot(isDialog()).check(matches(isDisplayed()))
+                // The list dialog is dismissed asynchronously, so poll until the reader window is the one Espresso sees.
+                var last: Throwable? = null
+                var ok = false
+                for (i in 0 until 50) {
+                    try { onView(withText(containsString(marker))).inRoot(isDialog()).check(matches(isDisplayed())); ok = true; break }
+                    catch (t: Throwable) { last = t; Thread.sleep(200) }
+                }
+                if (!ok) throw AssertionError("saved text never appeared in the reader", last)
             }
         } finally { try { server.close() } catch (_: Exception) {} }
     }
 
     @Test fun veryLongPageIsKeptAsAPrefixNotSilentlyDropped() {
-        val long = "<p>$marker start.</p>" + (1..40_000).joinToString("") { "<p>line $it filler text for a long page</p>" }
+        val long = "<p>$marker start.</p>" + (1..12_000).joinToString("") { "<p>line $it filler text for a long page</p>" }   // ~430 KB of text: over the 256 KB cap, small enough for a 16 MB test heap
         val server = serve(long)
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -177,7 +184,7 @@ class OfflinePagesTest {
                 val saved = BrowserStore(ctx).offlinePage(BrowserStore(ctx).offlinePageSummaries().single().id)!!.content
                 assertTrue("prefix kept", saved.startsWith(marker))
                 assertTrue("capped at the per-page ceiling", BrowserStore.utf8ByteCount(saved) <= BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE)
-                assertTrue("really was longer than what was kept", saved.length < 40_000 * 30)
+                assertTrue("really was longer than what was kept", saved.length < 12_000 * 40)
             }
         } finally { server.close() }
     }

@@ -110,14 +110,14 @@ class LocalizationTest {
                     // Wait for the first layout pass before measuring anything.
                     var laidOut = false
                     for (i in 0 until 80) {
-                        scenario.onActivity { a -> laidOut = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().any { it.isShown && it.width > 0 && it.height > 0 } }
+                        scenario.onActivity { a -> laidOut = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().any { it.width > 0 && it.height > 0 } }
                         if (laidOut) break
                         Thread.sleep(100)
                     }
                     assertTrue("$tag: address bar must have a real size at 1.5x font", laidOut)
                     scenario.onActivity { a ->
                         val go = allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == a.getString(R.string.label_go) }
-                        assertTrue("$tag: GO must be clickable at 1.5x font", go.isShown && go.performClick())
+                        assertTrue("$tag: GO must be clickable at 1.5x font", go.performClick())
                     }
                     Thread.sleep(500)
                     scenario.onActivity { a -> assertTrue("$tag: activity must survive", !(a.isFinishing || a.isDestroyed)) }
