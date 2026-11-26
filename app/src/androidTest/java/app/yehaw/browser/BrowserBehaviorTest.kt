@@ -150,13 +150,13 @@ class BrowserBehaviorTest {
     @Test
     fun stalledConnectionTimesOutThenRecoversWhenTheNetworkComes_back() {
         val held = java.util.Collections.synchronizedList(mutableListOf<java.net.Socket>())
-        @Volatile var respond = false
+        val respond = java.util.concurrent.atomic.AtomicBoolean(false)
         val server = java.net.ServerSocket(0, 8, java.net.InetAddress.getByName("127.0.0.1"))
         val acceptor = Thread {
             try {
                 while (!server.isClosed) {
                     val sock = server.accept()
-                    if (!respond) { held.add(sock); continue } // simulates a dead link: connected, never answers
+                    if (!respond.get()) { held.add(sock); continue } // simulates a dead link: connected, never answers
                     Thread {
                         try {
                             val input = sock.getInputStream()
@@ -187,7 +187,7 @@ class BrowserBehaviorTest {
                     Thread.sleep(100)
                 }
                 assertTrue("a connection that never answers must end in the Retry panel, not spin forever", shown)
-                respond = true // the network "comes back"
+                respond.set(true) // the network "comes back"
                 synchronized(held) { held.forEach { try { it.close() } catch (_: Exception) {} }; held.clear() }
                 scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
                 var title = ""
