@@ -82,3 +82,35 @@ Commit 2558f0b, runs 45743992354 (build, lint, 13 JVM unit tests) and 4574399623
 
 ## Honest bottom line
 The code builds, lints clean and passes its unit and backend tests in CI. It has **never been run on a device or emulator**, the live API is **not** on this code, and nothing about speed, memory or data savings has been **measured**. Those are the three gaps between "builds" and "ready for launch".
+
+---
+## Status at commit 35984d6 (2026-11-26) — release candidate readiness
+Categories as defined in the directive. "Verified" means a run or measurement exists; nothing here is assumed.
+
+**VERIFIED (evidence in CI run for 35984d6 unless noted)**
+- Build reproducibility: committed Gradle 8.11.1 wrapper runs in CI (`./gradlew --version`); `docs/BUILD.md`; `scripts/make-release-package.sh` (APK, R8 mapping, source archive, git bundle, SHA256SUMS) works without GitHub Actions. Source backup delivered to the owner (git bundle + tar.gz + checksums).
+- Debug instrumented suite (23 tests) passes on API 23, 29, 35, 36 AND on an API 23 low-end profile (1 GB RAM, 1 CPU core).
+- Minified (R8) release APK, ~505 KB, signature verifies; installs and cold-starts on API 23 and 36; survives 700 seeded monkey events and all four trim-memory levels; no crash/ANR/stripped-class in logcat.
+- Network failure handling: a connection that never answers ends in the Retry panel (25 s, shorter after progress); Retry loads the failed address (not the last good page); slow-but-advancing loads are not killed. Tested end to end with a local socket server.
+- Downloads: attachment download completes through DownloadManager on API 23/29/35/36; Android 6-9 now requests storage permission and falls back to the app folder if declined (main and private browser).
+- Search/navigation routing: unit-tested (URLs vs searches, non-Latin queries, javascript:/data:/file:/intent: never loaded).
+- Production API: deployment READY; `https://api.yeehaw.pro/healthz` 200 over HTTPS (DNS fixed 2026-11-26); live `/v1/config/app-config` signature verifies against the public key embedded in the app, tampering fails. Backend suite (auth, rate limits, validation, Pro verify fails closed) passes against Postgres.
+- Privacy design: analytics is consent-based (anonymous id not created before consent), "forget me" erases server data, no IP storage.
+
+**IMPLEMENTED BUT UNVERIFIED**
+- Data-saver byte savings on real traffic (no measured number may be claimed; see DATA_SAVINGS_METHODOLOGY.md).
+- Private-browser wipe on exit: code wipes at start and destroy, but no automated cross-process test.
+- Offline saved pages beyond the memory-budget test; downloads on a real network.
+- Auto-update/forced-update flow against a real newer build.
+
+**BLOCKED ON OWNER**
+- Production signing keystore (release APK is unsigned until supplied; never distribute the unsigned build).
+- Play Console app, service account (`PLAY_SERVICE_ACCOUNT_JSON`), AdMob IDs; support email address.
+- Vercel Hobby plan forbids commercial use: upgrade before charging users.
+- A real physical 2 GB phone test and a real mobile network test.
+
+**NOT STARTED / OUT OF SCOPE FOR NOW**
+- Founder console roles/sessions/2FA; native-speaker review of 80 languages; full accessibility audit (font scaling/contrast/touch targets); Play Store listing.
+
+**NOT CLAIMED**
+- Any performance or data-saving figure on a physical device. All timings above are emulator numbers.
