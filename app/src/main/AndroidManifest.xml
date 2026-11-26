@@ -38,6 +38,15 @@
                 android:resource="@xml/share_paths" />
         </provider>
 
+        <!-- Quick Tools: separate, optional screens; nothing in the browser starts or loads them until a person opens one. -->
+        <activity android:name=".tools.QuickToolsActivity" android:exported="false" />
+        <activity android:name=".tools.CalculatorActivity" android:exported="false" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
+        <activity android:name=".tools.UnitConverterActivity" android:exported="false" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
+        <activity android:name=".tools.QrGeneratorActivity" android:exported="false" />
+        <activity android:name=".tools.QrScannerActivity" android:exported="false" android:configChanges="keyboard|keyboardHidden|orientation|screenSize" />
+        <activity android:name=".tools.NotesActivity" android:exported="false" />
+        <activity android:name=".tools.PdfReaderActivity" android:exported="false" />
+
         <activity
             android:name=".PrivateBrowserActivity"
             android:process=":private_browser"

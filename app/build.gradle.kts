@@ -65,6 +65,8 @@ android {
 dependencies {
     implementation("com.android.billingclient:billing-ktx:7.1.1")
     implementation("androidx.core:core:1.13.1")
+    // QR Code Scanner decoder only: pure Java, offline, no services, Apache-2.0, loaded when the scanner is opened.
+    implementation("com.google.zxing:core:3.5.3")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test:core:1.6.1")

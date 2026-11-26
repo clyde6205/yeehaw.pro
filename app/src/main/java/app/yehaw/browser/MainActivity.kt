@@ -2021,7 +2021,7 @@ class MainActivity : Activity() {
             getString(R.string.tools_offline_reading),
             getString(R.string.tools_stop_sharing),
             getString(R.string.tools_family_apps)
-        )
+        ) + (if (app.yehaw.browser.tools.QuickTools.ENABLED) arrayOf(getString(R.string.tools_quick_tools)) else emptyArray())
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_yeehaw_tools))
             .setItems(labels) { _, which ->
@@ -2057,7 +2057,8 @@ class MainActivity : Activity() {
                         .setNegativeButton(getString(R.string.btn_close), null)
                         .show()
                     7 -> confirmForgetMe()
-                    else -> showSisterApps()
+                    8 -> showSisterApps()
+                    else -> app.yehaw.browser.tools.QuickTools.open(this, currentWebView()?.url)
                 }
             }
             .setNegativeButton(getString(R.string.btn_close), null)
