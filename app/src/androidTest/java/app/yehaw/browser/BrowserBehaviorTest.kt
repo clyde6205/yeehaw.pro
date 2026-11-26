@@ -245,8 +245,10 @@ class BrowserBehaviorTest {
             return null
         }
         if (android.os.Build.VERSION.SDK_INT in 23..28) { // no prompt can be tapped in a test; the app asks on first download
-            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
-                .grantRuntimePermission(ctx.packageName, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            // UiAutomation.grantRuntimePermission only exists from API 28; `pm grant` works on every level.
+            val pfd = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+                .executeShellCommand("pm grant ${ctx.packageName} android.permission.WRITE_EXTERNAL_STORAGE")
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
         }
         try {
             find()?.let { dm.remove(it.first) }
