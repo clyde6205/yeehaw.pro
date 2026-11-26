@@ -92,4 +92,31 @@ class LocalizationTest {
             scenario.onActivity { a -> assertEquals("Home", a.getString(R.string.label_home)) }
         }
     }
+
+    @Test fun everyLanguageStaysUsableAtLargeSystemFont() {
+        org.junit.Assume.assumeTrue("system font_scale reaches running apps on API 24+", android.os.Build.VERSION.SDK_INT >= 24)
+        val ui = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun sh(c: String) { android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(c)).use { it.readBytes() } }
+        try {
+            sh("settings put system font_scale 1.5")
+            for (i in 0 until 100) {
+                if (android.provider.Settings.System.getFloat(ctx.contentResolver, "font_scale", 1f) >= 1.45f) break
+                Thread.sleep(100)
+            }
+            Thread.sleep(2000)
+            for (tag in listOf("en", "hi", "zh-CN", "es", "ar", "bn", "pt", "ru", "ur", "id", "fil", "he", "fa")) {
+                LocaleHelper.save(ctx, tag)
+                ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                    scenario.onActivity { a ->
+                        val edit = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first()
+                        assertTrue("$tag: address bar must have a real size at 1.5x font", edit.width > 0 && edit.height > 0)
+                        val go = allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == a.getString(R.string.label_go) }
+                        assertTrue("$tag: GO must be clickable at 1.5x font", go.isShown && go.performClick())
+                    }
+                    Thread.sleep(500)
+                    scenario.onActivity { a -> assertTrue("$tag: activity must survive", !(a.isFinishing || a.isDestroyed)) }
+                }
+            }
+        } finally { sh("settings put system font_scale 1.0") }
+    }
 }
