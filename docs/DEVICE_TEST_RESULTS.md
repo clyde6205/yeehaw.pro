@@ -61,3 +61,8 @@ EMULATOR results only; no physical phone. Built with a throwaway test key (never
 Labels differ between the two columns because the runs report different `am start -W` fields (ThisTime vs TotalTime); do not compare them across API levels.
 Debug-build instrumented suite (23 tests incl. stall/recover, attachment download, private-browser process isolation) passes on API 23/29/35/36 at commit e890b31.
 Still unproven: any physical low-end device, real cellular networks, thermal/battery behaviour.
+
+## Accessibility checks (instrumented, commit after f12a31a)
+- Every button has a non-empty accessible label and a >= 48 dp minimum touch target (API 23/29/35/36).
+- 2x system font scale: text scales with the setting and the browser stays usable (API 29/35/36). NOT exercised on API 23: a shell `settings put system font_scale` does not reach a running app on Android 6, so that test is skipped there; the same sp-based code is used, but this is unverified on API 23-.
+- Not done: screen-reader (TalkBack) walkthrough, colour-contrast measurement, RTL layout review.

@@ -290,6 +290,9 @@ class BrowserBehaviorTest {
 
     @Test
     fun browserStaysUsableAtTheLargestSystemFontScale() {
+        // On Android 6 a shell `settings put` does not reach an already-running app's configuration, so the scaling can't be
+        // exercised this way there (documented in DEVICE_TEST_RESULTS.md). API 24+ is covered.
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 24)
         val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
         fun sh(c: String) { android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(c)).use { it.readBytes() } }
         var normalSize = 0f
