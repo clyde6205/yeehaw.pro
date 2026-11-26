@@ -18,6 +18,6 @@ Category key: APP = application defect, BUILD, INFRA, PROVIDER config, OWNER (ne
 | 12 | Play closed test: 12 testers x 14 days before production on new personal accounts. | OWNER | Recruit testers. |
 | 13 | `yehaw_app/` is a legacy, separate project (`co.yehaw.browser`). | APP | Preserved, not deleted. Not part of the shipped app. Decide on archiving. |
 | 14 | 80-language strings are machine-prepared, not reviewed by native speakers. | APP | Native review needed before claiming quality. |
-| 15 | Emulator-only evidence: 19 instrumented tests pass on API 23/29/35/36 emulators (commit 83c6570), plus JVM unit tests. No physical low-end phone has been tested. | APP/OWNER | Needs a real 2 GB device run. |
+| 15 | Evidence is emulator-only: debug instrumented suite passes on API 23/29/35/36 (e890b31) and the minified release APK installs, cold-starts and survives monkey + memory-trim on API 23/36 (cc94dbb). No physical low-end phone, no real mobile network, no battery/thermal data. | APP/OWNER | Needs a real 2 GB device run before any claim of device-level performance. |
 | 16 | No dependency vulnerability audit (npm/Gradle) in CI; no accessibility audit. | APP | Next P1/P5 items. |
 | 17 | ~~GitHub Actions blocked by account billing~~ WORKED AROUND 2026-11-26 by making the repo public (public-repo Actions are free). All jobs run again. Keep the repo public only while it holds no private material; nothing secret was found in a full history scan. | OWNER (done) | Decide later whether to return to private and fix billing. |

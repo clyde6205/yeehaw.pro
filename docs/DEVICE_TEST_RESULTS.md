@@ -45,3 +45,19 @@ Model, Android version, WebView version, RAM, cold start, warm start, RSS, tab s
 
 ## Latest emulator run
 2026-11-26, commit 2558f0b, run 45743996237: API 23, 29, 35, 36 all pass 19 instrumented tests (API 36 needed one re-run after a Maven Central 429).
+
+## Release (R8-minified) APK smoke — 2026-11-26, commit cc94dbb, CI run 45754592982
+EMULATOR results only; no physical phone. Built with a throwaway test key (never the production key), signature checked with `apksigner verify`.
+
+| Item | API 23 (1.5 GB RAM emulator) | API 36 (1.5 GB RAM emulator) |
+|---|---|---|
+| Release APK size | 516,771 bytes | 516,772 bytes |
+| Cold start (`am start -W`), 5 runs | ThisTime 531 / 562 / 593 / 671 / 689 ms | TotalTime 933 / 1013 / 1034 / 1076 / 1256 ms |
+| PSS after 8 s idle | ~64 MB | ~86 MB |
+| 700 seeded monkey events | no crash | no crash |
+| trim-memory RUNNING_LOW / RUNNING_CRITICAL / UI_HIDDEN / COMPLETE | process survived all | process survived all |
+| Crash / ANR / ClassNotFound / NoSuchMethod in logcat | none (job passed) | none (explicitly checked) |
+
+Labels differ between the two columns because the runs report different `am start -W` fields (ThisTime vs TotalTime); do not compare them across API levels.
+Debug-build instrumented suite (23 tests incl. stall/recover, attachment download, private-browser process isolation) passes on API 23/29/35/36 at commit e890b31.
+Still unproven: any physical low-end device, real cellular networks, thermal/battery behaviour.
