@@ -127,6 +127,8 @@ class MainActivity : Activity() {
     private lateinit var savings: SavingsMeter
     private val retryScheduler = RetryScheduler()
     private val loadStartedAt = java.util.WeakHashMap<WebView, Long>()
+    // A load that neither finishes nor errors (stalled DNS or a dead connection on a weak network) must not spin forever.
+    private val stallWatch = java.util.WeakHashMap<WebView, Runnable>()
     private var startedSafe = false
     private var adaptiveSaver = true
     private var systemSaverOn = false
@@ -714,7 +716,10 @@ class MainActivity : Activity() {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 tab.failed = false
                 tab.lastHistoryUrl = null
-                if (view != null && !isStartPageUrl(url)) loadStartedAt[view] = android.os.SystemClock.elapsedRealtime()
+                if (view != null && !isStartPageUrl(url)) {
+                    loadStartedAt[view] = android.os.SystemClock.elapsedRealtime()
+                    armStallWatch(view, tab)
+                }
                 if (view === currentWebView() && pageContainer.indexOfChild(view) < 0) showTab(activeTabIndex)
                 if (!url.isNullOrBlank()) {
                     tab.currentUrl = url
@@ -750,6 +755,7 @@ class MainActivity : Activity() {
                 if (view != null) ConsoleBootstrap.onPageFinished(view, url)
                 val tab = tabs.firstOrNull { it.webView === view }
                 if (view != null && tab != null && !tab.failed) {
+                    cancelStallWatch(view)
                     val started = loadStartedAt.remove(view)
                     if (started != null) signalMonitor.recordLoad(android.os.SystemClock.elapsedRealtime() - started, true)
                     retryScheduler.reset(view)
@@ -841,6 +847,7 @@ class MainActivity : Activity() {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true
                     tab.failedWasGet = request.method.equals("GET", ignoreCase = true)
+                    cancelStallWatch(view)
                     loadStartedAt.remove(view)
                     signalMonitor.recordLoad(0, false)
                     if (view === currentWebView()) showTab(activeTabIndex)
@@ -1405,6 +1412,30 @@ class MainActivity : Activity() {
     }
 
     /** Reload a page without ever re-sending a POST: a failed non-GET is replaced by a plain GET of its address. */
+    private fun cancelStallWatch(view: WebView?) {
+        view ?: return
+        stallWatch.remove(view)?.let { view.removeCallbacks(it) }
+    }
+
+    private fun armStallWatch(view: WebView, tab: BrowserTab) {
+        cancelStallWatch(view)
+        val r = Runnable {
+            stallWatch.remove(view)
+            if (isFinishing || isDestroyed || tab.failed || view.progress >= 100 || !loadStartedAt.containsKey(view)) return@Runnable
+            view.stopLoading()
+            loadStartedAt.remove(view)
+            tab.failed = true
+            tab.failedWasGet = true // the user presses Retry; nothing is re-sent automatically
+            signalMonitor.recordLoad(0, false)
+            if (view === currentWebView()) {
+                showTab(activeTabIndex)
+                statusText.text = "This page is taking too long. Tap Retry."
+            }
+        }
+        stallWatch[view] = r
+        view.postDelayed(r, LOAD_STALL_MS)
+    }
+
     private fun reloadSafely(tab: BrowserTab) {
         if (tab.failedWasGet) tab.webView.reload() else tab.webView.loadSaving(tab.currentUrl)
         tab.failedWasGet = true
@@ -2071,6 +2102,7 @@ class MainActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        private const val LOAD_STALL_MS = 25_000L
         private const val STATE_TAB_URLS = "yehaw.saved_tab_urls"
         private const val STATE_TAB_TITLES = "yehaw.saved_tab_titles"
         private const val STATE_TAB_SCROLLS = "yehaw.saved_tab_scrolls"
