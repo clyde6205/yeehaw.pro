@@ -248,9 +248,14 @@ class PrivateBrowserActivity : Activity() {
                     .setMessage("\"$name\" will be saved to the device's shared Downloads folder. The file and Android download record can remain after this private window is closed.")
                     .setPositiveButton("Download") { _, _ ->
                         try {
+                            // On Android 9 and below the shared Downloads folder needs a storage permission this window does not
+                            // request; those downloads go to the app's own folder instead of failing.
+                            val sharedOk = android.os.Build.VERSION.SDK_INT > 28 ||
+                                checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
                             val request = DownloadManager.Request(uri).setTitle(name)
                                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+                            if (sharedOk) request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+                            else request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, name)
                             if (!agent.isNullOrBlank()) request.addRequestHeader("User-Agent", agent)
                             CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
                             (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
