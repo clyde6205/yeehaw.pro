@@ -173,7 +173,12 @@ class OfflinePagesTest {
                         Thread.sleep(1500)
                     }
                 }
-                if (!opened) throw AssertionError("library entry could not be tapped after 4 attempts", focusProblem)
+                if (!opened) {
+                    val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+                    val win = String(android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand("dumpsys window windows")).use { it.readBytes() })
+                        .lines().filter { it.contains("mCurrentFocus") || it.contains("mFocusedApp") || it.contains("mFocusedWindow") }.joinToString(" | ")
+                    throw AssertionError("library entry could not be tapped after 4 attempts; focus: $win", focusProblem)
+                }
                 // The reader is a native text view fed from SQLite: it shows the saved words without the origin.
                 // The list dialog is dismissed asynchronously, so poll until the reader window is the one Espresso sees.
                 var last: Throwable? = null

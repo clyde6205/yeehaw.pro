@@ -64,6 +64,10 @@ class PrivateWipeTest {
     private fun killPrivateProcess() {
         privateProcessPid()?.let { android.os.Process.killProcess(it) }
         waitFor(15_000) { privateProcessPid() == null }
+        // A killed process can leave its task record on screen (logged on API 36 as TASK_TO_FRONT and a focused dead activity):
+        // go Home so no stale private window keeps focus, and so the next launch (CLEAR_TASK) starts a fresh instance.
+        shell("input keyevent 3")
+        Thread.sleep(800)
     }
 
     @org.junit.Before fun before() = killPrivateProcess()
@@ -77,7 +81,7 @@ class PrivateWipeTest {
 
     private fun launchPrivate(url: String) {
         ctx.startActivity(Intent(ctx, PrivateBrowserActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(PrivateBrowserActivity.EXTRA_START_URL, url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK).putExtra(PrivateBrowserActivity.EXTRA_START_URL, url))
     }
 
     private fun waitFor(timeoutMs: Long = 40_000, cond: () -> Boolean): Boolean {
