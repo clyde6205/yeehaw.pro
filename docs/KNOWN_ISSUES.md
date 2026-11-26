@@ -12,7 +12,7 @@ Category key: APP = application defect, BUILD, INFRA, PROVIDER config, OWNER (ne
 | 6 | Google Play verification needs a service account and a Play app with a `yeehaw_pro` subscription. | OWNER | Create the service account in Play Console and set `PLAY_SERVICE_ACCOUNT_JSON` / `PLAY_PACKAGE_NAME` in Vercel. Until then Pro fails closed. |
 | 7 | Release signing keystore not provided. | OWNER | Add keystore secrets in GitHub Settings. Release APK is currently unsigned. |
 | 8 | Ads are disabled: no AdMob SDK and no real IDs. | OWNER | Provide real AdMob IDs; evaluate low-RAM impact first. |
-| 9 | `api.yeehaw.pro` is attached to the Vercel project but Vercel reports it misconfigured: the domain uses Cloudflare nameservers and has no record pointing to Vercel. The app's `API_BASE_URL` is this domain, so until fixed it cannot reach the live backend and uses cached/default config. | OWNER | In Cloudflare DNS add `CNAME api -> cname.vercel-dns.com`, proxy OFF (grey cloud). Then re-verify HTTPS and `/healthz`. |
+| 9 | ~~api.yeehaw.pro DNS~~ RESOLVED 2026-11-26: CNAME `api -> cname.vercel-dns.com` created in Cloudflare (by the owner via another tool). Verified: Vercel domain config `misconfigured: false` (configuredBy CNAME) and `https://api.yeehaw.pro/healthz` returns 200 `{"ok":true}` with HSTS. | DONE | Optional: use the recommended `042ef5a15772dae0.vercel-dns-017.com` target later. |
 | 10 | Cloudflare dashboard build command cannot be read from here. | OWNER | Confirm `npm ci && npm run build`, output `./public`. |
 | 11 | Vercel Hobby plan forbids commercial use. | OWNER | Upgrade before charging users. |
 | 12 | Play closed test: 12 testers x 14 days before production on new personal accounts. | OWNER | Recruit testers. |

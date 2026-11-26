@@ -4,7 +4,7 @@
 | Cloudflare Worker `yeehaw-pro` | serves ./public built by `npm run build` | worker exists; dashboard build command not verifiable from the sandbox; live site blocked by the sandbox proxy |
 | Vercel project `yeehaw-api` | runs console/backend (Express) | project exists; alias https://yeehaw-api.vercel.app still serves OLD code; git-source deploy failed (`incorrect_git_source_info`) |
 | Neon `rapid-hat-12220373` / db `yeehaw` | Postgres | connection used earlier; `entitlements` migration APPLIED 2026-11-25 (additive; table present, 0 rows; no data touched) |
-| api.yeehaw.pro | CNAME to Vercel | attached to project; DNS record missing in Cloudflare (Vercel: misconfigured) |
+| api.yeehaw.pro | CNAME to Vercel | CNAME present; Vercel reports configured; /healthz 200 over HTTPS (verified 2026-11-26) |
 
 ## Neon migration procedure (additive, no reset)
 1. Create a Neon snapshot or branch as backup.
