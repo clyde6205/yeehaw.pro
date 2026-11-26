@@ -114,6 +114,23 @@ jobs:
           BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --verbose "$APK" | head -5
           grep -c "" app/build/outputs/mapping/release/mapping.txt || true
+      - name: Prove the release APK is a complete installable artifact (not partial or stripped)
+        timeout-minutes: 5
+        run: |
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | sort -V | tail -1)
+          echo "=== file"; ls -l "$APK"; sha256sum "$APK"
+          echo "=== zip integrity"; unzip -tq "$APK"
+          echo "=== required entries"
+          for e in AndroidManifest.xml classes.dex resources.arsc; do
+            unzip -l "$APK" | grep -q " $e$" && echo "present: $e" || { echo "::error::MISSING $e in release APK"; exit 1; }
+          done
+          unzip -l "$APK" | grep -E "assets/" | head -20
+          echo "entries total: $(unzip -Z1 "$APK" | wc -l)"; unzip -l "$APK" | tail -1
+          echo "=== badging (package, versions, SDK range, permissions, locales)"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion|^uses-permission|^locales|^application-label:|^launchable-activity|^supports-screens" 
+          LOC=$("$BT/aapt2" dump badging "$APK" | grep -c "^locales:")
+          "$BT/aapt2" dump badging "$APK" | grep "^locales:" | tr ' ' '\n' | grep -E "^'(ar|bn|es|fil|hi|in|pt|ru|ur|zh-rCN)'$" | sort | tr '\n' ' '; echo
+          echo "=== signature"; "$BT/apksigner" verify --verbose --print-certs "$APK" | head -12
       - name: Install the release APK and cold-start it
         if: steps.emu.outputs.started == 'true'
         timeout-minutes: 10
