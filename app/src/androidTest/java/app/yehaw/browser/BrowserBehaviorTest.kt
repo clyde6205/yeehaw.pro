@@ -215,6 +215,57 @@ class BrowserBehaviorTest {
     }
 
     @Test
+    fun attachmentLinkDownloadsToCompletionThroughTheDownloadManager() {
+        val payload = ByteArray(4096) { (it % 251).toByte() }
+        val server = java.net.ServerSocket(0, 8, java.net.InetAddress.getByName("127.0.0.1"))
+        Thread {
+            try {
+                while (!server.isClosed) {
+                    val sock = server.accept()
+                    Thread {
+                        try {
+                            sock.getInputStream().read(ByteArray(4096))
+                            val out = sock.getOutputStream()
+                            out.write(("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"yh-download-test.bin\"\r\nContent-Length: ${payload.size}\r\nConnection: close\r\n\r\n").toByteArray())
+                            out.write(payload); out.flush(); sock.close()
+                        } catch (_: Exception) {}
+                    }.start()
+                }
+            } catch (_: Exception) {}
+        }.apply { isDaemon = true; start() }
+        val ctx = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val dm = ctx.getSystemService(android.content.Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+        fun find(): Pair<Long, Int>? {
+            dm.query(android.app.DownloadManager.Query()).use { c ->
+                while (c.moveToNext()) {
+                    val title = c.getString(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_TITLE))
+                    if (title == "yh-download-test.bin") return Pair(c.getLong(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_ID)), c.getInt(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_STATUS)))
+                }
+            }
+            return null
+        }
+        try {
+            find()?.let { dm.remove(it.first) }
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { a ->
+                    allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first().setText("http://127.0.0.1:${server.localPort}/file")
+                    assertTrue("GO must be clickable", clickByLabel(a, "GO"))
+                }
+                var state: Pair<Long, Int>? = null
+                for (i in 0 until 300) {
+                    state = find()
+                    if (state?.second == android.app.DownloadManager.STATUS_SUCCESSFUL || state?.second == android.app.DownloadManager.STATUS_FAILED) break
+                    Thread.sleep(100)
+                }
+                assertTrue("the attachment must appear in DownloadManager and finish successfully (state=$state, sdk=${android.os.Build.VERSION.SDK_INT})", state?.second == android.app.DownloadManager.STATUS_SUCCESSFUL)
+                state?.let { dm.remove(it.first) }
+            }
+        } finally {
+            try { server.close() } catch (_: Exception) {}
+        }
+    }
+
+    @Test
     fun privateBrowserRunsInItsOwnProcessOnApi28PlusAndRefusesBelow() {
         val ctx = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val intent = android.content.Intent(ctx, PrivateBrowserActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
