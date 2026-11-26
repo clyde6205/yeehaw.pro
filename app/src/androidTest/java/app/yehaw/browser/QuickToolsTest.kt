@@ -207,6 +207,7 @@ class QuickToolsTest {
         launch(PdfReaderActivity::class.java, Intent(ctx, PdfReaderActivity::class.java).setData(uri)).use { sc ->
             fun info(): String { var s = ""; sc.onActivity { a -> s = a.all().filterIsInstance<TextView>().joinToString("|") { it.text } }; return s }
             assertTrue(waitFor { info().contains(ctx.getString(R.string.pdf_page_of, 1, 2)) })
+            assertTrue("first page must be drawn before searching", waitFor { var ok = false; sc.onActivity { a -> ok = a.all().filterIsInstance<ImageView>().any { it.drawable != null } }; ok })
             sc.onActivity { a -> a.all().filterIsInstance<EditText>().first { it.hint == ctx.getString(R.string.pdf_search_hint) }.setText("hello"); a.button(ctx.getString(R.string.pdf_find_next)).performClick() }
             // Either the phone searches (found/not found) or it says plainly that it cannot. Never silence, never a fake "found".
             assertTrue(info(), waitFor {
@@ -214,6 +215,17 @@ class QuickToolsTest {
             })
             if (android.os.Build.VERSION.SDK_INT < 35) assertTrue(info().contains(ctx.getString(R.string.pdf_search_unsupported)))
         }
+    }
+
+    /** A person can press Back the instant a PDF starts opening. This must never crash the app. */
+    @Test fun leavingThePdfReaderImmediatelyAfterOpeningDoesNotCrash() {
+        val uri = makePdf(2, "quick-exit.pdf")
+        repeat(8) {
+            launch(PdfReaderActivity::class.java, Intent(ctx, PdfReaderActivity::class.java).setData(uri)).use { sc ->
+                sc.onActivity { a -> assertFalse(a.isFinishing) }
+            }
+        }
+        Thread.sleep(1500)   // let the background renderer threads finish closing
     }
 
     @Test fun corruptOrEmptyPdfShowsAClearErrorAndDoesNotCrash() {

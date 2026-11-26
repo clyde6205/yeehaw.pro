@@ -158,6 +158,7 @@ jobs:
           fi
           if grep -qE "Fatal signal|SIGSEGV|SIGABRT" /tmp/yehaw-emulator-logcat.txt; then
             echo "::warning title=Native crash signal in the log::first lines:"; grep -E -A12 "Fatal signal" /tmp/yehaw-emulator-logcat.txt | head -60
+            echo "--- native backtrace(s) from the debuggerd dump:"; grep -E "F DEBUG" /tmp/yehaw-emulator-logcat.txt | grep -E "pid:|signal 11|#[0-9]+ pc|backtrace" | cut -c1-220 | head -60
           fi
           echo "no crash/ANR in YeeHaw processes"
       - name: Upload emulator diagnostics
