@@ -32,7 +32,7 @@ import java.util.concurrent.Executors
  * PDF extension) and says plainly when it does not.
  */
 class PdfReaderActivity : ToolActivity() {
-    private val worker = Executors.newSingleThreadExecutor()   // PdfRenderer is not thread-safe: all calls go through here
+    private val worker get() = WORKER   // PdfRenderer is not thread-safe: every call, from every reader instance, goes through one thread
     private val ui = Handler(Looper.getMainLooper())
 
     private var renderer: PdfRenderer? = null
@@ -257,11 +257,12 @@ class PdfReaderActivity : ToolActivity() {
     override fun onDestroy() {
         renderToken++
         worker.execute { closeDocumentOnWorker() }
-        worker.shutdown()
         super.onDestroy()
     }
 
     companion object {
+        /** One process-wide thread: the platform PDF engine on older Android crashes when two instances open or close at once. */
+        private val WORKER = Executors.newSingleThreadExecutor { r -> Thread(r, "yeehaw-pdf").apply { isDaemon = true } }
         private const val REQ_PICK = 4101
         private const val STATE_URI = "pdf_uri"; private const val STATE_PAGE = "pdf_page"; private const val STATE_ZOOM = "pdf_zoom"
         private const val MAX_COPY_BYTES = 150L * 1024 * 1024
