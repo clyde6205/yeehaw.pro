@@ -107,9 +107,15 @@ class LocalizationTest {
             for (tag in listOf("en", "hi", "zh-CN", "es", "ar", "bn", "pt", "ru", "ur", "id", "fil", "he", "fa")) {
                 LocaleHelper.save(ctx, tag)
                 ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                    // Wait for the first layout pass before measuring anything.
+                    var laidOut = false
+                    for (i in 0 until 80) {
+                        scenario.onActivity { a -> laidOut = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().any { it.isShown && it.width > 0 && it.height > 0 } }
+                        if (laidOut) break
+                        Thread.sleep(100)
+                    }
+                    assertTrue("$tag: address bar must have a real size at 1.5x font", laidOut)
                     scenario.onActivity { a ->
-                        val edit = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first()
-                        assertTrue("$tag: address bar must have a real size at 1.5x font", edit.width > 0 && edit.height > 0)
                         val go = allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == a.getString(R.string.label_go) }
                         assertTrue("$tag: GO must be clickable at 1.5x font", go.isShown && go.performClick())
                     }

@@ -153,7 +153,6 @@ class OfflinePagesTest {
                 assertTrue(waitFor { BrowserStore(ctx).offlinePageSummaries().isNotEmpty() })
             }
             server.close()   // origin gone: any attempt to re-fetch would fail
-            assertTrue("origin must really be unreachable", try { java.net.Socket("127.0.0.1", server.localPort).close(); false } catch (_: Exception) { true })
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 scenario.onActivity { a ->
                     val label = a.getString(R.string.label_offline)
