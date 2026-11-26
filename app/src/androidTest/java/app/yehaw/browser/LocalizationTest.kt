@@ -58,7 +58,9 @@ class LocalizationTest {
                     assertTrue("$tag: '$label' touch target must be >= 48dp",
                         b.minimumWidth >= (48 * d - 1) && b.minimumHeight >= (48 * d - 1))
                 }
-                assertTrue("$lang locale applied", legacy(a.resources.configuration.locales[0].language) == legacy(lang) || android.os.Build.VERSION.SDK_INT < 24)
+                @Suppress("DEPRECATION")
+                val applied = if (android.os.Build.VERSION.SDK_INT >= 24) a.resources.configuration.locales[0].language else a.resources.configuration.locale.language
+                assertTrue("$lang locale applied (was $applied)", legacy(applied) == legacy(lang))
             }
         }
     }
