@@ -140,7 +140,7 @@ class BrowserBehaviorTest {
                 if (shown) break
                 Thread.sleep(100)
             }
-            assertTrue("failure handling must engage for an unreachable site (panel shown=$shown, status='$status')", shown || status.isNotEmpty())
+            assertTrue("failure handling must engage for an unreachable site (panel shown=$shown, status='$status'); " + dump(scenario), shown || status.isNotEmpty())
             if (shown) scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
             Thread.sleep(1500)
             scenario.onActivity { a -> assertFalse(a.isFinishing || a.isDestroyed) }

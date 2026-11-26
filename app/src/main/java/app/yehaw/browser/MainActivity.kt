@@ -1447,7 +1447,7 @@ class MainActivity : Activity() {
         stallWatch.remove(view)?.let { view.removeCallbacks(it) }
     }
 
-    private fun armStallWatch(view: WebView, tab: BrowserTab, baseline: Int = view.progress) {
+    private fun armStallWatch(view: WebView, tab: BrowserTab, baseline: Int = view.progress, delayMs: Long = LOAD_STALL_MS) {
         cancelStallWatch(view)
         val r = Runnable {
             stallWatch.remove(view)
@@ -1456,7 +1456,7 @@ class MainActivity : Activity() {
             // view.progress still holds the PREVIOUS page's value (often 100) until the new load reports, so progress only
             // counts as real when it is past the initial 10% and differs from what it was when the load was requested.
             val p = view.progress
-            if (p > 10 && p != baseline) { armStallWatch(view, tab, p); return@Runnable } // slow but advancing (2G, heavy page)
+            if (p > 10 && p != baseline) { armStallWatch(view, tab, p, LOAD_RECHECK_MS); return@Runnable } // slow but advancing (2G, heavy page)
             view.stopLoading()
             loadStartedAt.remove(view)
             tab.failed = true
@@ -1468,7 +1468,7 @@ class MainActivity : Activity() {
             }
         }
         stallWatch[view] = r
-        view.postDelayed(r, LOAD_STALL_MS)
+        view.postDelayed(r, delayMs)
     }
 
     /** Retry a failed page without ever re-sending a POST: a failed non-GET is replaced by a plain GET of its address. */
@@ -2141,6 +2141,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val LOAD_STALL_MS = 25_000L
+        private const val LOAD_RECHECK_MS = 10_000L // after real progress was seen, re-check sooner
         private const val STATE_TAB_URLS = "yehaw.saved_tab_urls"
         private const val STATE_TAB_TITLES = "yehaw.saved_tab_titles"
         private const val STATE_TAB_SCROLLS = "yehaw.saved_tab_scrolls"
