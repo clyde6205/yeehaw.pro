@@ -298,6 +298,13 @@ class BrowserBehaviorTest {
         }
         try {
             sh("settings put system font_scale 2.0")
+            // Old Android versions apply the setting asynchronously: wait until the system configuration reports it.
+            val res = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources
+            for (i in 0 until 100) {
+                if (android.provider.Settings.System.getFloat(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.contentResolver, "font_scale", 1f) >= 1.9f) break
+                Thread.sleep(100)
+            }
+            Thread.sleep(2500)
             ActivityScenario.launch(MainActivity::class.java).use { sc ->
                 sc.onActivity { a ->
                     val edit = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first()
