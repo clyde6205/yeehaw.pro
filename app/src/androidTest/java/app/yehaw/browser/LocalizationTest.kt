@@ -104,13 +104,20 @@ class LocalizationTest {
                 Thread.sleep(100)
             }
             Thread.sleep(2000)
+            val server = LocalPage.serve()
+            val pageUrl = "http://127.0.0.1:${server.localPort}/"
+            try {
             for (tag in listOf("en", "hi", "zh-CN", "es", "ar", "bn", "pt", "ru", "ur", "id", "fil", "he", "fa")) {
                 LocaleHelper.save(ctx, tag)
                 ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                    // Wait for the first layout pass before measuring anything.
+                    // The start page hides the native address bar by design; open a page so the real chrome is on screen.
+                    scenario.onActivity { a ->
+                        allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().first().setText(pageUrl)
+                        allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == a.getString(R.string.label_go) }.performClick()
+                    }
                     var laidOut = false
                     for (i in 0 until 80) {
-                        scenario.onActivity { a -> laidOut = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().any { it.width > 0 && it.height > 0 } }
+                        scenario.onActivity { a -> laidOut = allViews(a.window.decorView).filterIsInstance<android.widget.EditText>().any { it.isShown && it.width > 0 && it.height > 0 } }
                         if (laidOut) break
                         Thread.sleep(100)
                     }
@@ -128,6 +135,7 @@ class LocalizationTest {
                     scenario.onActivity { a -> assertTrue("$tag: activity must survive", !(a.isFinishing || a.isDestroyed)) }
                 }
             }
+            } finally { server.close() }
         } finally { sh("settings put system font_scale 1.0") }
     }
 

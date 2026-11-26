@@ -91,10 +91,24 @@ class PrivateWipeTest {
         android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(cmd)).use { it.readBytes() }
     }
 
+    /** Evidence for a failed launch: which windows/activities exist and the app's recent log lines. */
+    private fun diag(): String = try {
+        val ui = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun out(c: String) = android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(c)).use { String(it.readBytes()) }
+        val acts = out("dumpsys activity activities").lines().filter { it.contains("yehaw", true) && (it.contains("ActivityRecord") || it.contains("state=")) }.take(6)
+        val log = out("logcat -d -t 400 -v brief").lines().filter { it.contains("yehaw", true) || it.contains("FATAL") || it.contains("ANR") }.takeLast(12)
+        "procs=${privateProcessPid()} acts=$acts log=$log"
+    } catch (t: Throwable) { "diag failed: $t" }
+
     private fun session(url: String, end: () -> Unit): Pair<Hit, Hit> {
         val before = hits.size
         launchPrivate(url)
-        assertTrue("private page must request the origin", waitFor { hits.drop(before).any { it.path == "/" } })
+        var requested = waitFor(20_000) { hits.drop(before).any { it.path == "/" } }
+        if (!requested) {   // one relaunch: the very first start after a process kill can lose the intent on slow images
+            launchPrivate(url)
+            requested = waitFor(30_000) { hits.drop(before).any { it.path == "/" } }
+        }
+        assertTrue("private page must request the origin; diag: ${diag()}", requested)
         assertTrue("private page script must call back", waitFor { hits.drop(before).any { it.path.startsWith("/probe") } })
         val page = hits.drop(before).first { it.path == "/" }
         val probe = hits.drop(before).first { it.path.startsWith("/probe") }

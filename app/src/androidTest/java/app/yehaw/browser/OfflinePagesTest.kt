@@ -154,11 +154,26 @@ class OfflinePagesTest {
             }
             server.close()   // origin gone: any attempt to re-fetch would fail
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                scenario.onActivity { a ->
-                    val label = a.getString(R.string.label_offline)
-                    allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == label }.performClick()
+                // Espresso refuses to act on a window that never gets focus (seen on the API 36 emulator when a system
+                // window briefly holds focus). Retry the whole open-and-tap a few times, closing the dialog in between.
+                var opened = false
+                var focusProblem: Throwable? = null
+                for (attempt in 0 until 4) {
+                    scenario.onActivity { a ->
+                        val label = a.getString(R.string.label_offline)
+                        allViews(a.window.decorView).first { it is android.widget.TextView && it.text?.toString() == label }.performClick()
+                    }
+                    try {
+                        onView(withText(containsString("Offline Test Page"))).inRoot(isDialog()).perform(click())
+                        opened = true; break
+                    } catch (t: Throwable) {
+                        focusProblem = t
+                        val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+                        for (c in listOf("cmd statusbar collapse", "input keyevent 4")) android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(c)).use { it.readBytes() }
+                        Thread.sleep(1500)
+                    }
                 }
-                onView(withText(containsString("Offline Test Page"))).inRoot(isDialog()).perform(click())
+                if (!opened) throw AssertionError("library entry could not be tapped after 4 attempts", focusProblem)
                 // The reader is a native text view fed from SQLite: it shows the saved words without the origin.
                 // The list dialog is dismissed asynchronously, so poll until the reader window is the one Espresso sees.
                 var last: Throwable? = null
