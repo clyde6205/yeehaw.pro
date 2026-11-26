@@ -109,3 +109,35 @@ class ConfigRulesTest {
         org.junit.Assert.assertFalse(app.yehaw.browser.console.ConfigRules.verifySignature("garbage", body, sigB64))
     }
 }
+
+class SearchRoutingTest {
+    private val tpl = "https://duckduckgo.com/?q={query}"
+    private fun r(s: String) = app.yehaw.browser.console.SearchRouting.resolve(s, tpl, "")
+
+    @org.junit.Test fun addressesGoStraightThrough() {
+        org.junit.Assert.assertEquals("https://example.com", r("https://example.com"))
+        org.junit.Assert.assertEquals("HTTP://Example.com/a", r("HTTP://Example.com/a"))
+        org.junit.Assert.assertEquals("https://example.com/path?x=1", r("example.com/path?x=1"))
+        org.junit.Assert.assertEquals("http://192.168.1.1:8080/", r("192.168.1.1:8080/"))
+        org.junit.Assert.assertEquals("http://localhost:3000", r("localhost:3000"))
+    }
+
+    @org.junit.Test fun wordsBecomeSearchesInAnyLanguage() {
+        org.junit.Assert.assertEquals("https://duckduckgo.com/?q=weather+manila", r("weather manila"))
+        org.junit.Assert.assertEquals("https://duckduckgo.com/?q=" + java.net.URLEncoder.encode("天気 東京", "UTF-8"), r("天気 東京"))
+        org.junit.Assert.assertEquals("https://duckduckgo.com/?q=" + java.net.URLEncoder.encode("पानी", "UTF-8"), r("पानी"))
+        org.junit.Assert.assertEquals("https://duckduckgo.com/?q=cats", r("cats"))
+    }
+
+    @org.junit.Test fun dangerousSchemesAreSearchedNeverLoaded() {
+        for (s in listOf("javascript:alert(1)", "data:text/html,<b>x</b>", "file:///etc/passwd", "intent://x#Intent;end", "content://x")) {
+            org.junit.Assert.assertTrue(s, r(s).startsWith("https://duckduckgo.com/?q="))
+        }
+    }
+
+    @org.junit.Test fun emptyAndQueryCharsAreSafe() {
+        org.junit.Assert.assertEquals("", r("   "))
+        val u = r("a&b=c d")
+        org.junit.Assert.assertEquals("https://duckduckgo.com/?q=a%26b%3Dc+d", u)
+    }
+}
