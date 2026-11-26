@@ -1427,14 +1427,16 @@ class MainActivity : Activity() {
         stallWatch.remove(view)?.let { view.removeCallbacks(it) }
     }
 
-    private fun armStallWatch(view: WebView, tab: BrowserTab, lastProgress: Int = -1) {
+    private fun armStallWatch(view: WebView, tab: BrowserTab, baseline: Int = view.progress) {
         cancelStallWatch(view)
         val r = Runnable {
             stallWatch.remove(view)
-            if (isFinishing || isDestroyed || tab.failed || view.progress >= 100 || !loadStartedAt.containsKey(view)) return@Runnable
-            // A slow but advancing load (2G, heavy page) is not a stall: only give up when no progress was made.
-            if (view.progress > lastProgress && lastProgress >= 0) { armStallWatch(view, tab, view.progress); return@Runnable }
-            if (lastProgress < 0 && view.progress > 10) { armStallWatch(view, tab, view.progress); return@Runnable }
+            // loadStartedAt is cleared by onPageFinished/onReceivedError, so its absence means the load already ended.
+            if (isFinishing || isDestroyed || tab.failed || !loadStartedAt.containsKey(view)) return@Runnable
+            // view.progress still holds the PREVIOUS page's value (often 100) until the new load reports, so progress only
+            // counts as real when it is past the initial 10% and differs from what it was when the load was requested.
+            val p = view.progress
+            if (p > 10 && p != baseline) { armStallWatch(view, tab, p); return@Runnable } // slow but advancing (2G, heavy page)
             view.stopLoading()
             loadStartedAt.remove(view)
             tab.failed = true
