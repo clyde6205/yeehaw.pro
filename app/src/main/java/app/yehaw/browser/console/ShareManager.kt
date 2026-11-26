@@ -1,5 +1,6 @@
 package app.yehaw.browser.console
 
+import app.yehaw.browser.R
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
@@ -92,16 +93,7 @@ object ShareManager {
             setPadding(pad, pad, pad, 0)
         }
         box.addView(TextView(activity).apply {
-            text = when (Locale.getDefault().language) {
-                "fil", "tl" -> "I-scan para makuha ang YeeHaw"
-                "id" -> "Pindai untuk mendapatkan YeeHaw"
-                "hi" -> "YeeHaw पाने के लिए स्कैन करें"
-                "bn" -> "YeeHaw পেতে স্ক্যান করুন"
-                "vi" -> "Quét để cài YeeHaw"
-                "es" -> "Escanea para obtener YeeHaw"
-                "pt" -> "Escaneie para obter o YeeHaw"
-                else -> "Scan to get YeeHaw"
-            }
+            text = activity.getString(R.string.qr_scan_caption)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             gravity = Gravity.CENTER
         })
@@ -118,9 +110,9 @@ object ShareManager {
 
         val dialog = AlertDialog.Builder(activity)
             .setView(box)
-            .setPositiveButton("Share") { _, _ -> shareVia(activity, Channel.SYSTEM) }
-            .setNeutralButton("WhatsApp") { _, _ -> shareVia(activity, Channel.WHATSAPP) }
-            .setNegativeButton("Close", null)
+            .setPositiveButton(activity.getString(R.string.label_share)) { _, _ -> shareVia(activity, Channel.SYSTEM) }
+            .setNeutralButton(activity.getString(R.string.share_whatsapp)) { _, _ -> shareVia(activity, Channel.WHATSAPP) }
+            .setNegativeButton(activity.getString(R.string.btn_close), null)
             .create()
         dialog.setOnShowListener {
             dialog.window?.let { w ->

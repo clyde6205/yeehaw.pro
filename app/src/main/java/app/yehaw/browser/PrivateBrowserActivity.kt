@@ -47,17 +47,21 @@ class PrivateBrowserActivity : Activity() {
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
     private var previousSystemUiVisibility = 0
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (privateSessionActive) {
-            Toast.makeText(this, "A private window is already open.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_a_private_window_is_already_open), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
         privateSessionActive = true
         ownsPrivateSession = true
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            Toast.makeText(this, "Private profile isolation requires Android 9 or later.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_private_profile_isolation_requires_a), Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -76,7 +80,7 @@ class PrivateBrowserActivity : Activity() {
             }
         }
         address = EditText(this).apply {
-            hint = "Private search or website"
+            hint = getString(R.string.hint_private_search_or_website)
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_GO
             setOnEditorActionListener { _, action, _ ->
@@ -85,10 +89,10 @@ class PrivateBrowserActivity : Activity() {
         }
         root.addView(address, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        controls.addView(button("Go") { navigate() })
-        controls.addView(button("Back") { webView?.let { if (it.canGoBack()) it.goBack() } })
-        controls.addView(button("Reload") { webView?.reload() })
-        controls.addView(button("Close private") { finish() })
+        controls.addView(button(getString(R.string.label_go_2)) { navigate() })
+        controls.addView(button(getString(R.string.cd_back)) { webView?.let { if (it.canGoBack()) it.goBack() } })
+        controls.addView(button(getString(R.string.cd_reload)) { webView?.reload() })
+        controls.addView(button(getString(R.string.label_close_private)) { finish() })
         root.addView(controls)
         val view = WebView(this)
         webView = view
@@ -149,16 +153,16 @@ class PrivateBrowserActivity : Activity() {
                     if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in allowed) required.add(Manifest.permission.CAMERA)
                     if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in allowed) required.add(Manifest.permission.RECORD_AUDIO)
                     AlertDialog.Builder(this@PrivateBrowserActivity)
-                        .setTitle("Private site permission")
-                        .setMessage(request.origin.host.toString() + " requests camera or microphone access.")
-                        .setPositiveButton("Continue") { _, _ ->
+                        .setTitle(getString(R.string.title_private_site_permission))
+                        .setMessage(getString(R.string.msg_private_requests_camera_mic, request.origin.host.toString()))
+                        .setPositiveButton(getString(R.string.btn_continue)) { _, _ ->
                             pendingWebPermission = request
                             pendingWebResources = allowed
                             val missing = required.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
                             if (missing.isEmpty()) grantPendingWebPermission()
                             else requestPermissions(missing.toTypedArray(), PRIVATE_SITE_PERMISSION)
                         }
-                        .setNegativeButton("Block") { _, _ -> request.deny() }
+                        .setNegativeButton(getString(R.string.btn_block)) { _, _ -> request.deny() }
                         .show()
                 }
             }
@@ -169,9 +173,9 @@ class PrivateBrowserActivity : Activity() {
                     return
                 }
                 AlertDialog.Builder(this@PrivateBrowserActivity)
-                    .setTitle("Private location permission")
-                    .setMessage(Uri.parse(origin).host.toString() + " requests device location.")
-                    .setPositiveButton("Continue") { _, _ ->
+                    .setTitle(getString(R.string.title_private_location_permission))
+                    .setMessage(getString(R.string.msg_private_requests_location, Uri.parse(origin).host.toString()))
+                    .setPositiveButton(getString(R.string.btn_continue)) { _, _ ->
                         pendingGeoCallback = callback
                         pendingGeoOrigin = origin
                         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -179,7 +183,7 @@ class PrivateBrowserActivity : Activity() {
                             grantPendingGeoPermission(true)
                         } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), PRIVATE_GEO_PERMISSION)
                     }
-                    .setNegativeButton("Block") { _, _ -> callback.invoke(origin, false, false) }
+                    .setNegativeButton(getString(R.string.btn_block)) { _, _ -> callback.invoke(origin, false, false) }
                     .show()
             }
 
@@ -189,7 +193,7 @@ class PrivateBrowserActivity : Activity() {
                 return try {
                     startActivityForResult(Intent.createChooser(params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
                         type = "*/*"; addCategory(Intent.CATEGORY_OPENABLE)
-                    }, "Choose file"), FILE_REQUEST)
+                    }, getString(R.string.title_choose_file)), FILE_REQUEST)
                     true
                 } catch (_: Exception) { uploadCallback = null; false }
             }
@@ -201,13 +205,13 @@ class PrivateBrowserActivity : Activity() {
                 val scheme = uri.scheme?.lowercase()
                 if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market")) return true
                 AlertDialog.Builder(this@PrivateBrowserActivity)
-                    .setTitle("Open another app?")
-                    .setMessage("This private page wants to open an external application (" + scheme + ").")
-                    .setPositiveButton("Open") { _, _ ->
+                    .setTitle(getString(R.string.title_open_another_app))
+                    .setMessage(getString(R.string.msg_private_wants_external_app, scheme))
+                    .setPositiveButton(getString(R.string.btn_open)) { _, _ ->
                         try { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                        catch (_: Exception) { Toast.makeText(this@PrivateBrowserActivity, "No compatible app is installed.", Toast.LENGTH_SHORT).show() }
+                        catch (_: Exception) { Toast.makeText(this@PrivateBrowserActivity, getString(R.string.toast_no_compatible_app_is_installed), Toast.LENGTH_SHORT).show() }
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(getString(R.string.btn_cancel), null)
                     .show()
                 return true
             }
@@ -218,7 +222,7 @@ class PrivateBrowserActivity : Activity() {
                     it.destroy()
                 }
                 webView = null
-                Toast.makeText(this@PrivateBrowserActivity, "Private page ran out of memory. Close and reopen private browsing.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@PrivateBrowserActivity, getString(R.string.toast_private_page_ran_out_of_memory), Toast.LENGTH_LONG).show()
                 finish()
                 return true
             }
@@ -229,7 +233,7 @@ class PrivateBrowserActivity : Activity() {
             ) {
                 handler?.cancel()
                 if (v != null && error?.url == v.url) {
-                    Toast.makeText(this@PrivateBrowserActivity, "Secure connection blocked.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@PrivateBrowserActivity, getString(R.string.status_secure_connection_blocked), Toast.LENGTH_LONG).show()
                 }
             }
 
@@ -240,13 +244,13 @@ class PrivateBrowserActivity : Activity() {
         view.setDownloadListener(DownloadListener { url, agent, disposition, mime, _ ->
             val uri = Uri.parse(url)
             if (uri.scheme !in listOf("http", "https")) {
-                Toast.makeText(this, "Blocked unsupported download URL.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_blocked_unsupported_download_url), Toast.LENGTH_SHORT).show()
             } else {
                 val name = safeDownloadFilename(URLUtil.guessFileName(url, disposition, mime))
                 AlertDialog.Builder(this)
-                    .setTitle("Save outside private browsing?")
-                    .setMessage("\"$name\" will be saved to the device's shared Downloads folder. The file and Android download record can remain after this private window is closed.")
-                    .setPositiveButton("Download") { _, _ ->
+                    .setTitle(getString(R.string.title_save_outside_private_browsing))
+                    .setMessage(getString(R.string.msg_private_save_outside, name))
+                    .setPositiveButton(getString(R.string.btn_download)) { _, _ ->
                         try {
                             // On Android 9 and below the shared Downloads folder needs a storage permission this window does not
                             // request; those downloads go to the app's own folder instead of failing.
@@ -260,10 +264,10 @@ class PrivateBrowserActivity : Activity() {
                             CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
                             (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
                         } catch (_: Exception) {
-                            Toast.makeText(this, "Download failed.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, getString(R.string.toast_download_failed), Toast.LENGTH_SHORT).show()
                         }
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(getString(R.string.btn_cancel), null)
                     .show()
             }
         })
