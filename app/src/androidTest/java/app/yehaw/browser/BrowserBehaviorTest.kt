@@ -141,7 +141,16 @@ class BrowserBehaviorTest {
                 Thread.sleep(100)
             }
             assertTrue("failure handling must engage for an unreachable site (panel shown=$shown, status='$status'); " + dump(scenario), shown || status.isNotEmpty())
-            if (shown) scenario.onActivity { a -> assertTrue("Retry must be clickable", clickByLabel(a, "Retry")) }
+            if (shown) {
+                // The app retries on its own, so the panel can be swapped out between polls: keep trying until it is clickable.
+                var clicked = false
+                for (i in 0 until 200) {
+                    scenario.onActivity { a -> clicked = clickByLabel(a, "Retry") }
+                    if (clicked) break
+                    Thread.sleep(100)
+                }
+                assertTrue("Retry must be clickable (panel was shown); " + dump(scenario), clicked)
+            }
             Thread.sleep(1500)
             scenario.onActivity { a -> assertFalse(a.isFinishing || a.isDestroyed) }
         }
