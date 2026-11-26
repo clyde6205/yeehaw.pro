@@ -54,7 +54,10 @@ class AccessibilityTest {
                 val problems = mutableListOf<String>()
                 for (v in allViews(a.window.decorView)) {
                     if (!v.isShown) continue
-                    val info = v.createAccessibilityNodeInfo()
+                    // A WebView exposes the web page's own accessibility tree to TalkBack; giving it a contentDescription
+                    // would hide the page text from screen readers, so it is deliberately not labelled.
+                    if (v is android.webkit.WebView) continue
+                    val info = v.createAccessibilityNodeInfo() ?: continue
                     val spoken = (info.contentDescription ?: info.text)?.toString().orEmpty()
                     if (v.isClickable) {
                         if (!info.isClickable) problems += "$tag: node of ${v.javaClass.simpleName} not clickable"
