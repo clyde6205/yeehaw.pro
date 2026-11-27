@@ -2,7 +2,7 @@
 // Agent "ci-watch": looks at the latest CI runs on the integration branch. If a job failed ONLY because Maven Central
 // rate-limited the runner (HTTP 429), it re-runs the failed jobs, at most twice per commit. Everything else is reported
 // for a human or a fixer agent: it never edits code, never touches main, never merges.
-const { report, gh, GH_TOKEN } = require('./lib');
+const { report, gh, GH_TOKEN } = require('./lib.cjs');
 const BRANCH = process.env.WATCH_BRANCH || 'integration/reconcile-main';
 (async () => {
   const rr = await gh(`/actions/runs?branch=${encodeURIComponent(BRANCH)}&per_page=30`);

@@ -2,7 +2,7 @@
 // Agent "deps-watch": known-vulnerability and outdated-version check for the console backend (npm audit) and the three
 // Android libraries. Read-only: it reports; a human or the fixer agent opens a PR.
 const { execSync } = require('child_process');
-const { report } = require('./lib');
+const { report } = require('./lib.cjs');
 const LIBS = [['com.google.zxing', 'core', '3.5.3'], ['com.android.billingclient', 'billing-ktx', '7.1.1']];
 (async () => {
   const notes = []; let worst = 'ok';

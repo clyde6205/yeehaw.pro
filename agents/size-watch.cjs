@@ -1,6 +1,6 @@
 'use strict';
 // Agent "size-watch": release APK size from the latest release-smoke CI log, against the 12 MiB gate and a growth budget.
-const { report, gh } = require('./lib');
+const { report, gh } = require('./lib.cjs');
 const BRANCH = process.env.WATCH_BRANCH || 'integration/reconcile-main';
 const GATE = 12 * 1024 * 1024, BUDGET = 1.25 * 972583; // budget: +25% over the Quick Tools release candidate
 (async () => {

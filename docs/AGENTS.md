@@ -1,6 +1,6 @@
 # Maintenance agents and the founder console
 
-What exists and is tested: four small read-mostly agents (`agents/*.js`) that run on GitHub Actions every 6 hours (and when `agents/` changes on the integration branches), plus a write-only reporting endpoint and an **Agents** tab in the founder console.
+What exists and is tested: four small read-mostly agents (`agents/*.cjs`) that run on GitHub Actions every 6 hours (and when `agents/` changes on the integration branches), plus a write-only reporting endpoint and an **Agents** tab in the founder console.
 
 | Agent | What it does | Can it change anything? |
 |---|---|---|

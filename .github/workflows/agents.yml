@@ -30,4 +30,4 @@ jobs:
           CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
         run: |
-          for a in site-health ci-watch size-watch deps-watch; do node agents/$a.js || echo "agent $a crashed"; done
+          rc=0; for a in site-health ci-watch size-watch deps-watch; do node agents/$a.cjs || { echo "::error::agent $a crashed"; rc=1; }; done; exit $rc

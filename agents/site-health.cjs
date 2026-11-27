@@ -1,6 +1,6 @@
 'use strict';
 // Agent "site-health": are the public site and the API up right now? Read-only.
-const { report } = require('./lib');
+const { report } = require('./lib.cjs');
 const checks = [
   ['https://yeehaw.pro/', (r) => r.ok],
   ['https://yeehaw.pro/privacy/', (r) => r.ok],
