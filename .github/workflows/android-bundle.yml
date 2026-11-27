@@ -33,9 +33,9 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: "8.11.1"
-      - name: Build release bundle (unsigned by Gradle: no production key is available to CI)
+      - name: "Build release bundle (no production key is available to CI)"
         run: gradle --no-daemon :app:bundleRelease
-      - name: Sign with a THROWAWAY key so the bundle can be inspected (NOT the Play upload key)
+      - name: "Sign with a THROWAWAY key so the bundle can be inspected (NOT the Play upload key)"
         run: |
           AAB=$(ls app/build/outputs/bundle/release/*.aab | head -1)
           echo "AAB=$AAB" >> "$GITHUB_ENV"
@@ -53,7 +53,7 @@ jobs:
           echo "=== debug artifacts (expect none)"; unzip -Z1 "$AAB" | grep -iE "debug|\.kotlin_module|proguard" || echo "none"
           echo "entries total: $(unzip -Z1 "$AAB" | wc -l)"
           echo "=== version in proto manifest (strings)"; unzip -p "$AAB" base/manifest/AndroidManifest.xml | strings | grep -E "app\.yehaw\.browser|0\.6\.0" | head -5
-      - name: Record the bundle in the log (CI artifacts are not downloadable from the sandbox)
+      - name: "Record the bundle in the log"
         run: |
           echo "-----BEGIN YEEHAW AAB BASE64-----"
           base64 -w 120 "$AAB"
