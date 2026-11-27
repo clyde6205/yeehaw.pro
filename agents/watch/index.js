@@ -6,6 +6,11 @@
 const SITE = ['https://yeehaw.pro/', 'https://yeehaw.pro/privacy/', 'https://yeehaw.pro/support/'];
 const UA = 'YeeHawWatch/1.0 (+https://yeehaw.pro/support/; availability probe)';
 const EVERY_MS = 30_000, REREPORT_MS = 15 * 60_000, DB_EVERY_MS = 30 * 60_000, TIMEOUT_MS = 8000;
+// The orchestrator (all specialist agents, findings, repairs, independent verification) is started from here, not by a person:
+// once an hour while everything is fine (each pass wakes the free-tier database for a few minutes, so this is the cost ceiling), at once when the
+// live state changes, every 5 minutes while an incident lasts, and a failed trigger is retried after 10 minutes. The API enforces its own
+// minimum interval and a lease, so overlapping or repeated triggers are harmless.
+const TICK_EVERY_MS = 60 * 60_000, TICK_FAIL_EVERY_MS = 5 * 60_000, TICK_RETRY_MS = 10 * 60_000;
 
 const sig = () => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(TIMEOUT_MS) : undefined);
 
@@ -98,6 +103,17 @@ export async function runOnce(env, storage, fetchFn = fetch, now = Date.now()) {
       if (!blocked) delete next.deliveryError;
     }
   } else delete next.deliveryError;
+  // Scheduled orchestrator pass (see the constants above). Only after delivery succeeded, so the diagnostic agent sees the Worker's evidence.
+  const tickDue = !keep.length && (next.status !== (prev.status || 'ok') || now - (prev.lastTickAt || 0) >= (next.status === 'fail' ? TICK_FAIL_EVERY_MS : TICK_EVERY_MS));
+  next.lastTickAt = prev.lastTickAt || 0; next.lastTick = prev.lastTick || null;
+  if (tickDue && token && !/[^\x21-\x7e]/.test(token)) {
+    try {
+      const r = await fetchFn(base + '/v1/agent/tick', { method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json', 'user-agent': UA }, body: '{}', signal: sig() });
+      const j = r.status === 200 ? await r.json().catch(() => null) : null;
+      if (r.status === 200) { next.lastTickAt = now; next.tickFailures = 0; next.lastTick = { at: new Date(now).toISOString(), http: 200, lease: j && j.orchestrator ? j.orchestrator.lease : null, run: j && j.orchestrator ? j.orchestrator.run || null : null, open: j ? j.open_findings || {} : {} }; }
+      else { next.lastTickAt = now - TICK_EVERY_MS + TICK_RETRY_MS; next.tickFailures = (prev.tickFailures || 0) + 1; next.lastTick = { at: new Date(now).toISOString(), http: r.status, error: 'tick refused' }; }
+    } catch (e) { next.lastTickAt = now - TICK_EVERY_MS + TICK_RETRY_MS; next.tickFailures = (prev.tickFailures || 0) + 1; next.lastTick = { at: new Date(now).toISOString(), error: e.message }; }
+  } else next.tickFailures = prev.tickFailures || 0;
   next.queued = keep.length;
   next.lastReportedAt = keep.some((k) => k.at === now) ? (prev.lastReportedAt || 0) : (report ? now : next.lastReportedAt);
   await storage.put('queue', keep);
@@ -134,7 +150,7 @@ export class Watch {
     const s = (await this.state.storage.get('state')) || {};
     const alarm = await this.state.storage.getAlarm();
     return Response.json({ running: alarm != null, status: s.status || 'unknown', since: s.since ? new Date(s.since).toISOString() : null,
-      lastRunAt: s.lastRunAt ? new Date(s.lastRunAt).toISOString() : null, bad: s.bad || [], warn: s.warn || [], incident: s.incident || null, queued: s.queued || 0, deliveryError: s.deliveryError || null });
+      lastRunAt: s.lastRunAt ? new Date(s.lastRunAt).toISOString() : null, bad: s.bad || [], warn: s.warn || [], incident: s.incident || null, queued: s.queued || 0, deliveryError: s.deliveryError || null, lastTick: s.lastTick || null, tickFailures: s.tickFailures || 0 });
   }
   async alarm() {
     try { await runOnce(this.env, this.state.storage); } catch (e) { console.error('[watch] run failed: ' + e.message); }

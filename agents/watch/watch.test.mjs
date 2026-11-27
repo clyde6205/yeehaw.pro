@@ -4,7 +4,8 @@ import { runOnce, decide, probe } from './index.js';
 const mem = () => { const m = new Map(); return { get: async (k) => m.get(k), put: async (k, v) => { m.set(k, v); } }; };
 const env = { CONSOLE_URL: 'https://api.example', AGENT_TOKEN: 'x'.repeat(40) };
 const res = (status, body = {}, ct = 'application/json') => ({ ok: status < 400, status, headers: { get: () => ct }, json: async () => body });
-const net = (over = {}, sent = []) => async (url, o = {}) => {
+const net = (over = {}, sent = [], ticks = []) => async (url, o = {}) => {
+  if (o.method === 'POST' && url.endsWith('/v1/agent/tick')) { ticks.push(o.headers.authorization ? 'auth' : 'noauth'); return over.tick ? over.tick() : res(200, { ok: true, orchestrator: { lease: 'acquired', run: '12' }, open_findings: {} }); }
   if (o.method === 'POST') { sent.push(JSON.parse(o.body)); return res(over.report ?? 201); }
   if (over[url]) return over[url];
   if (url.includes('/livez')) return res(200, { ok: true });
@@ -114,4 +115,26 @@ test('selfTest sends one report with the Worker token, is rate limited, and neve
   assert.equal((await selfTest({ CONSOLE_URL: 'x' }, new Map().constructor === Map ? { get: async () => 0, put: async () => {} } : null, f, 9e9)).sent, false);
   const rej = await selfTest(env, { get: async () => 0, put: async () => {} }, async () => ({ status: 401 }), 9e9);
   assert.equal(rej.accepted, false); assert.equal(rej.httpStatus, 401);
+});
+
+test('scheduled orchestrator: first pass at once, then hourly while fine, immediately on a state change, every 5 minutes during an incident', async () => {
+  const st = mem(), ticks = [], sent = []; const f = net({}, sent, ticks), bad = net({ 'https://yeehaw.pro/': res(500) }, sent, ticks);
+  const T = 10_000_000;
+  await runOnce(env, st, f, T); assert.equal(ticks.length, 1, 'first run triggers a pass');
+  await runOnce(env, st, f, T + 30_000); await runOnce(env, st, f, T + 30 * 60_000); assert.equal(ticks.length, 1, 'no extra passes while fine');
+  await runOnce(env, st, f, T + 60 * 60_000); assert.equal(ticks.length, 2, 'hourly pass');
+  await runOnce(env, st, bad, T + 61 * 60_000); assert.equal(ticks.length, 3, 'state change triggers a pass at once');
+  await runOnce(env, st, bad, T + 62 * 60_000); assert.equal(ticks.length, 3);
+  await runOnce(env, st, bad, T + 67 * 60_000); assert.equal(ticks.length, 4, 'every 5 minutes while failing');
+  const s = await st.get('state'); assert.equal(s.lastTick.http, 200); assert.equal(s.lastTick.run, '12');
+});
+test('scheduled orchestrator: a refused trigger is retried after 10 minutes, never in a tight loop; no token means no trigger', async () => {
+  const st = mem(), ticks = []; const f = net({ tick: () => res(503) }, [], ticks); const T = 5_000_000;
+  await runOnce(env, st, f, T); assert.equal(ticks.length, 1);
+  await runOnce(env, st, f, T + 30_000); await runOnce(env, st, f, T + 5 * 60_000); assert.equal(ticks.length, 1);
+  await runOnce(env, st, f, T + 10 * 60_000); assert.equal(ticks.length, 2); assert.equal((await st.get('state')).tickFailures, 2);
+  const t2 = []; await runOnce({ ...env, AGENT_TOKEN: '' }, mem(), net({}, [], t2), T); assert.equal(t2.length, 0);
+});
+test('scheduled orchestrator: not triggered while reports are still queued (the diagnostic would see stale evidence)', async () => {
+  const st = mem(), ticks = []; await runOnce(env, st, net({ 'https://yeehaw.pro/': res(500), report: 503 }, [], ticks), 10_000_000); assert.equal(ticks.length, 0);
 });
