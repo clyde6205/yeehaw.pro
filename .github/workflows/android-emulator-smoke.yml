@@ -21,14 +21,23 @@ permissions:
 
 jobs:
   emulator-smoke:
-    name: API ${{ matrix.api-level }} browser smoke test
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    name: API ${{ matrix.api-level }} browser smoke test (${{ matrix.profile }})
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_AVD_HOME: /home/runner/.android/avd
+    timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 5
       matrix:
         api-level: [23, 29, 35, 36]
+        profile: [standard]
+        include:
+          # Slow-phone proxy: 1 GB RAM, one CPU core (the RAM setting is only honoured on API 23 images).
+          - api-level: 23
+            profile: lowend-1gb-1core
+            ram: 1024
+            cores: 1
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,23 +50,126 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           gradle-version: "8.11.1"
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Probe KVM (infrastructure check, not an app test)
+        id: kvm
+        run: |
+          if [ -w /dev/kvm ]; then echo "available=true" >> "$GITHUB_OUTPUT"; echo "KVM present"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Emulator NOT run (infrastructure)::No /dev/kvm on this runner. GitHub only offers KVM on public-repo standard runners and on larger runners; this private repo uses a standard runner. This is NOT an app test result. See docs/KNOWN_ISSUES.md and android-emulator-tcg.yml."
+          fi
+      - name: Put Android platform-tools and emulator on PATH
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platform-tools" "emulator"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
+      - name: Create AVD
+        if: steps.kvm.outputs.available == 'true'
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          AVDMANAGER="$(command -v avdmanager || find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager | head -n 1)"
+          IMG="system-images;android-${{ matrix.api-level }};default;x86_64"
+          "$SDKMANAGER" --install "$IMG" >/dev/null
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$AVDMANAGER" create avd --force -n test -k "$IMG" -d pixel_2
+          emulator -list-avds
+          # Low-end proxy: 1.5 GB RAM, small heap. Still an emulator, not a physical phone.
+          CFG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          sed -i '/^hw.ramSize/d;/^vm.heapSize/d' "$CFG"
+          sed -i '/^hw.cpu.ncore/d' "$CFG"
+          printf 'hw.ramSize=${{ matrix.ram || 1536 }}\nvm.heapSize=128\nhw.cpu.ncore=${{ matrix.cores || 2 }}\n' >> "$CFG"
+      - name: Start emulator and wait for boot (hardware acceleration required)
+        id: emu
+        if: steps.kvm.outputs.available == 'true'
+        timeout-minutes: 12
+        run: |
+          emulator -accel-check || true
+          nohup emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on > /tmp/emulator.log 2>&1 &
+          booted=0
+          for i in $(seq 1 90); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
+            sleep 5
+          done
+          echo "--- adb devices"; adb devices
+          echo "--- emulator.log tail"; tail -40 /tmp/emulator.log
+          if [ "$booted" = 1 ]; then
+            echo "started=true" >> "$GITHUB_OUTPUT"; adb shell getprop ro.build.version.sdk
+          else
+            echo "started=false" >> "$GITHUB_OUTPUT"
+            echo "::error title=Emulator did not boot within 7.5 minutes::see log tail above"
+            exit 1
+          fi
       - name: Run browser smoke test on Android emulator
-        uses: reactivecircus/android-emulator-runner@e93c997dcab69054e999e3924af3d21c4a736e13 # v2.9.0
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash .github/scripts/android-emulator-smoke.sh
+        if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 20
+        run: |
+          adb shell input keyevent 82 || true
+          # Standard instrumentation hygiene: no window animations. On the API 36 emulator the window-manager transition
+          # was seen never to commit ("WM sent Transaction ... never received commit callback"), leaving dialog windows without focus.
+          adb shell settings put global window_animation_scale 0 || true
+          adb shell settings put global transition_animation_scale 0 || true
+          adb shell settings put global animator_duration_scale 0 || true
+          adb shell cmd statusbar collapse || true
+          gradle --no-daemon :app:connectedDebugAndroidTest --info 2>&1 | tail -150
+          exit ${PIPESTATUS[0]}
+      - name: Name every failed test (the Gradle log above is truncated)
+        if: failure() && steps.emu.outputs.started == 'true'
+        run: |
+          grep -rl "<failure\|<error" app/build/outputs/androidTest-results 2>/dev/null | while read f; do
+            echo "== $f"; grep -B1 -A3 "<failure\|<error" "$f" | cut -c1-400 | head -40
+          done
+      - name: Emulator measurements (cold start, memory) - emulator numbers, not a phone
+        if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 10
+        run: |
+          gradle --no-daemon :app:installDebug -q
+          PKG=app.yehaw.browser.debug
+          echo "=== API ${{ matrix.api-level }} @ 1.5 GB RAM emulator"
+          adb shell getprop ro.build.version.release
+          adb shell cat /proc/meminfo | head -1
+          for i in 1 2 3 4 5; do
+            adb shell am force-stop $PKG; sleep 2
+            adb shell am start -W -n $PKG/app.yehaw.browser.MainActivity | grep -E "ThisTime|TotalTime" | tr '\n' ' '; echo
+          done
+          sleep 8
+          adb shell dumpsys meminfo $PKG | grep -E "TOTAL|Java Heap|Native Heap" | head -6
+      - name: Crash and ANR scan of the whole run (own processes fail the job; other processes are reported)
+        if: always() && steps.emu.outputs.started == 'true'
+        timeout-minutes: 3
+        run: |
+          adb logcat -d > /tmp/yehaw-emulator-logcat.txt || true
+          echo "--- navigation events and WebView errors (tail):"; grep -aE "YeeHawNav|ERR_NAME|net::ERR|ERR_INTERNET" /tmp/yehaw-emulator-logcat.txt | cut -c1-220 | tail -120 || true
+          # A crash counts against the app only when the crashing process is one of ours (app.yehaw.browser*).
+          if grep -E "Process: app\.yehaw\.browser|ANR in app\.yehaw" /tmp/yehaw-emulator-logcat.txt; then
+            echo "::error::crash or ANR in a YeeHaw process"; grep -B2 -A15 "FATAL EXCEPTION" /tmp/yehaw-emulator-logcat.txt | head -80; exit 1
+          fi
+          if grep -q "FATAL EXCEPTION" /tmp/yehaw-emulator-logcat.txt; then
+            echo "::warning title=Crash in a NON-YeeHaw process::the Android system or emulator crashed a process that is not ours (not an app result). Processes:"
+            grep -A1 "FATAL EXCEPTION" /tmp/yehaw-emulator-logcat.txt | grep "Process:" | sort -u
+          fi
+          if grep -qE "Fatal signal|SIGSEGV|SIGABRT" /tmp/yehaw-emulator-logcat.txt; then
+            echo "::warning title=Native crash signal in the log::first lines:"; grep -E -A12 "Fatal signal" /tmp/yehaw-emulator-logcat.txt | head -60
+            echo "--- native backtrace(s) from the debuggerd dump:"; grep -E "F DEBUG" /tmp/yehaw-emulator-logcat.txt | grep -E "pid:|signal 11|#[0-9]+ pc|backtrace" | cut -c1-220 | head -60
+          fi
+          echo "no crash/ANR in YeeHaw processes"
       - name: Upload emulator diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: android-api-${{ matrix.api-level }}-diagnostics
+          name: android-api-${{ matrix.api-level }}-${{ matrix.profile }}-diagnostics
           path: |
             /tmp/yehaw-emulator-logcat.txt
+            /tmp/emulator.log
             /tmp/yehaw-emulator-meminfo.txt
             app/build/reports/androidTests/connected/
           if-no-files-found: ignore

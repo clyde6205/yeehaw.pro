@@ -71,7 +71,7 @@
     <a class="tile" href="?a=shareapp"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7h14v-7"/></svg></span><span class="label" data-i="10">Share</span></a>
   </div>
   <div class="tagline" id="tagline"><b id="tagB">Your web, without the clutter.</b>A simple browser surface for the pages you need.</div>
-  <div class="version">YeeHaw™ Browser v0.5.0</div>
+  <div class="version">YeeHaw™ Browser v0.6.0</div>
   <div class="legal" id="legal">YeeHaw™ · Free tier for ages 13+ · Pro is optional · No financial advice · Independent browser, not affiliated with Google</div>
   <nav>
     <a href="?a=home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/></svg><small data-i="11">Home</small></a>
@@ -187,5 +187,24 @@ ht|Chèche oswa antre adrès sit entènèt|Ale|Sere|Istwa|Dosye|Onglè|Vi prive|
     window.yeehawLive=function(sig,lvl,skipped,est,low,repairs){V.sig=sig;V.lvl=lvl;V.skipped=skipped;V.est=est;V.low=low;V.rep=repairs;draw();};
   draw();
   </script>
+<script>
+window.yeehawSpeedDial = function (list) {
+  var old = document.getElementById('yhDial'); if (old) old.remove();
+  if (!Array.isArray(list) || !list.length) return;
+  var wrap = document.createElement('div'); wrap.className = 'tiles'; wrap.id = 'yhDial';
+  list.slice(0, 12).forEach(function (e) {
+    if (!e || typeof e.url !== 'string' || e.url.indexOf('https://') !== 0) return;
+    var a = document.createElement('a'); a.className = 'tile'; a.href = e.url; a.rel = e.sponsored ? 'sponsored noopener' : 'noopener';
+    var ic = document.createElement('span'); ic.className = 'icon'; ic.style.fontWeight = '800'; ic.style.fontSize = '1.3rem';
+    ic.textContent = String(e.title || '?').trim().charAt(0).toUpperCase();
+    var lb = document.createElement('span'); lb.className = 'label'; lb.textContent = String(e.title || '');
+    a.appendChild(ic); a.appendChild(lb);
+    if (e.sponsored) { var sp = document.createElement('span'); sp.className = 'label'; sp.style.fontSize = '.62rem'; sp.style.color = '#5a6b84'; sp.textContent = 'Sponsored'; a.appendChild(sp); }
+    wrap.appendChild(a);
+  });
+  var first = document.querySelector('.tiles'); // the built-in tiles
+  if (first && first.parentNode) first.parentNode.insertBefore(wrap, first.nextSibling); else document.body.appendChild(wrap);
+};
+</script>
 </body>
 </html>

@@ -1,53 +1,38 @@
-# YeeHaw Browser — Privacy Policy
+<!-- Source of truth: site-extra/privacy/index.html (published at https://yeehaw.pro/privacy/) -->
+# Privacy Policy
 
-Last updated: November 6, 2026
+Last updated: November 25, 2026. YeeHaw™ is a lightweight Android browser. It has no accounts and no sign-up.
 
-YeeHaw™ is a lightweight web browser built for speed and low data use. This policy explains, in plain language, what happens to your information when you use it.
+## What stays on your phone
 
-## The short version
+Your tabs, history, bookmarks, downloads, saved offline pages, Quick Paste snippets and data-saver counters are stored only on your device. We do not receive them.
 
-YeeHaw does **not** have user accounts. It does not send your browsing history, downloads, saved pages, or data-savings numbers to us. Those stay on your device until you delete them (or uninstall the app).
+## What the app may send us
 
-## What stays on your device
+- An anonymous random install ID, the app version, Android version, phone memory size and country code, so we can count installs and fix problems on low-memory phones.
+- Anonymous counts of crashes, freezes and data-saver activity. No web addresses and no page content.
+- In the EEA, UK and Switzerland this is sent only after you agree. Everywhere, you can turn it off, and "Forget me" in the app asks us to delete the data tied to your install ID.
 
-- **Browsing history, tabs, and bookmarks** — stored locally by the browser engine on your phone.
-- **Downloads and Saved (offline) pages** — stored in your device storage only.
-- **Data used / data saved counters** — measured by your phone's own Android system counters for this app. They are shown to you on the home page and never transmitted.
-- **Turbo mode settings and preferences** — stored locally on your device.
+## Pro subscription
 
-## Third-party services
+Payment is handled by Google Play. To unlock Pro, the app sends your Google Play purchase token to our server, which checks it with Google. We store a hash of the token and the subscription state, not your card or payment details.
 
-**Google AdMob (ads).** The free version of YeeHaw shows ads served by Google AdMob. Google and its partners may use advertising identifiers and device information to show you relevant ads. You can limit ad tracking or reset your advertising ID anytime in your Android Settings (Privacy → Ads). Ads are hidden for Pro subscribers.
+## Advertising
 
-**Google Play Billing (YeeHaw Pro).** If you subscribe to YeeHaw Pro, your purchase and payment are processed entirely by Google Play. We never see your card details or payment information.
+Ads are currently not shown. If ads are added later, they will use Google AdMob with the consent required in your region, and this page will be updated first.
 
-**Websites you visit.** When you browse the web, the websites you visit naturally receive your requests (as with any browser). Turbo mode blocks images, video, and font files to save you data, but does not otherwise change what websites see.
+## Permissions
 
-## What we never do
+Camera, microphone and location are asked for only when a website you visit requests them, and you can refuse. Storage and notification access are used only for downloads and saved pages.
 
-- No accounts, no sign-up, no email address collected by YeeHaw.
-- No selling or sharing of your browsing history — we never receive it in the first place.
-- No tracking of your location.
-- No reading of your messages, files, or downloads.
+## Websites you visit
 
-## Permissions and why
-
-- **Internet** — to load the web pages you request.
-- **Storage** — for your downloads and Saved (offline) pages.
-- **Network statistics** — to show your data-savings numbers (on-device only).
+Websites receive your requests as with any browser. When a data-saving mode is on, the app also sends the standard Save-Data header to ask sites for lighter pages.
 
 ## Children
 
-YeeHaw is not directed at children under 13, and we do not knowingly collect any personal information from anyone.
+YeeHaw is a general-audience browser and is not directed at children under 13.
 
-## Your control
+## Changes and contact
 
-Uninstalling YeeHaw (or clearing its data in Android Settings → Apps) permanently deletes everything the app has stored on your device. There is nothing to delete on any server, because nothing is stored there.
-
-## Changes to this policy
-
-If this policy changes, the updated version will appear here with a new date.
-
-## Contact
-
-Questions? Email us at **ceo@yeehaw.pro** or via GitHub: https://github.com/clyde6205/yeehaw.pro
+We will post changes here. This policy has not yet had formal legal review in every country; see the Support page for how to reach us.

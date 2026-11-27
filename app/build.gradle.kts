@@ -18,8 +18,8 @@ android {
         applicationId = "app.yehaw.browser"
         minSdk = 23
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.5.0"
+        versionCode = 20
+        versionName = "0.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -33,6 +33,8 @@ android {
             }
         }
     }
+
+    testOptions { unitTests.isReturnDefaultValues = true }
 
     buildTypes {
         release {
@@ -62,6 +64,11 @@ android {
 
 dependencies {
     implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("androidx.core:core:1.13.1")
+    // QR Code Scanner decoder only: pure Java, offline, no services, Apache-2.0, loaded when the scanner is opened.
+    implementation("com.google.zxing:core:3.5.3")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

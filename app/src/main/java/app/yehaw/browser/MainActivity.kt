@@ -34,7 +34,21 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import app.yehaw.browser.console.ConsoleBootstrap
+import app.yehaw.browser.console.DeviceStatusManager
+import app.yehaw.browser.console.HealthReporter
+import app.yehaw.browser.console.ProEntitlement
+import app.yehaw.browser.console.RemoteConfigManager
+import app.yehaw.browser.console.SearchRoutingEngine
+import app.yehaw.browser.console.ShareManager
+import app.yehaw.browser.console.TelemetryManager
+import app.yehaw.browser.core.ClipboardWatcher
+import app.yehaw.browser.core.DataSaverPolicy
 import app.yehaw.browser.core.Guardian
+import app.yehaw.browser.core.MarkupScreen
+import app.yehaw.browser.core.QuickPasteStore
+import app.yehaw.browser.core.ScreenshotTool
+import app.yehaw.browser.core.StorageGuard
 import app.yehaw.browser.core.RetryScheduler
 import app.yehaw.browser.core.SavingsMeter
 import app.yehaw.browser.core.SignalLevel
@@ -63,9 +77,12 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private data class BrowserTab(
         var webView: WebView,
-        var title: String = "New tab",
+        var title: String = "",
         var currentUrl: String = HOME_URL,
         var failed: Boolean = false,
+        /** False when the failed request was not a GET (e.g. a form POST): never re-sent automatically. */
+        var failedWasGet: Boolean = true,
+        var failedAtMs: Long = 0L,
         var evicted: Boolean = false,
         var savedScrollY: Int = 0,
         var lastHistoryUrl: String? = null
@@ -96,6 +113,7 @@ class MainActivity : Activity() {
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
     private var previousSystemUiVisibility = 0
     private var activeTabIndex = -1
+    private var pendingDownload: Array<String?>? = null
     private var lastRxSample = -1L
     private var sessionDataUsed = 0L
     private var sessionOfflineSaved = 0L
@@ -106,20 +124,37 @@ class MainActivity : Activity() {
             statsHandler.postDelayed(this, STATS_REFRESH_INTERVAL_MS)
         }
     }
+    private val activityManager by lazy { getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager }
     private lateinit var signalMonitor: SignalMonitor
     private lateinit var savings: SavingsMeter
     private val retryScheduler = RetryScheduler()
     private val loadStartedAt = java.util.WeakHashMap<WebView, Long>()
+    // A load that neither finishes nor errors (stalled DNS or a dead connection on a weak network) must not spin forever.
+    private val stallWatch = java.util.WeakHashMap<WebView, Runnable>()
     private var startedSafe = false
+    private var adaptiveSaver = true
+    private var systemSaverOn = false
+    private lateinit var clipboardWatcher: ClipboardWatcher
+    private lateinit var quickPaste: QuickPasteStore
     private var billingClient: com.android.billingclient.api.BillingClient? = null
     private var proProductDetails: com.android.billingclient.api.ProductDetails? = null
-    private val maxTabs: Int by lazy {
-        val memoryClass = (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).memoryClass
-        when {
-            memoryClass <= 128 -> 2
-            memoryClass <= 192 -> 3
-            else -> 4
+    /** How many tabs may keep a live WebView (and its renderer memory) at once. */
+    private val liveTabLimit: Int by lazy {
+        BrowserPerformancePolicy.maxLiveTabs(activityManager.isLowRamDevice, activityManager.memoryClass)
+    }
+    /** Total tabs allowed. Suspended tabs hold only a URL, title and scroll offset, so this can be generous. */
+    private val maxTabs = BrowserPerformancePolicy.MAX_TOTAL_TABS
+
+    /** Suspend the oldest background tabs until no more than [liveTabLimit] WebViews are alive. Nothing is deleted. */
+    private fun enforceLiveTabLimit() {
+        while (tabs.count { !it.evicted } > liveTabLimit) {
+            val victim = tabs.filterIndexed { i, t -> !t.evicted && i != activeTabIndex }.firstOrNull() ?: return
+            discardTabForMemory(victim)
         }
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -131,9 +166,18 @@ class MainActivity : Activity() {
         sessionDataUsed = browserPreferences.getLong(PREF_TOTAL_DATA_RECEIVED, 0L).coerceAtLeast(0L)
         sessionOfflineSaved = browserPreferences.getLong(PREF_TOTAL_OFFLINE_BYTES_REUSED, 0L).coerceAtLeast(0L)
         desktopMode = browserPreferences.getBoolean("desktop_mode", false)
-        memorySaver = browserPreferences.getBoolean("memory_saver", false)
+        memorySaver = browserPreferences.getBoolean(
+            "memory_saver",
+            BrowserPerformancePolicy.defaultMemorySaver(activityManager.isLowRamDevice, activityManager.memoryClass)
+        )
         preferOfflineCache = browserPreferences.getBoolean("prefer_offline_cache", false)
-        turboMode = browserPreferences.getBoolean("turbo_mode", true)
+        // Turbo (blocks all network images) is opt-in; Adaptive Data Saver (default on) skips heavy assets only on weak signal or Android Data Saver.
+        turboMode = browserPreferences.getBoolean("turbo_mode", false)
+        adaptiveSaver = browserPreferences.getBoolean("adaptive_saver", true)
+        clipboardWatcher = ClipboardWatcher(this)
+        quickPaste = QuickPasteStore(this)
+        ConsoleBootstrap.init(this)
+        window.decorView.post { maybeAskAnalyticsConsent() }
         thirdPartyCookiesEnabled = browserPreferences.getBoolean("third_party_cookies", false)
         searchEngine = browserPreferences.getString("search_engine", "Google") ?: "Google"
         if (searchEngine !in SEARCH_ENGINES.keys) searchEngine = "Google"
@@ -141,7 +185,7 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptCookie(true)
         val restoredTabs = if (startedSafe) false else restoreTabs(savedInstanceState)
         if (startedSafe) {
-            Toast.makeText(this, "Safe start after a problem. Your saved pages and bookmarks are untouched.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_safe_start_after_a_problem_your), Toast.LENGTH_LONG).show()
         }
         signalMonitor.start()
         statsHandler.postDelayed({ Guardian.markStable(this) }, 30_000L)
@@ -193,6 +237,9 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         Guardian.setForeground(true)
+        systemSaverOn = DataSaverPolicy.systemDataSaverOn(this)
+        ConsoleBootstrap.onResume()
+        reportHealthAndStatus()
         currentWebView()?.onResume()
         statsHandler.removeCallbacks(statsTicker)
         statsHandler.post(statsTicker)
@@ -211,7 +258,7 @@ class MainActivity : Activity() {
             stateUrls.mapIndexedNotNull { index, url ->
                 if (isWebUrl(url)) BrowserStore.SessionTab(
                     url,
-                    stateTitles?.getOrNull(index)?.take(160)?.ifBlank { "Restored tab" } ?: "Restored tab",
+                    stateTitles?.getOrNull(index)?.take(160)?.ifBlank { getString(R.string.tab_restored) } ?: getString(R.string.tab_restored),
                     stateScrolls?.getOrNull(index)?.coerceAtLeast(0) ?: 0
                 ) else null
             }
@@ -231,7 +278,7 @@ class MainActivity : Activity() {
             if (index == activeIndex) {
                 activeTabIndex = index
                 pageContainer.addView(restoredView)
-                restoredView.loadUrl(entry.url)
+                restoredView.loadSaving(entry.url)
             } else {
                 restoredView.destroy()
                 tab.evicted = true
@@ -241,7 +288,7 @@ class MainActivity : Activity() {
         addressBar.setText(displayUrl(active.currentUrl))
         addressBar.setSelection(addressBar.text.length)
         updateChromeVisibility(active.currentUrl)
-        statusText.text = "Restoring last session…"
+        statusText.text = getString(R.string.status_restoring_last_session)
         return true
     }
 
@@ -294,7 +341,7 @@ class MainActivity : Activity() {
         }
 
         brandText = TextView(this).apply {
-            text = "YEEHAW  ·  LIGHTWEIGHT BROWSER"
+            text = getString(R.string.header_brand_tagline)
             textSize = 12f
             setTextColor(0xFFB8F36B.toInt())
             setPadding(dp(14), dp(10), dp(14), dp(4))
@@ -307,7 +354,7 @@ class MainActivity : Activity() {
             setPadding(dp(8), dp(4), dp(8), dp(6))
         }
         addressBar = EditText(this).apply {
-            hint = "Search or enter website"
+            hint = getString(R.string.hint_search_or_enter_website)
             isSingleLine = true
             textSize = 15f
             imeOptions = EditorInfo.IME_ACTION_GO
@@ -324,7 +371,7 @@ class MainActivity : Activity() {
             }
         }
         addressRow.addView(addressBar, LinearLayout.LayoutParams(0, dp(48), 1f))
-        addressRow.addView(actionButton("GO") { navigateFromAddressBar() })
+        addressRow.addView(actionButton(getString(R.string.label_go), getString(R.string.cd_go_to_address)) { navigateFromAddressBar() })
         root.addView(addressRow)
 
         val controls = LinearLayout(this).apply {
@@ -332,12 +379,12 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(4), dp(2), dp(4), dp(6))
         }
-        controls.addView(actionButton("‹") { currentWebView()?.let { if (it.canGoBack()) it.goBack() } })
-        controls.addView(actionButton("›") { currentWebView()?.let { if (it.canGoForward()) it.goForward() } })
-        controls.addView(actionButton("↻") { currentWebView()?.reload() })
-        controls.addView(actionButton("Home") { loadHome() })
-        controls.addView(actionButton("+") { createTab(HOME_URL) })
-        controls.addView(actionButton("Tabs") { showTabPicker() })
+        controls.addView(actionButton("‹", getString(R.string.cd_back)) { currentWebView()?.let { if (it.canGoBack()) it.goBack() } })
+        controls.addView(actionButton("›", getString(R.string.cd_forward)) { currentWebView()?.let { if (it.canGoForward()) it.goForward() } })
+        controls.addView(actionButton("↻", getString(R.string.cd_reload)) { currentWebView()?.reload() })
+        controls.addView(actionButton(getString(R.string.label_home)) { loadHome() })
+        controls.addView(actionButton("+", getString(R.string.cd_new_tab)) { createTab(HOME_URL) })
+        controls.addView(actionButton(getString(R.string.label_tabs)) { showTabPicker() })
         controlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(controls)
@@ -349,14 +396,14 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(2), 0, dp(2), dp(4))
         }
-        libraryControls.addView(actionButton("Save") { saveBookmark() })
-        libraryControls.addView(actionButton("Find") { findOnPage() })
-        libraryControls.addView(actionButton("Share") { shareCurrentPage() })
-        libraryControls.addView(actionButton("Save offline") { saveOfflinePage() })
-        libraryControls.addView(actionButton("Offline") { showOfflinePages() })
-        libraryControls.addView(actionButton("Downloads") { openDownloads() })
-        libraryControls.addView(actionButton("Apps") { showSisterApps() })
-        libraryControls.addView(actionButton("More") { showBrowserMenu() })
+        libraryControls.addView(actionButton(getString(R.string.label_save)) { saveBookmark() })
+        libraryControls.addView(actionButton(getString(R.string.label_find)) { findOnPage() })
+        libraryControls.addView(actionButton(getString(R.string.label_share)) { shareCurrentPage() })
+        libraryControls.addView(actionButton(getString(R.string.label_save_offline)) { saveOfflinePage() })
+        libraryControls.addView(actionButton(getString(R.string.label_offline)) { showOfflinePages() })
+        libraryControls.addView(actionButton(getString(R.string.label_downloads)) { openDownloads() })
+        libraryControls.addView(actionButton(getString(R.string.label_apps)) { showAppsHub() })
+        libraryControls.addView(actionButton(getString(R.string.label_more)) { showBrowserMenu() })
         libraryControlsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(libraryControls)
@@ -364,7 +411,7 @@ class MainActivity : Activity() {
         root.addView(libraryControlsScroll)
 
         statusText = TextView(this).apply {
-            text = "Ready"
+            text = getString(R.string.status_ready)
             textSize = 11f
             setTextColor(0xFFA5B4CA.toInt())
             setPadding(dp(12), dp(2), dp(12), dp(4))
@@ -388,9 +435,14 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
-    private fun actionButton(label: String, action: () -> Unit): Button {
+    private fun appVersionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+    } catch (_: Exception) { "" }
+
+    private fun actionButton(label: String, description: String? = null, action: () -> Unit): Button {
         return Button(this).apply {
             text = label
+            contentDescription = description
             textSize = 11f
             isAllCaps = false
             minWidth = dp(48)
@@ -405,14 +457,15 @@ class MainActivity : Activity() {
 
     private fun createTab(url: String) {
         if (tabs.size >= maxTabs) {
-            Toast.makeText(this, "Close a tab before opening another (limit: $maxTabs).", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_tab_limit, maxTabs), Toast.LENGTH_SHORT).show()
             return
         }
         val webView = WebView(this)
         configureWebView(webView)
         tabs.add(BrowserTab(webView = webView, currentUrl = url))
         showTab(tabs.lastIndex)
-        webView.loadUrl(url)
+        enforceLiveTabLimit()
+        webView.loadSaving(url)
     }
 
     private fun configureWebView(webView: WebView) {
@@ -424,15 +477,16 @@ class MainActivity : Activity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = false
-            loadsImagesAutomatically = !memorySaver
-            blockNetworkImage = false
+            loadsImagesAutomatically = !memorySaver && !turboMode
+            blockNetworkImage = turboMode
             cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
             builtInZoomControls = true
             displayZoomControls = false
             setSupportZoom(true)
             javaScriptCanOpenWindowsAutomatically = false
             mediaPlaybackRequiresUserGesture = true
-            offscreenPreRaster = true
+            // Pre-rasterizing off-screen content increases memory use; keep it disabled for low-RAM phones.
+            offscreenPreRaster = false
             setSupportMultipleWindows(true)
             allowFileAccess = false
             allowContentAccess = true // User-selected content:// URIs are required for file uploads.
@@ -452,9 +506,9 @@ class MainActivity : Activity() {
             if (!isLink || linkUrl.isNullOrBlank() || !isWebUrl(linkUrl)) {
                 false
             } else {
-                val actions = arrayOf("Open in new tab", "Open in this tab", "Copy link")
+                val actions = arrayOf(getString(R.string.item_open_in_new_tab), getString(R.string.item_open_in_this_tab), getString(R.string.item_copy_link))
                 AlertDialog.Builder(this)
-                    .setTitle("Link options")
+                    .setTitle(getString(R.string.title_link_options))
                     .setItems(actions) { _, which ->
                         when (which) {
                             0 -> createTab(linkUrl)
@@ -462,11 +516,11 @@ class MainActivity : Activity() {
                             2 -> {
                                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Website link", linkUrl))
-                                Toast.makeText(this, "Link copied.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this, getString(R.string.toast_link_copied), Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(getString(R.string.btn_cancel), null)
                     .show()
                 true
             }
@@ -512,20 +566,23 @@ class MainActivity : Activity() {
                     val required = mutableListOf<String>()
                     if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in allowed) required.add(Manifest.permission.CAMERA)
                     if (PermissionRequest.RESOURCE_AUDIO_CAPTURE in allowed) required.add(Manifest.permission.RECORD_AUDIO)
-                    val names = allowed.joinToString(" and ") {
-                        if (it == PermissionRequest.RESOURCE_VIDEO_CAPTURE) "camera" else "microphone"
-                    }
+                    val hasCam = PermissionRequest.RESOURCE_VIDEO_CAPTURE in allowed
+                    val hasMic = PermissionRequest.RESOURCE_AUDIO_CAPTURE in allowed
+                    val names = getString(
+                        if (hasCam && hasMic) R.string.perm_camera_and_microphone
+                        else if (hasCam) R.string.perm_camera else R.string.perm_microphone
+                    )
                     AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Site permission request")
-                        .setMessage(request.origin.host.toString() + " wants to use your " + names + ". Continue only if you trust this website.")
-                        .setPositiveButton("Continue") { _, _ ->
+                        .setTitle(getString(R.string.title_site_permission_request))
+                        .setMessage(getString(R.string.msg_site_wants_permission, request.origin.host.toString(), names))
+                        .setPositiveButton(getString(R.string.btn_continue)) { _, _ ->
                             pendingWebPermission = request
                             pendingWebResources = allowed
                             val missing = required.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
                             if (missing.isEmpty()) grantPendingWebPermission()
                             else requestPermissions(missing.toTypedArray(), REQUEST_SITE_PERMISSION)
                         }
-                        .setNegativeButton("Block") { _, _ -> request.deny() }
+                        .setNegativeButton(getString(R.string.btn_block)) { _, _ -> request.deny() }
                         .show()
                 }
             }
@@ -543,16 +600,17 @@ class MainActivity : Activity() {
                     return
                 }
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Location permission request")
-                    .setMessage(Uri.parse(origin).host.toString() + " wants access to your device location.")
-                    .setPositiveButton("Continue") { _, _ ->
+                    .setTitle(getString(R.string.title_location_permission_request))
+                    .setMessage(getString(R.string.msg_site_wants_location, Uri.parse(origin).host.toString()))
+                    .setPositiveButton(getString(R.string.btn_continue)) { _, _ ->
                         pendingGeoCallback = callback
                         pendingGeoOrigin = origin
-                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                             grantPendingGeoPermission(true)
-                        } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_GEO_PERMISSION)
+                        } else requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_GEO_PERMISSION)
                     }
-                    .setNegativeButton("Block") { _, _ -> callback.invoke(origin, false, false) }
+                    .setNegativeButton(getString(R.string.btn_block)) { _, _ -> callback.invoke(origin, false, false) }
                     .show()
             }
 
@@ -569,7 +627,7 @@ class MainActivity : Activity() {
                             type = "*/*"
                             addCategory(Intent.CATEGORY_OPENABLE)
                         }
-                    startActivityForResult(Intent.createChooser(chooser, "Choose file"), REQUEST_FILE_CHOOSER)
+                    startActivityForResult(Intent.createChooser(chooser, getString(R.string.title_choose_file)), REQUEST_FILE_CHOOSER)
                     true
                 } catch (_: Exception) {
                     uploadCallback = null
@@ -585,6 +643,7 @@ class MainActivity : Activity() {
                 configureWebView(popup)
                 tabs.add(BrowserTab(webView = popup))
                 showTab(tabs.lastIndex)
+                enforceLiveTabLimit()
                 transport.webView = popup
                 message.sendToTarget()
                 return true
@@ -605,13 +664,13 @@ class MainActivity : Activity() {
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
-                tab.title = title?.take(80)?.ifBlank { "Untitled page" } ?: "Untitled page"
+                tab.title = title?.take(80)?.ifBlank { getString(R.string.tab_untitled) } ?: getString(R.string.tab_untitled)
                 if (view === currentWebView()) statusText.text = tab.title
             }
 
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (view === currentWebView()) {
-                    statusText.text = if (newProgress >= 100) "Page loaded" else "Loading $newProgress%"
+                    statusText.text = if (newProgress >= 100) getString(R.string.status_page_loaded) else getString(R.string.status_loading_percent, newProgress)
                 }
             }
         }
@@ -627,7 +686,10 @@ class MainActivity : Activity() {
                         null
                     }
                 }
-                if ((turboMode || signalMonitor.level.textFirst) && request?.isForMainFrame != true) {
+                if (RemoteConfigManager.shouldBlock(request?.url)) {
+                    return RemoteConfigManager.blockedResponse(this@MainActivity, request?.url?.host, request?.isForMainFrame == true)
+                }
+                if ((turboMode || signalMonitor.level.textFirst || DataSaverPolicy.shouldBlockHeavy(adaptiveSaver, signalMonitor.level, systemSaverOn)) && request?.isForMainFrame != true) {
                     val path = (uri.path ?: "").lowercase()
                     if (SavingsMeter.isHeavyAsset(path)) {
                         savings.recordSkipped(path)
@@ -658,9 +720,16 @@ class MainActivity : Activity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
+                android.util.Log.i("YeeHawNav", "started failed=${tab.failed} sameUrl=${url == tab.currentUrl} sinceFail=${android.os.SystemClock.elapsedRealtime() - tab.failedAtMs}")
+                // Some WebView versions start a second navigation for the browser's own error page right after onReceivedError.
+                // That must not erase the failure, or the retry panel never appears and the page is announced as loaded.
+                if (tab.failed && url == tab.currentUrl && android.os.SystemClock.elapsedRealtime() - tab.failedAtMs < 2000L) return
                 tab.failed = false
                 tab.lastHistoryUrl = null
-                if (view != null && !isStartPageUrl(url)) loadStartedAt[view] = android.os.SystemClock.elapsedRealtime()
+                if (view != null && !isStartPageUrl(url)) {
+                    loadStartedAt[view] = android.os.SystemClock.elapsedRealtime()
+                    armStallWatch(view, tab)
+                }
                 if (view === currentWebView() && pageContainer.indexOfChild(view) < 0) showTab(activeTabIndex)
                 if (!url.isNullOrBlank()) {
                     tab.currentUrl = url
@@ -672,7 +741,7 @@ class MainActivity : Activity() {
                 if (view === currentWebView()) {
                     updateChromeVisibility(url)
                     sampleDataUsage()
-                    statusText.text = "Loading…"
+                    statusText.text = getString(R.string.status_loading)
                 }
             }
 
@@ -693,8 +762,11 @@ class MainActivity : Activity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                if (view != null) ConsoleBootstrap.onPageFinished(view, url)
                 val tab = tabs.firstOrNull { it.webView === view }
+                android.util.Log.i("YeeHawNav", "finished failed=${tab?.failed}")
                 if (view != null && tab != null && !tab.failed) {
+                    cancelStallWatch(view)
                     val started = loadStartedAt.remove(view)
                     if (started != null) signalMonitor.recordLoad(android.os.SystemClock.elapsedRealtime() - started, true)
                     retryScheduler.reset(view)
@@ -719,7 +791,8 @@ class MainActivity : Activity() {
                     }
                 }
                 if (view === currentWebView()) {
-                    statusText.text = "Ready"
+                    // A failed page also finishes loading (the error page); it must not be announced as loaded.
+                    if (tab?.failed != true) statusText.text = getString(R.string.status_ready)
                     sampleDataUsage()
                 }
             }
@@ -744,7 +817,7 @@ class MainActivity : Activity() {
                     showTab(activeTabIndex)
                     fresh.loadUrl(lostUrl)
                     Guardian.noteRepair(this@MainActivity)
-                    Toast.makeText(this@MainActivity, "That page ran out of memory. It was restarted automatically.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_that_page_ran_out_of_memory), Toast.LENGTH_LONG).show()
                     return true
                 }
                 if (tabs.isEmpty()) {
@@ -755,7 +828,7 @@ class MainActivity : Activity() {
                     else if (activeTabIndex == index) activeTabIndex = -1
                     showTab(if (activeTabIndex < 0) index.coerceAtMost(tabs.lastIndex) else activeTabIndex)
                 }
-                Toast.makeText(this@MainActivity, "A page used too much memory and was closed.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, getString(R.string.toast_a_page_used_too_much_memory), Toast.LENGTH_LONG).show()
                 return true
             }
 
@@ -766,14 +839,14 @@ class MainActivity : Activity() {
             ) {
                 handler?.cancel()
                 if (view == null || error?.url != view.url) {
-                    if (view === currentWebView()) statusText.text = "Some secure page content was blocked."
+                    if (view === currentWebView()) statusText.text = getString(R.string.status_some_secure_page_content_was_blocked)
                     return
                 }
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
                 tab.failed = true
                 if (view === currentWebView()) {
                     showTab(activeTabIndex)
-                    statusText.text = "Secure connection blocked."
+                    statusText.text = getString(R.string.status_secure_connection_blocked)
                 }
             }
 
@@ -782,14 +855,25 @@ class MainActivity : Activity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
+                android.util.Log.i("YeeHawNav", "error mainFrame=${request?.isForMainFrame} code=${error?.errorCode}")
                 if (request?.isForMainFrame == true && view != null) {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true
+                    tab.failedAtMs = android.os.SystemClock.elapsedRealtime()
+                    tab.failedWasGet = request.method.equals("GET", ignoreCase = true)
+                    if (tab.failedWasGet) request.url?.toString()?.takeIf { isWebUrl(it) }?.let { tab.currentUrl = it }
+                    cancelStallWatch(view)
                     loadStartedAt.remove(view)
                     signalMonitor.recordLoad(0, false)
                     if (view === currentWebView()) showTab(activeTabIndex)
-                    statusText.text = "Page could not be loaded. Retrying automatically…"
-                    retryScheduler.schedule(view) { retryTab(tab) }
+                    if (tab.failedWasGet) {
+                        statusText.text = getString(R.string.status_page_could_not_be_loaded_retrying)
+                        retryScheduler.schedule(view) { retryTab(tab) }
+                    } else {
+                        // A form or other non-GET request failed. Re-sending it could repeat an order or payment,
+                        // so it is never retried automatically; the user decides.
+                        statusText.text = getString(R.string.status_that_request_failed_it_was_not)
+                    }
                 }
             }
         }
@@ -822,15 +906,15 @@ class MainActivity : Activity() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     startActivity(Intent(this, PrivateBrowserActivity::class.java))
                 } else {
-                    Toast.makeText(this, "Isolated private browsing requires Android 9 or later.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, getString(R.string.toast_isolated_private_browsing_requires_a), Toast.LENGTH_LONG).show()
                 }
             }
             "share" -> shareCurrentPage()
             "save" -> saveBookmark()
             "offline" -> showOfflinePages()
             "more" -> showBrowserMenu()
-            "apps" -> showSisterApps()
-            "shareapp" -> shareYeeHaw()
+            "apps" -> showAppsHub()
+            "shareapp" -> showShareMenu()
             else -> loadHome()
         }
     }
@@ -839,24 +923,25 @@ class MainActivity : Activity() {
         val raw = addressBar.text?.toString()?.trim().orEmpty()
         if (raw.isBlank()) return
         val destination = if (raw.contains(" ") || (!raw.contains(".") && !raw.startsWith("http", true))) {
-            SEARCH_ENGINES.getValue(searchEngine) + Uri.encode(raw)
+            val userChose = browserPreferences.contains("search_engine")
+            SearchRoutingEngine.resolve(raw, if (userChose) SEARCH_ENGINES.getValue(searchEngine) + "{query}" else null)
         } else {
             val candidate = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "https://$raw"
             val parsed = Uri.parse(candidate)
             if (parsed.scheme !in listOf("http", "https") || parsed.host.isNullOrBlank()) {
-                Toast.makeText(this, "Enter a valid website address or search.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_enter_a_valid_website_address_or), Toast.LENGTH_SHORT).show()
                 return
             }
             candidate
         }
-        currentWebView()?.loadUrl(destination) ?: createTab(destination)
+        currentWebView()?.loadSaving(destination) ?: createTab(destination)
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         if (uri.scheme == "http" || uri.scheme == "https") {
-            if (tabs.isEmpty()) createTab(uri.toString()) else currentWebView()?.loadUrl(uri.toString())
+            if (tabs.isEmpty()) createTab(uri.toString()) else currentWebView()?.loadSaving(uri.toString())
         }
     }
 
@@ -866,7 +951,7 @@ class MainActivity : Activity() {
             val parsedIntent = try {
                 Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
             } catch (_: Exception) {
-                Toast.makeText(this, "Invalid app link.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_invalid_app_link), Toast.LENGTH_SHORT).show()
                 return
             }
             val fallback = parsedIntent.getStringExtra("browser_fallback_url")
@@ -879,34 +964,34 @@ class MainActivity : Activity() {
             parsedIntent.categories?.toList()?.forEach { parsedIntent.removeCategory(it) }
             parsedIntent.addCategory(Intent.CATEGORY_BROWSABLE)
             AlertDialog.Builder(this)
-                .setTitle("Open another app?")
-                .setMessage("This website wants to open an external application. Continue only if you trust the page.")
-                .setPositiveButton("Open") { _, _ ->
+                .setTitle(getString(R.string.title_open_another_app))
+                .setMessage(getString(R.string.msg_this_website_wants_to_open_an))
+                .setPositiveButton(getString(R.string.btn_open)) { _, _ ->
                     try {
                         startActivity(parsedIntent)
                     } catch (_: Exception) {
                         openHttpFallback(fallback)
                     }
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.btn_cancel), null)
                 .show()
             return
         }
         if (scheme !in setOf("tel", "mailto", "sms", "smsto", "geo", "market")) {
-            Toast.makeText(this, "Blocked unsupported link type.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_blocked_unsupported_link_type), Toast.LENGTH_SHORT).show()
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Open another app?")
-            .setMessage("This link wants to open an external application (" + scheme + "). Continue only if you trust the page.")
-            .setPositiveButton("Open") { _, _ ->
+            .setTitle(getString(R.string.title_open_another_app))
+            .setMessage(getString(R.string.msg_link_wants_external_app, scheme))
+            .setPositiveButton(getString(R.string.btn_open)) { _, _ ->
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                 } catch (_: Exception) {
-                    Toast.makeText(this, "No compatible app is installed.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.toast_no_compatible_app_is_installed), Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(getString(R.string.btn_cancel), null)
             .show()
     }
 
@@ -915,29 +1000,47 @@ class MainActivity : Activity() {
         if (fallback != null && fallback.scheme in listOf("http", "https") && !fallback.host.isNullOrBlank()) {
             currentWebView()?.loadUrl(fallback.toString())
         } else {
-            Toast.makeText(this, "No compatible app or safe web fallback is available.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_no_compatible_app_or_safe_web), Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun downloadFile(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?) {
         val uri = Uri.parse(url)
         if (uri.scheme !in listOf("http", "https")) {
-            Toast.makeText(this, "Blocked unsupported download URL.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_blocked_unsupported_download_url), Toast.LENGTH_SHORT).show()
             return
         }
+        // Never fill a nearly-full phone. Nothing is deleted: the download is simply not started.
+        if (StorageGuard.level(this) == StorageGuard.Level.CRITICAL) {
+            Toast.makeText(this, getString(R.string.toast_not_enough_space, formatDataBytes(StorageGuard.freeBytes(this))), Toast.LENGTH_LONG).show()
+            return
+        }
+        // Android 6-9 (API 23-28) needs WRITE_EXTERNAL_STORAGE to save into the public Downloads folder; ask once.
+        if (Build.VERSION.SDK_INT in 23..28 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDownload = arrayOf(url, userAgent, contentDisposition, mimeType)
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE_PERMISSION)
+            return
+        }
+        enqueueDownload(url, userAgent, contentDisposition, mimeType, publicFolder = true)
+    }
+
+    private fun enqueueDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, publicFolder: Boolean) {
         try {
             val filename = safeDownloadFilename(URLUtil.guessFileName(url, contentDisposition, mimeType))
-            val request = DownloadManager.Request(uri)
+            val request = DownloadManager.Request(Uri.parse(url))
                 .setTitle(filename)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            if (publicFolder) request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            else request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, filename) // needs no permission
             if (!userAgent.isNullOrBlank()) request.addRequestHeader("User-Agent", userAgent)
             CookieManager.getInstance().getCookie(url)?.let { request.addRequestHeader("Cookie", it) }
             val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             manager.enqueue(request)
-            Toast.makeText(this, "Download started.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (publicFolder) getString(R.string.toast_download_started) else getString(R.string.toast_download_started_saved_in_the_app), Toast.LENGTH_SHORT).show()
         } catch (_: Exception) {
-            Toast.makeText(this, "Could not start this download.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_could_not_start_this_download), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -949,14 +1052,14 @@ class MainActivity : Activity() {
     private fun showTabPicker() {
         if (tabs.isEmpty()) return
         val labels = tabs.mapIndexed { index, tab ->
-            val host = if (isStartPageUrl(tab.currentUrl)) "Start page" else Uri.parse(tab.currentUrl).host ?: "New tab"
-            "${index + 1}. ${tab.title}  ·  $host"
+            val host = if (isStartPageUrl(tab.currentUrl)) getString(R.string.tab_start_page) else Uri.parse(tab.currentUrl).host ?: getString(R.string.tab_new)
+            "${index + 1}. ${tab.title.ifBlank { getString(R.string.tab_new) }}  ·  $host"
         }.toTypedArray()
         android.app.AlertDialog.Builder(this)
-            .setTitle("Open tabs")
+            .setTitle(getString(R.string.title_open_tabs))
             .setItems(labels) { _, which -> showTab(which) }
-            .setNegativeButton("Close current") { _, _ -> closeCurrentTab() }
-            .setNeutralButton("New tab") { _, _ -> createTab(HOME_URL) }
+            .setNegativeButton(getString(R.string.btn_close_current)) { _, _ -> closeCurrentTab() }
+            .setNeutralButton(getString(R.string.btn_new_tab)) { _, _ -> createTab(HOME_URL) }
             .show()
     }
 
@@ -976,6 +1079,7 @@ class MainActivity : Activity() {
             tab.evicted = false
         }
         tab.webView.onResume()
+        if (restoreUrl != null) enforceLiveTabLimit()
         if (tab.failed) {
             val errorPanel = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -983,16 +1087,16 @@ class MainActivity : Activity() {
                 setPadding(dp(24), dp(24), dp(24), dp(24))
             }
             errorPanel.addView(TextView(this).apply {
-                text = "This page could not be loaded. Check your connection and try again."
+                text = getString(R.string.error_page_could_not_be_loaded)
                 textSize = 16f
                 gravity = Gravity.CENTER
                 setPadding(0, 0, 0, dp(16))
             })
-            errorPanel.addView(actionButton("Retry") {
+            errorPanel.addView(actionButton(getString(R.string.label_retry)) {
                 tab.failed = false
                 pageContainer.removeAllViews()
                 pageContainer.addView(tab.webView)
-                tab.webView.reload()
+                reloadSafely(tab)
             })
             pageContainer.addView(errorPanel, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1000,7 +1104,7 @@ class MainActivity : Activity() {
             ))
         } else {
             pageContainer.addView(tab.webView)
-            if (restoreUrl != null) tab.webView.loadUrl(restoreUrl)
+            if (restoreUrl != null) tab.webView.loadSaving(restoreUrl)
         }
         addressBar.setText(displayUrl(tab.currentUrl))
         addressBar.setSelection(addressBar.text.length)
@@ -1016,7 +1120,8 @@ class MainActivity : Activity() {
         pageContainer.removeView(tab.webView)
         tab.webView.stopLoading()
         tab.webView.onPause()
-        tab.webView.clearCache(false)
+        // Avoid purging WebView's in-memory resource cache during tab eviction.
+        // The disk cache remains managed by Android System WebView.
         tab.webView.destroy()
         tab.evicted = true
     }
@@ -1039,6 +1144,26 @@ class MainActivity : Activity() {
         persistSession()
     }
 
+    /**
+     * Loads [url]; when any data-saving mode is on, asks the site for its lighter version with the standard
+     * `Save-Data: on` request header (honoured by many sites; ignored by the rest). Only the page request can
+     * carry it: WebView does not let an app add headers to the sub-resources the page then fetches.
+     */
+    private fun WebView.loadSaving(url: String) {
+        // Start the stall timer when the load is requested, not only when the engine reports it: some WebViews never
+        // call onPageStarted for a navigation that gets no response, which is exactly the dead-connection case.
+        if (isWebUrl(url) && Uri.parse(url).host != START_HOST) {
+            tabs.firstOrNull { it.webView === this }?.let { t ->
+                t.failed = false
+                t.currentUrl = url
+                loadStartedAt[this] = android.os.SystemClock.elapsedRealtime()
+                armStallWatch(this, t)
+            }
+        }
+        val saving = memorySaver || turboMode || systemSaverOn || (adaptiveSaver && signalMonitor.level.textFirst)
+        if (saving && isWebUrl(url) && Uri.parse(url).host != START_HOST) loadUrl(url, mapOf("Save-Data" to "on")) else loadUrl(url)
+    }
+
     private fun loadHome() {
         currentWebView()?.loadUrl(HOME_URL) ?: createTab(HOME_URL)
     }
@@ -1047,16 +1172,16 @@ class MainActivity : Activity() {
 
     private fun requestDefaultBrowserRole() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            Toast.makeText(this, "Use Android Settings → Apps → Default apps → Browser.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_use_android_settings_apps_default_ap), Toast.LENGTH_LONG).show()
             return
         }
         val roleManager = getSystemService(RoleManager::class.java)
         if (!roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
-            Toast.makeText(this, "Browser role is unavailable on this Android version.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, getString(R.string.toast_browser_role_is_unavailable_on_this), Toast.LENGTH_LONG).show()
             return
         }
         if (roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
-            Toast.makeText(this, "YeeHaw is already the default browser.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_yeehaw_is_already_the_default_browse), Toast.LENGTH_SHORT).show()
             return
         }
         startActivityForResult(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER), REQUEST_BROWSER_ROLE)
@@ -1064,7 +1189,12 @@ class MainActivity : Activity() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW && tabs.size > 1) {
+        // Suspend background tabs only under real memory pressure (running low/critical, or the process is
+        // a background candidate). TRIM_MEMORY_UI_HIDDEN just means the app left the screen: save state only.
+        val pressure = level in ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW..ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+        if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) persistSession()
+        if (pressure && tabs.size > 1) {
             tabs.forEachIndexed { index, tab ->
                 if (index != activeTabIndex) discardTabForMemory(tab)
             }
@@ -1107,7 +1237,13 @@ class MainActivity : Activity() {
                     pendingWebResources = emptyArray()
                 }
             }
-            REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(granted)
+            REQUEST_GEO_PERMISSION -> grantPendingGeoPermission(grantResults.any { it == PackageManager.PERMISSION_GRANTED })
+            REQUEST_STORAGE_PERMISSION -> {
+                val d = pendingDownload
+                pendingDownload = null
+                // Declined: still deliver the file, into the app's own folder, rather than losing the download.
+                if (d != null) enqueueDownload(d[0]!!, d[1], d[2], d[3], publicFolder = granted)
+            }
         }
     }
 
@@ -1122,10 +1258,10 @@ class MainActivity : Activity() {
             }
             .distinctBy { it.second }
             .sortedBy { it.first.lowercase() }
-        val options = mutableListOf("ChatMe — Tap to Chat (private or groups)")
+        val options = mutableListOf(getString(R.string.item_chatme))
         options.addAll(apps.map { it.first })
         AlertDialog.Builder(this)
-            .setTitle("YeeHaw family apps")
+            .setTitle(getString(R.string.title_yeehaw_family_apps))
             .setItems(options.toTypedArray()) { _, which ->
                 if (which == 0) {
                     openChatMe()
@@ -1135,12 +1271,12 @@ class MainActivity : Activity() {
                 try {
                     val launch = packageManager.getLaunchIntentForPackage(app.second)
                     if (launch != null) startActivity(launch)
-                    else Toast.makeText(this, "This app cannot be opened.", Toast.LENGTH_SHORT).show()
+                    else Toast.makeText(this, getString(R.string.toast_this_app_cannot_be_opened), Toast.LENGTH_SHORT).show()
                 } catch (_: Exception) {
-                    Toast.makeText(this, "This app cannot be opened.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.toast_this_app_cannot_be_opened), Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Close", null)
+            .setNegativeButton(getString(R.string.btn_close), null)
             .show()
     }
 
@@ -1156,15 +1292,19 @@ class MainActivity : Activity() {
             return
         }
         currentWebView()?.loadUrl(CHATME_URL) ?: createTab(CHATME_URL)
-        Toast.makeText(this, "ChatMe is not installed yet — opening chatme.pro to get it.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, getString(R.string.toast_chatme_is_not_installed_yet_opening), Toast.LENGTH_LONG).show()
     }
 
-    private fun isProMode(): Boolean = browserPreferences.getBoolean("pro_mode", false)
+    private fun isProMode(): Boolean = ProEntitlement.isPro(this)
 
-    /** YeeHaw Pro tier: one-time purchase through Google Play Billing. Free tier stays fully functional forever. */
+    /**
+     * YeeHaw Pro: a Google Play subscription. Pro is granted ONLY after the YeeHaw server confirms the
+     * purchase token with Google Play (signed answer); no local flag or client callback unlocks it.
+     * The free tier keeps every tool working.
+     */
     private fun openProUpgrade() {
         if (isProMode()) {
-            Toast.makeText(this, "YeeHaw Pro is active on this device.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_yeehaw_pro_is_active_on_this), Toast.LENGTH_SHORT).show()
             return
         }
         val product = proProductDetails
@@ -1182,9 +1322,9 @@ class MainActivity : Activity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("YeeHaw Pro")
-            .setMessage("Pro removes all ads forever and funds free development. The free tier keeps every tool working forever — nothing is paywalled.\n\nA small monthly subscription, automatically priced for your country by Google Play: UPI in India, M-Pesa in Africa, cards and local wallets worldwide. Cancel anytime in Play Store settings.\n\nPro activates automatically once the store listing is live.")
-            .setPositiveButton("OK", null)
+            .setTitle(getString(R.string.title_yeehaw_pro))
+            .setMessage(getString(R.string.msg_pro_is_not_available_to_buy))
+            .setPositiveButton(getString(R.string.btn_ok), null)
             .show()
     }
 
@@ -1192,8 +1332,7 @@ class MainActivity : Activity() {
         if (billingClient != null) return
         val purchasesUpdatedListener = com.android.billingclient.api.PurchasesUpdatedListener { result, purchases ->
             if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK && !purchases.isNullOrEmpty()) {
-                browserPreferences.edit().putBoolean("pro_mode", true).apply()
-                Toast.makeText(this, "Welcome to YeeHaw Pro. Ads are off forever.", Toast.LENGTH_LONG).show()
+                handlePurchases(purchases)
             }
         }
         billingClient = com.android.billingclient.api.BillingClient.newBuilder(this)
@@ -1204,7 +1343,7 @@ class MainActivity : Activity() {
             .build()
         billingClient?.startConnection(object : com.android.billingclient.api.BillingClientStateListener {
             override fun onBillingSetupFinished(result: com.android.billingclient.api.BillingResult) {
-                if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) queryProProduct()
+                if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) { queryProProduct(); restorePurchases() }
             }
 
             override fun onBillingServiceDisconnected() {
@@ -1233,7 +1372,7 @@ class MainActivity : Activity() {
         try {
             startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
         } catch (_: Exception) {
-            Toast.makeText(this, "Downloads app is unavailable on this device.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_downloads_app_is_unavailable_on_this), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1294,10 +1433,10 @@ class MainActivity : Activity() {
         savings.onSignal(level)
         tabs.filterNot { it.evicted }.forEach { applySignalPolicy(it.webView.settings) }
         statusText.text = when (level) {
-            SignalLevel.OFFLINE -> "Offline. Saved pages still open."
-            SignalLevel.POOR -> "Weak signal: text-first mode saves your data."
-            SignalLevel.FAIR -> "Fair signal."
-            SignalLevel.GOOD -> "Signal OK."
+            SignalLevel.OFFLINE -> getString(R.string.status_offline_saved_pages)
+            SignalLevel.POOR -> getString(R.string.status_weak_signal)
+            SignalLevel.FAIR -> getString(R.string.status_fair_signal)
+            SignalLevel.GOOD -> getString(R.string.status_signal_ok)
         }
         if (level != SignalLevel.OFFLINE) {
             // The connection is back (or usable): resume every page that was interrupted.
@@ -1313,14 +1452,48 @@ class MainActivity : Activity() {
             pageContainer.removeAllViews()
             pageContainer.addView(tab.webView)
         }
-        tab.webView.reload()
+        reloadSafely(tab)
     }
 
-    private fun formatDataBytes(bytes: Long): String = when {
-        bytes >= 1048576 -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1048576.0)
-        bytes >= 1024 -> (bytes / 1024).toString() + " KB"
-        else -> bytes.toString() + " B"
+    private fun cancelStallWatch(view: WebView?) {
+        view ?: return
+        stallWatch.remove(view)?.let { view.removeCallbacks(it) }
     }
+
+    private fun armStallWatch(view: WebView, tab: BrowserTab, baseline: Int = view.progress, delayMs: Long = LOAD_STALL_MS) {
+        cancelStallWatch(view)
+        val r = Runnable {
+            stallWatch.remove(view)
+            // loadStartedAt is cleared by onPageFinished/onReceivedError, so its absence means the load already ended.
+            if (isFinishing || isDestroyed || tab.failed || !loadStartedAt.containsKey(view)) return@Runnable
+            // view.progress still holds the PREVIOUS page's value (often 100) until the new load reports, so progress only
+            // counts as real when it is past the initial 10% and differs from what it was when the load was requested.
+            val p = view.progress
+            if (p > 10 && p != baseline) { armStallWatch(view, tab, p, LOAD_RECHECK_MS); return@Runnable } // slow but advancing (2G, heavy page)
+            view.stopLoading()
+            loadStartedAt.remove(view)
+            tab.failed = true
+            tab.failedWasGet = true // the user presses Retry; nothing is re-sent automatically
+            signalMonitor.recordLoad(0, false)
+            if (view === currentWebView()) {
+                showTab(activeTabIndex)
+                statusText.text = getString(R.string.status_this_page_is_taking_too_long)
+            }
+        }
+        stallWatch[view] = r
+        view.postDelayed(r, delayMs)
+    }
+
+    /** Retry a failed page without ever re-sending a POST: a failed non-GET is replaced by a plain GET of its address. */
+    private fun reloadSafely(tab: BrowserTab) {
+        // reload() would re-run the last page that actually loaded, which is the wrong page when this navigation never
+        // committed (stalled or failed first load). Always load the address that failed, as a plain GET.
+        tab.webView.loadSaving(tab.currentUrl)
+        tab.failedWasGet = true
+    }
+
+    /** Localized, locale-aware size text (units and digits follow the phone's language). */
+    private fun formatDataBytes(bytes: Long): String = android.text.format.Formatter.formatShortFileSize(this, bytes)
 
     /** One-tap WhatsApp-ready share of the browser itself with a real download link. */
     private fun shareYeeHaw() {
@@ -1328,7 +1501,7 @@ class MainActivity : Activity() {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, "YeeHaw Browser — fast, light, and it saves your data. Works great on any Android. Get it free: https://github.com/clyde6205/yeehaw.pro")
         }
-        startActivity(Intent.createChooser(share, "Share YeeHaw"))
+        startActivity(Intent.createChooser(share, getString(R.string.chooser_share_yeehaw)))
     }
 
     private fun shareCurrentPage() {
@@ -1338,33 +1511,49 @@ class MainActivity : Activity() {
             putExtra(Intent.EXTRA_TEXT, tab.currentUrl)
             putExtra(Intent.EXTRA_SUBJECT, tab.title)
         }
-        startActivity(Intent.createChooser(share, "Share page"))
+        startActivity(Intent.createChooser(share, getString(R.string.chooser_share_page)))
     }
 
     private fun saveBookmark() {
         val tab = tabs.getOrNull(activeTabIndex) ?: return
         if (!tab.currentUrl.startsWith("http") || isStartPageUrl(tab.currentUrl)) return
         browserStore.addBookmark(tab.currentUrl, tab.title)
-        Toast.makeText(this, "Bookmark saved.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.toast_bookmark_saved), Toast.LENGTH_SHORT).show()
     }
 
     private fun showSavedItems(bookmarks: Boolean) {
         val items = if (bookmarks) browserStore.bookmarks() else browserStore.history()
         if (items.isEmpty()) {
-            Toast.makeText(this, if (bookmarks) "No bookmarks yet." else "No history yet.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, if (bookmarks) getString(R.string.toast_no_bookmarks_yet) else getString(R.string.toast_no_history_yet), Toast.LENGTH_SHORT).show()
             return
         }
         val labels = items.map { "${it.title}\n${it.url}" }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle(if (bookmarks) "Bookmarks" else "Recent history")
+            .setTitle(if (bookmarks) getString(R.string.title_bookmarks) else getString(R.string.title_recent_history))
             .setItems(labels) { _, index ->
-                val url = items[index].url
-                currentWebView()?.loadUrl(url) ?: createTab(url)
+                val item = items[index]
+                AlertDialog.Builder(this)
+                    .setTitle(item.title.ifBlank { item.url }.take(80))
+                    .setMessage(item.url.take(200))
+                    .setPositiveButton(getString(R.string.btn_open)) { _, _ -> currentWebView()?.loadSaving(item.url) ?: createTab(item.url) }
+                    .setNeutralButton(getString(R.string.btn_remove_this_one)) { _, _ ->
+                        if (bookmarks) browserStore.deleteBookmark(item.url) else browserStore.deleteHistoryEntry(item.url)
+                        Toast.makeText(this, getString(R.string.toast_removed), Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton(getString(R.string.btn_cancel), null)
+                    .show()
             }
-            .setNeutralButton(if (bookmarks) "Clear bookmarks" else "Clear history") { _, _ ->
-                if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
+            .setNeutralButton(if (bookmarks) getString(R.string.btn_clear_bookmarks) else getString(R.string.btn_clear_history)) { _, _ ->
+                AlertDialog.Builder(this)
+                    .setTitle(if (bookmarks) getString(R.string.title_delete_all_bookmarks) else getString(R.string.title_delete_all_history))
+                    .setMessage(getString(R.string.msg_this_cannot_be_undone))
+                    .setPositiveButton(getString(R.string.btn_delete_all)) { _, _ ->
+                        if (bookmarks) browserStore.clearBookmarks() else browserStore.clearHistory()
+                    }
+                    .setNegativeButton(getString(R.string.btn_keep_them), null)
+                    .show()
             }
-            .setNegativeButton("Close", null).show()
+            .setNegativeButton(getString(R.string.btn_close), null).show()
     }
 
     private fun toggleOfflineCachePreference() {
@@ -1374,9 +1563,9 @@ class MainActivity : Activity() {
             tab.webView.settings.cacheMode = if (preferOfflineCache) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
         }
         val message = if (preferOfflineCache) {
-            "Cached resources are preferred. Only content allowed by the website to be cached may work offline."
+            getString(R.string.toast_offline_cache_preferred)
         } else {
-            "Normal online cache behavior restored."
+            getString(R.string.toast_offline_cache_normal)
         }
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
@@ -1386,51 +1575,65 @@ class MainActivity : Activity() {
         val webView = currentWebView() ?: return
         val pageUrl = webView.url ?: tab.currentUrl
         if (!isWebUrl(pageUrl) || isStartPageUrl(pageUrl)) {
-            Toast.makeText(this, "Only normal web pages can be saved.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_only_normal_web_pages_can_be), Toast.LENGTH_SHORT).show()
             return
         }
-        statusText.text = "Saving offline reading copy…"
-        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText.slice(0,250000):''});})()") { result ->
+        if (!StorageGuard.canWrite(this, 2L * 1024 * 1024)) {
+            Toast.makeText(this, getString(R.string.toast_storage_is_almost_full_free_some), Toast.LENGTH_LONG).show()
+            return
+        }
+        statusText.text = getString(R.string.status_saving_offline_reading_copy)
+        webView.evaluateJavascript("(function(){return JSON.stringify({title:document.title||'',text:document.body?document.body.innerText.slice(0,250000):'',total:document.body?document.body.innerText.length:0});})()") { result ->
             try {
                 val encoded = JSONTokener(result ?: "null").nextValue() as? String
-                    ?: throw IllegalStateException("Page text was unavailable.")
+                    ?: throw IllegalStateException(getString(R.string.err_page_text_unavailable))
                 val snapshot = JSONObject(encoded)
                 val text = snapshot.optString("text").trim()
-                if (text.isBlank()) throw IllegalStateException("This page has no readable text.")
-                val title = snapshot.optString("title").ifBlank { tab.title }
+                if (text.isBlank()) throw IllegalStateException(getString(R.string.err_page_no_readable_text))
+                val title = snapshot.optString("title").ifBlank { tab.title.ifBlank { getString(R.string.tab_untitled) } }
                 browserStore.saveOfflinePage(pageUrl, title, text)
-                statusText.text = "Saved for offline reading"
-                Toast.makeText(this, "Offline reading copy saved on this device.", Toast.LENGTH_LONG).show()
+                // Be honest about partial copies: the page was longer than what the library keeps (text only, capped).
+                val partial = snapshot.optInt("total", 0) > text.length ||
+                    BrowserStore.utf8ByteCount(text) > BrowserStore.MAX_OFFLINE_TEXT_BYTES_PER_PAGE
+                statusText.text = getString(R.string.status_saved_for_offline_reading)
+                Toast.makeText(this, getString(if (partial) R.string.toast_offline_saved_partial else R.string.toast_offline_reading_copy_saved_on_this), Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
-                statusText.text = "Ready"
-                Toast.makeText(this, error.message ?: "Could not save this page.", Toast.LENGTH_LONG).show()
+                statusText.text = getString(R.string.status_ready)
+                Toast.makeText(this, error.message ?: getString(R.string.toast_could_not_save_this_page), Toast.LENGTH_LONG).show()
             }
         }
     }
 
+    /** Test hook: the offline library / reader dialog currently on screen (lets tests act without needing window focus). */
+    internal var offlineDialogForTest: android.app.Dialog? = null
+
     private fun showOfflinePages() {
-        val pages = browserStore.offlinePages()
+        val pages = browserStore.offlinePageSummaries()
         if (pages.isEmpty()) {
-            Toast.makeText(this, "No offline pages saved yet.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_no_offline_pages_saved_yet), Toast.LENGTH_SHORT).show()
             return
         }
         val labels = pages.map { "${it.title}\n${it.url}" }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("Offline reading library")
-            .setItems(labels) { _, index -> showOfflinePage(pages[index]) }
-            .setNeutralButton("Clear all") { _, _ ->
+            .setTitle(getString(R.string.title_offline_reading_library))
+            .setItems(labels) { _, index ->
+                // Load only the chosen page's text (low-memory safe).
+                val full = browserStore.offlinePage(pages[index].id)
+                if (full != null) showOfflinePage(full) else Toast.makeText(this, getString(R.string.toast_that_offline_page_is_no_longer), Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(getString(R.string.btn_clear_all)) { _, _ ->
                 AlertDialog.Builder(this)
-                    .setTitle("Delete all offline pages?")
-                    .setMessage("Saved offline reading copies will be permanently removed from this device.")
-                    .setPositiveButton("Delete all") { _, _ ->
+                    .setTitle(getString(R.string.title_delete_all_offline_pages))
+                    .setMessage(getString(R.string.msg_saved_offline_reading_copies_will_be))
+                    .setPositiveButton(getString(R.string.btn_delete_all)) { _, _ ->
                         browserStore.clearOfflinePages()
-                        Toast.makeText(this, "Offline library cleared.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.toast_offline_library_cleared), Toast.LENGTH_SHORT).show()
                     }
-                    .setNegativeButton("Cancel", null)
+                    .setNegativeButton(getString(R.string.btn_cancel), null)
                     .show()
             }
-            .setNegativeButton("Close", null)
-            .show()
+            .setNegativeButton(getString(R.string.btn_close), null)
+            .create().also { offlineDialogForTest = it }.show()
     }
 
     private fun showOfflinePage(page: BrowserStore.OfflinePage) {
@@ -1450,26 +1653,26 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(page.title)
             .setView(content)
-            .setNeutralButton("Delete") { _, _ ->
+            .setNeutralButton(getString(R.string.btn_delete)) { _, _ ->
                 browserStore.deleteOfflinePage(page.id)
-                Toast.makeText(this, "Offline page deleted.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_offline_page_deleted), Toast.LENGTH_SHORT).show()
             }
-            .setPositiveButton("Open website") { _, _ ->
+            .setPositiveButton(getString(R.string.btn_open_website)) { _, _ ->
                 currentWebView()?.loadUrl(page.url) ?: createTab(page.url)
             }
-            .setNegativeButton("Close", null)
-            .show()
+            .setNegativeButton(getString(R.string.btn_close), null)
+            .create().also { offlineDialogForTest = it }.show()
     }
 
     private fun findOnPage() {
         val field = EditText(this).apply {
-            hint = "Find text on this page"
+            hint = getString(R.string.hint_find_text_on_this_page)
             isSingleLine = true
         }
         var lastQuery: String? = null
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(actionButton("Previous") {
+            addView(actionButton(getString(R.string.label_previous)) {
                 val query = field.text.toString()
                 val webView = currentWebView()
                 if (query.isNotBlank() && webView != null) {
@@ -1479,7 +1682,7 @@ class MainActivity : Activity() {
                     } else webView.findNext(false)
                 }
             })
-            addView(actionButton("Next") {
+            addView(actionButton(getString(R.string.label_next)) {
                 val query = field.text.toString()
                 val webView = currentWebView()
                 if (query.isNotBlank() && webView != null) {
@@ -1496,21 +1699,22 @@ class MainActivity : Activity() {
             addView(field)
             addView(controls)
         }
-        val dialog = AlertDialog.Builder(this).setTitle("Find in page").setView(content).create()
+        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.title_find_in_page)).setView(content).create()
         dialog.setOnDismissListener { currentWebView()?.clearMatches() }
         dialog.show()
     }
 
     private fun showBrowserMenu() {
         val choices = arrayOf(
-            if (desktopMode) "Use mobile website" else "Request desktop website",
-            if (memorySaver) "Disable memory saver" else "Enable memory saver",
-            if (thirdPartyCookiesEnabled) "Block third-party cookies" else "Allow third-party cookies",
-            "Clear browsing data", "Browser engine information", "Make YeeHaw default browser", "New private window", "Search engine", "App permissions",
-            if (isProMode()) "YeeHaw Pro — active" else "Go Pro — ad-free forever",
-            if (turboMode) "Turbo mode — ON (fastest, no images/video)" else "Turbo mode — OFF (full sites)"
+            if (desktopMode) getString(R.string.menu_use_mobile_site) else getString(R.string.menu_request_desktop_site),
+            if (memorySaver) getString(R.string.menu_disable_memory_saver) else getString(R.string.menu_enable_memory_saver),
+            if (thirdPartyCookiesEnabled) getString(R.string.menu_block_third_party_cookies) else getString(R.string.menu_allow_third_party_cookies),
+            getString(R.string.menu_clear_browsing_data), getString(R.string.menu_engine_info), getString(R.string.menu_make_default), getString(R.string.menu_new_private_window), getString(R.string.menu_search_engine), getString(R.string.menu_app_permissions),
+            getString(R.string.menu_pro_unavailable),
+            if (turboMode) getString(R.string.menu_turbo_on) else getString(R.string.menu_turbo_off),
+            getString(R.string.menu_language)
         )
-        AlertDialog.Builder(this).setTitle("Browser settings — YeeHaw v0.4.7").setItems(choices) { _, which ->
+        AlertDialog.Builder(this).setTitle(getString(R.string.title_browser_settings, appVersionName())).setItems(choices) { _, which ->
             when (which) {
                 0 -> {
                     desktopMode = !desktopMode
@@ -1525,22 +1729,22 @@ class MainActivity : Activity() {
                     browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
                     tabs.forEachIndexed { index, tab ->
                         if (!tab.evicted) {
-                            tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                            tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
                             if (index != activeTabIndex) tab.webView.onPause()
                             else tab.webView.onResume()
                         }
                     }
-                    Toast.makeText(this, if (memorySaver) "Memory saver enabled." else "Memory saver disabled.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, if (memorySaver) getString(R.string.toast_memory_saver_enabled) else getString(R.string.toast_memory_saver_disabled), Toast.LENGTH_SHORT).show()
                 }
                 2 -> {
                     thirdPartyCookiesEnabled = !thirdPartyCookiesEnabled
                     browserPreferences.edit().putBoolean("third_party_cookies", thirdPartyCookiesEnabled).apply()
                     tabs.filterNot { it.evicted }.forEach { CookieManager.getInstance().setAcceptThirdPartyCookies(it.webView, thirdPartyCookiesEnabled) }
-                    Toast.makeText(this, if (thirdPartyCookiesEnabled) "Third-party cookies allowed." else "Third-party cookies blocked.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, if (thirdPartyCookiesEnabled) getString(R.string.toast_third_party_cookies_allowed) else getString(R.string.toast_third_party_cookies_blocked), Toast.LENGTH_SHORT).show()
                 }
-                3 -> AlertDialog.Builder(this).setTitle("Clear browsing data?")
-                    .setMessage("This clears history, bookmarks, saved offline reading pages, cookies, cached files and website storage. You may be signed out.")
-                    .setPositiveButton("Clear") { _, _ ->
+                3 -> AlertDialog.Builder(this).setTitle(getString(R.string.title_clear_browsing_data))
+                    .setMessage(getString(R.string.msg_this_clears_history_bookmarks_saved))
+                    .setPositiveButton(getString(R.string.btn_clear)) { _, _ ->
                         browserStore.clearHistory()
                         browserStore.clearBookmarks()
                         browserStore.clearOfflinePages()
@@ -1554,33 +1758,33 @@ class MainActivity : Activity() {
                         }
                         android.webkit.WebStorage.getInstance().deleteAllData()
                         android.webkit.GeolocationPermissions.getInstance().clearAll()
-                        Toast.makeText(this, "Browsing data cleared.", Toast.LENGTH_SHORT).show()
-                    }.setNegativeButton("Cancel", null).show()
+                        Toast.makeText(this, getString(R.string.toast_browsing_data_cleared), Toast.LENGTH_SHORT).show()
+                    }.setNegativeButton(getString(R.string.btn_cancel), null).show()
                 4 -> {
                     val pkg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WebView.getCurrentWebViewPackage() else null
-                    val message = if (pkg == null) "Android System WebView provider details unavailable."
-                        else "Engine: Chromium-based Android System WebView\nProvider: ${pkg.packageName}\nVersion: ${pkg.versionName}\n\nKeep Android System WebView or Chrome updated."
-                    AlertDialog.Builder(this).setTitle("Browser engine").setMessage(message).setPositiveButton("OK", null).show()
+                    val message = if (pkg == null) getString(R.string.msg_engine_unavailable)
+                        else getString(R.string.msg_engine_details, pkg.packageName, pkg.versionName)
+                    AlertDialog.Builder(this).setTitle(getString(R.string.title_browser_engine)).setMessage(message).setPositiveButton(getString(R.string.btn_ok), null).show()
                 }
                 5 -> requestDefaultBrowserRole()
                 6 -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         startActivity(Intent(this, PrivateBrowserActivity::class.java))
                     } else {
-                        Toast.makeText(this, "Isolated private browsing requires Android 9 or later.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, getString(R.string.toast_isolated_private_browsing_requires_a), Toast.LENGTH_LONG).show()
                     }
                 }
                 7 -> {
                     val engines = SEARCH_ENGINES.keys.toList()
                     AlertDialog.Builder(this)
-                        .setTitle("Choose search engine")
+                        .setTitle(getString(R.string.title_choose_search_engine))
                         .setSingleChoiceItems(engines.toTypedArray(), engines.indexOf(searchEngine)) { dialog, which ->
                             searchEngine = engines[which]
                             browserPreferences.edit().putString("search_engine", searchEngine).apply()
-                            Toast.makeText(this, "Search engine: " + searchEngine, Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, getString(R.string.toast_search_engine_set, searchEngine), Toast.LENGTH_SHORT).show()
                             dialog.dismiss()
                         }
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(getString(R.string.btn_cancel), null)
                         .show()
                 }
                 8 -> {
@@ -1593,11 +1797,41 @@ class MainActivity : Activity() {
                 10 -> {
                     turboMode = !turboMode
                     browserPreferences.edit().putBoolean("turbo_mode", turboMode).apply()
+                    tabs.filterNot { it.evicted }.forEach { tab ->
+                        tab.webView.settings.blockNetworkImage = turboMode
+                        tab.webView.settings.loadsImagesAutomatically = !memorySaver && !turboMode
+                    }
                     currentWebView()?.reload()
-                    Toast.makeText(this, if (turboMode) "Turbo: images and video blocked for the fastest loads." else "Turbo off: full sites with images.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        if (turboMode) getString(R.string.toast_turbo_on)
+                        else getString(R.string.toast_turbo_off),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
+                11 -> showLanguagePicker()
             }
         }.show()
+    }
+
+    private fun showLanguagePicker() {
+        val saved = LocaleHelper.saved(this)
+        val entries = listOf(LocaleHelper.SYSTEM to getString(R.string.language_system_default)) + LocaleHelper.SUPPORTED
+        val checked = entries.indexOfFirst { it.first == saved }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_language))
+            .setSingleChoiceItems(entries.map { it.second }.toTypedArray(), checked) { dialog, which ->
+                val tag = entries[which].first
+                dialog.dismiss()
+                if (tag == saved) return@setSingleChoiceItems
+                LocaleHelper.save(this, tag)
+                if (tag != LocaleHelper.SYSTEM && tag != "en") {
+                    Toast.makeText(this, getString(R.string.toast_machine_translation_notice), Toast.LENGTH_LONG).show()
+                }
+                recreate()
+            }
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show()
     }
 
     @Deprecated("Platform activity result API retained for Android 6+ compatibility.")
@@ -1612,7 +1846,7 @@ class MainActivity : Activity() {
         if (requestCode == REQUEST_BROWSER_ROLE) {
             val held = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                 getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_BROWSER)
-            Toast.makeText(this, if (held) "YeeHaw is now the default browser." else "Default browser selection was not changed.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, if (held) getString(R.string.toast_yeehaw_is_now_the_default_browser) else getString(R.string.toast_default_browser_selection_was_not_ch), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1643,6 +1877,7 @@ class MainActivity : Activity() {
         pendingWebPermission = null
         pendingGeoCallback?.invoke(pendingGeoOrigin, false, false)
         pendingGeoCallback = null
+        ConsoleBootstrap.onDestroy()
         retryScheduler.cancelAll()
         signalMonitor.stop()
         savings.flush()
@@ -1650,13 +1885,322 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
+
+
+    /** Pro unlocks only after the server confirms the purchase with Google Play; the purchase is acknowledged after that. */
+    private fun handlePurchases(purchases: List<com.android.billingclient.api.Purchase>) {
+        purchases.filter { it.purchaseState == com.android.billingclient.api.Purchase.PurchaseState.PURCHASED }.forEach { purchase ->
+            val product = purchase.products.firstOrNull() ?: PRODUCT_ID_PRO
+            ProEntitlement.verify(this, product, purchase.purchaseToken) { verified ->
+                when (verified) {
+                    true -> {
+                        if (!purchase.isAcknowledged) {
+                            val ack = com.android.billingclient.api.AcknowledgePurchaseParams.newBuilder().setPurchaseToken(purchase.purchaseToken).build()
+                            billingClient?.acknowledgePurchase(ack) { }
+                        }
+                        Toast.makeText(this, getString(R.string.toast_welcome_to_yeehaw_pro_ads_are), Toast.LENGTH_LONG).show()
+                    }
+                    false -> Toast.makeText(this, getString(R.string.toast_google_play_did_not_confirm_this), Toast.LENGTH_LONG).show()
+                    null -> Toast.makeText(this, getString(R.string.toast_purchase_received_pro_will_activate), Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    /** Restores Pro on a new phone or after a failed check: asks Play for current subscriptions and re-verifies. */
+    private fun restorePurchases() {
+        val client = billingClient ?: return
+        if (!client.isReady) return
+        val params = com.android.billingclient.api.QueryPurchasesParams.newBuilder()
+            .setProductType(com.android.billingclient.api.BillingClient.ProductType.SUBS).build()
+        client.queryPurchasesAsync(params) { result, list ->
+            if (result.responseCode == com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
+                runOnUiThread { handlePurchases(list) }
+            }
+        }
+    }
+
+    private fun reportHealthAndStatus() {
+        val totals = mapOf(
+            "crash" to Guardian.totalCrashesRecovered(this).toLong(),
+            "render_rescue" to Guardian.totalRepairs(this).toLong(),
+            "skipped_requests" to savings.skippedRequests,
+            "est_bytes_avoided" to savings.estimatedBytesAvoided,
+            "low_signal_seconds" to savings.lowSignalSecs,
+            "data_received_bytes" to sessionDataUsed
+        )
+        HealthReporter.maybeReport(this, totals)
+        val versionCode = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+            else @Suppress("DEPRECATION") packageManager.getPackageInfo(packageName, 0).versionCode
+        } catch (_: Exception) { 0 }
+        DeviceStatusManager.check(this, versionCode) { status ->
+            if (isFinishing) return@check
+            if (status.blocked) {
+                AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.title_yeehaw_is_paused_for_this_device))
+                    .setMessage(status.blockedReason.ifBlank { getString(R.string.msg_contact_support_at_yeehaw_pro) })
+                    .setCancelable(false)
+                    .setPositiveButton(getString(R.string.btn_close)) { _, _ -> finish() }
+                    .show()
+            } else if (status.updateAvailable && status.updateUrl.isNotEmpty()) {
+                val key = "update_prompt_" + status.latestVersionName
+                if (status.updateRequired || !browserPreferences.getBoolean(key, false)) {
+                    browserPreferences.edit().putBoolean(key, true).apply()
+                    val builder = AlertDialog.Builder(this)
+                        .setTitle(if (status.updateRequired) getString(R.string.title_update_required) else getString(R.string.title_update_available))
+                        .setMessage(status.message.ifBlank { getString(R.string.msg_update_ready, status.latestVersionName) })
+                        .setPositiveButton(getString(R.string.btn_update)) { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(status.updateUrl))) }
+                    if (!status.updateRequired) builder.setNegativeButton(getString(R.string.btn_later), null) else builder.setCancelable(false)
+                    builder.show()
+                }
+            }
+        }
+        if (ProEntitlement.needsRecheck(this)) {
+            ProEntitlement.storedToken(this)?.let { (product, token) -> ProEntitlement.verify(this, product, token) { } }
+        }
+    }
+
+    private fun maybeAskAnalyticsConsent() {
+        if (!TelemetryManager.isConsentRequired() || browserPreferences.getBoolean("consent_asked", false)) return
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_help_improve_yeehaw))
+            .setMessage(getString(R.string.msg_share_anonymous_app_health_crashes_a))
+            .setCancelable(false)
+            .setPositiveButton(getString(R.string.label_share)) { _, _ -> TelemetryManager.setConsent(this, true); browserPreferences.edit().putBoolean("consent_asked", true).apply() }
+            .setNegativeButton(getString(R.string.btn_no_thanks)) { _, _ -> TelemetryManager.setConsent(this, false); browserPreferences.edit().putBoolean("consent_asked", true).apply() }
+            .show()
+    }
+
+    private fun showShareMenu() {
+        val canApk = ShareManager.canShareApk(this)
+        val labels = mutableListOf(getString(R.string.share_qr), getString(R.string.share_whatsapp), getString(R.string.share_messenger), getString(R.string.share_telegram), getString(R.string.share_viber), getString(R.string.share_sms), getString(R.string.share_other_apps))
+        if (canApk) labels.add(getString(R.string.share_bluetooth_nearby))
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_share_yeehaw))
+            .setItems(labels.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> ShareManager.showQrDialog(this)
+                    1 -> ShareManager.shareVia(this, ShareManager.Channel.WHATSAPP)
+                    2 -> ShareManager.shareVia(this, ShareManager.Channel.MESSENGER)
+                    3 -> ShareManager.shareVia(this, ShareManager.Channel.TELEGRAM)
+                    4 -> ShareManager.shareVia(this, ShareManager.Channel.VIBER)
+                    5 -> ShareManager.shareVia(this, ShareManager.Channel.SMS)
+                    6 -> ShareManager.shareVia(this, ShareManager.Channel.SYSTEM)
+                    else -> ShareManager.shareApk(this)
+                }
+            }
+            .setNegativeButton(getString(R.string.btn_close), null)
+            .show()
+    }
+
+    private fun confirmForgetMe() {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_stop_sharing_and_delete_my_data))
+            .setMessage(getString(R.string.msg_this_deletes_yeehaw_s_anonymous_app))
+            .setPositiveButton(getString(R.string.btn_delete)) { _, _ ->
+                TelemetryManager.forgetMe(this) { ok ->
+                    runOnUiThread { Toast.makeText(this, if (ok) getString(R.string.toast_deleted_nothing_more_will_be_shared) else getString(R.string.toast_could_not_reach_the_server_try), Toast.LENGTH_LONG).show() }
+                }
+            }
+            .setNegativeButton(getString(R.string.btn_cancel), null)
+            .show()
+    }
+
+    // ---------------------------------------------------------------- Apps hub (tools)
+
+    private fun toggleMemorySaver() {
+        memorySaver = !memorySaver
+        browserPreferences.edit().putBoolean("memory_saver", memorySaver).apply()
+        tabs.forEachIndexed { index, tab ->
+            if (!tab.evicted) {
+                tab.webView.settings.loadsImagesAutomatically = !memorySaver
+                if (index != activeTabIndex) tab.webView.onPause() else tab.webView.onResume()
+            }
+        }
+        Toast.makeText(this, if (memorySaver) getString(R.string.toast_memory_saver_on) else getString(R.string.toast_memory_saver_off), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showAppsHub() {
+        val onOff = { value: Boolean -> getString(if (value) R.string.state_on else R.string.state_off) }
+        val labels = arrayOf(
+            getString(R.string.tools_memory_saver, onOff(memorySaver)),
+            getString(R.string.tools_adaptive_saver, onOff(adaptiveSaver)),
+            getString(R.string.tools_storage_protection),
+            getString(R.string.tools_quick_paste),
+            getString(R.string.tools_clipboard, onOff(clipboardWatcher.enabled)),
+            getString(R.string.tools_screenshot),
+            getString(R.string.tools_offline_reading),
+            getString(R.string.tools_stop_sharing),
+            getString(R.string.tools_family_apps)
+        ) + (if (app.yehaw.browser.tools.QuickTools.ENABLED) arrayOf(getString(R.string.tools_quick_tools)) else emptyArray()) +
+            arrayOf(getString(R.string.tools_contact_support))
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_yeehaw_tools))
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> toggleMemorySaver()
+                    1 -> {
+                        adaptiveSaver = !adaptiveSaver
+                        browserPreferences.edit().putBoolean("adaptive_saver", adaptiveSaver).apply()
+                        Toast.makeText(
+                            this,
+                            if (adaptiveSaver) getString(R.string.toast_adaptive_on)
+                            else getString(R.string.toast_adaptive_off),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    2 -> showStorageProtection()
+                    3 -> showQuickPaste()
+                    4 -> {
+                        clipboardWatcher.enabled = !clipboardWatcher.enabled
+                        Toast.makeText(
+                            this,
+                            if (clipboardWatcher.enabled) getString(R.string.toast_clipboard_on)
+                            else getString(R.string.toast_clipboard_off),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    5 -> startScreenshotMarkup()
+                    6 -> AlertDialog.Builder(this)
+                        .setTitle(getString(R.string.title_offline_reading))
+                        .setItems(arrayOf(getString(R.string.item_save_this_page_for_offline_reading), getString(R.string.item_open_my_offline_library))) { _, choice ->
+                            if (choice == 0) saveOfflinePage() else showOfflinePages()
+                        }
+                        .setNegativeButton(getString(R.string.btn_close), null)
+                        .show()
+                    7 -> confirmForgetMe()
+                    8 -> showSisterApps()
+                    labels.size - 1 -> contactSupport()
+                    else -> app.yehaw.browser.tools.QuickTools.open(this, currentWebView()?.url)
+                }
+            }
+            .setNegativeButton(getString(R.string.btn_close), null)
+            .show()
+    }
+
+    /** Opens the person's mail app addressed to support; if there is no mail app, copies the address so it is never a dead end. */
+    private fun contactSupport() {
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$SUPPORT_EMAIL")).putExtra(Intent.EXTRA_SUBJECT, "YeeHaw Browser support")
+        try { startActivity(intent) } catch (e: Exception) {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.setPrimaryClip(android.content.ClipData.newPlainText("support", SUPPORT_EMAIL))
+            Toast.makeText(this, getString(R.string.tools_contact_support), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showStorageProtection() {
+        val level = StorageGuard.level(this)
+        val status = when (level) {
+            StorageGuard.Level.OK -> getString(R.string.storage_healthy)
+            StorageGuard.Level.LOW -> getString(R.string.storage_low)
+            StorageGuard.Level.CRITICAL -> getString(R.string.storage_critical)
+        }
+        val message = getString(
+            R.string.msg_storage_protection,
+            formatDataBytes(StorageGuard.freeBytes(this)),
+            formatDataBytes(StorageGuard.totalBytes(this)),
+            status,
+            formatDataBytes(StorageGuard.appDataBytes(this)),
+            formatDataBytes(StorageGuard.appCacheBytes(this))
+        )
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_storage_protection))
+            .setMessage(message)
+            .setPositiveButton(getString(R.string.btn_clear_temporary_cache)) { _, _ ->
+                tabs.filterNot { it.evicted }.forEach { it.webView.clearCache(true) }
+                Toast.makeText(this, getString(R.string.toast_temporary_cache_cleared_your_saved_d), Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton(getString(R.string.btn_close), null)
+            .show()
+    }
+
+    private fun showQuickPaste() {
+        val items = quickPaste.list()
+        val labels = mutableListOf(getString(R.string.item_add_from_clipboard))
+        labels.addAll(items.map { if (it.length > 60) it.take(60) + "…" else it })
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_quick_paste_tap_to_insert_hold))
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    val clip = try {
+                        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+                            ?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val added = !clip.isNullOrBlank() && quickPaste.add(clip)
+                    Toast.makeText(
+                        this,
+                        if (added) getString(R.string.toast_saved_quick_paste) else getString(R.string.toast_nothing_to_add, QuickPasteStore.MAX_ITEMS),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    insertQuickPaste(items[which - 1])
+                }
+            }
+            .setNegativeButton(getString(R.string.btn_close), null)
+            .create().also { dialog ->
+                dialog.listView.setOnItemLongClickListener { _, _, position, _ ->
+                    if (position > 0) {
+                        quickPaste.remove(position - 1)
+                        dialog.dismiss()
+                        Toast.makeText(this, getString(R.string.toast_removed), Toast.LENGTH_SHORT).show()
+                    }
+                    true
+                }
+                dialog.show()
+            }
+    }
+
+    private fun insertQuickPaste(text: String) {
+        val web = currentWebView()
+        if (web == null) {
+            copyForPaste(text)
+            return
+        }
+        web.evaluateJavascript(QuickPasteStore.insertScript(text)) { result ->
+            if (result != "true") copyForPaste(text)
+        }
+    }
+
+    private fun copyForPaste(text: String) {
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Quick Paste", text))
+        Toast.makeText(this, getString(R.string.toast_tap_a_text_box_first_copied), Toast.LENGTH_LONG).show()
+    }
+
+    private fun startScreenshotMarkup() {
+        val web = currentWebView()
+        val shot = if (web != null) ScreenshotTool.capture(web) else null
+        if (shot == null) {
+            Toast.makeText(this, getString(R.string.toast_could_not_take_a_screenshot_right), Toast.LENGTH_SHORT).show()
+            return
+        }
+        MarkupScreen.show(this, shot) { message -> Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) return
+        val link = clipboardWatcher.pendingLink() ?: return
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.title_open_copied_link))
+            .setMessage(if (link.length > 120) link.take(120) + "…" else link)
+            .setPositiveButton(getString(R.string.btn_open)) { _, _ -> createTab(link) }
+            .setNegativeButton(getString(R.string.btn_no_thanks), null)
+            .show()
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        const val SUPPORT_EMAIL = "ceo@yeehaw.pro"
+        private const val LOAD_STALL_MS = 25_000L
+        private const val LOAD_RECHECK_MS = 10_000L // after real progress was seen, re-check sooner
         private const val STATE_TAB_URLS = "yehaw.saved_tab_urls"
         private const val STATE_TAB_TITLES = "yehaw.saved_tab_titles"
         private const val STATE_TAB_SCROLLS = "yehaw.saved_tab_scrolls"
         private const val STATE_ACTIVE_TAB = "yehaw.saved_active_tab"
+        private const val REQUEST_STORAGE_PERMISSION = 4104
         private const val REQUEST_BROWSER_ROLE = 4102
         private const val REQUEST_FILE_CHOOSER = 4103
         private const val REQUEST_SITE_PERMISSION = 4104

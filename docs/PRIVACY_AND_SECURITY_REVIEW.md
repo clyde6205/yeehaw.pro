@@ -9,7 +9,7 @@
 | Open tabs | Restore browsing session | SQLite session table; maximum four tabs |
 | History | Recently visited pages | SQLite; maximum 1,000 entries |
 | Bookmarks | User-saved sites | SQLite; user controlled |
-| Offline reading copies | Explicit user-requested text snapshots | SQLite; maximum 100 pages and 250,000 characters per page |
+| Offline reading copies | Explicit user-requested text snapshots | SQLite; maximum 100 pages, 256 KiB UTF-8 per page and 8 MiB total |
 | Cookies and website storage | Website functionality | Android System WebView profile |
 | Downloads | User-requested files | Android DownloadManager / shared Downloads |
 | Site permissions | Camera, microphone, location | Android runtime permissions and WebView permission callbacks |

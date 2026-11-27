@@ -15,4 +15,7 @@ for (const item of ["index.html", "manifest.json", "sw.js"]) {
   await cp(join(root, item), join(output, item));
 }
 
+// Extra pages, headers and the 404 page.
+await cp(join(root, "site-extra"), output, { recursive: true });
+
 console.log("Built the Yehaw Android browser product site in public/.");

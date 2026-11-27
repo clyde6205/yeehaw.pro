@@ -1,0 +1,205 @@
+name: Android release APK smoke test
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "*.gradle.kts"
+      - ".github/workflows/android-release-smoke.yml"
+      - ".github/scripts/**"
+  push:
+    branches: ["main"]
+    paths:
+      - "app/**"
+      - "*.gradle.kts"
+      - ".github/workflows/android-release-smoke.yml"
+      - ".github/scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-smoke:
+    name: API ${{ matrix.api-level }} release APK (R8-minified)
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_AVD_HOME: /home/runner/.android/avd
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        api-level: [23, 36]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up JDK 17
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          gradle-version: "8.11.1"
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Probe KVM (infrastructure check, not an app test)
+        id: kvm
+        run: |
+          if [ -w /dev/kvm ]; then echo "available=true" >> "$GITHUB_OUTPUT"; echo "KVM present"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Emulator NOT run (infrastructure)::No /dev/kvm on this runner. GitHub only offers KVM on public-repo standard runners and on larger runners; this private repo uses a standard runner. This is NOT an app test result. See docs/KNOWN_ISSUES.md and android-emulator-tcg.yml."
+          fi
+      - name: Put Android platform-tools and emulator on PATH
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platform-tools" "emulator"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
+      - name: Create AVD
+        if: steps.kvm.outputs.available == 'true'
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          AVDMANAGER="$(command -v avdmanager || find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager | head -n 1)"
+          IMG="system-images;android-${{ matrix.api-level }};default;x86_64"
+          "$SDKMANAGER" --install "$IMG" >/dev/null
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$AVDMANAGER" create avd --force -n test -k "$IMG" -d pixel_2
+          emulator -list-avds
+          # Low-end proxy: 1.5 GB RAM, small heap. Still an emulator, not a physical phone.
+          CFG="$ANDROID_AVD_HOME/test.avd/config.ini"
+          sed -i '/^hw.ramSize/d;/^vm.heapSize/d' "$CFG"
+          printf 'hw.ramSize=1536\nvm.heapSize=128\n' >> "$CFG"
+      - name: Start emulator and wait for boot (hardware acceleration required)
+        id: emu
+        if: steps.kvm.outputs.available == 'true'
+        timeout-minutes: 12
+        run: |
+          emulator -accel-check || true
+          nohup emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on > /tmp/emulator.log 2>&1 &
+          booted=0
+          for i in $(seq 1 90); do
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
+            sleep 5
+          done
+          echo "--- adb devices"; adb devices
+          echo "--- emulator.log tail"; tail -40 /tmp/emulator.log
+          if [ "$booted" = 1 ]; then
+            echo "started=true" >> "$GITHUB_OUTPUT"; adb shell getprop ro.build.version.sdk
+          else
+            echo "started=false" >> "$GITHUB_OUTPUT"
+            echo "::error title=Emulator did not boot within 7.5 minutes::see log tail above"
+            exit 1
+          fi
+      - name: Build the minified release APK with a throwaway test key (NOT the production key)
+        timeout-minutes: 15
+        run: |
+          KS="$RUNNER_TEMP/throwaway-test.jks"
+          keytool -genkeypair -keystore "$KS" -storepass testpass -keypass testpass -alias test -keyalg RSA -keysize 2048 -validity 2 -dname "CN=yeehaw ci throwaway"
+          export ANDROID_KEYSTORE_PATH="$KS" ANDROID_KEYSTORE_PASSWORD=testpass ANDROID_KEY_ALIAS=test ANDROID_KEY_PASSWORD=testpass
+          ./gradlew --no-daemon :app:assembleRelease
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          ls -l "$APK"
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose "$APK" | head -5
+          grep -c "" app/build/outputs/mapping/release/mapping.txt || true
+      - name: Prove the release APK is a complete installable artifact (not partial or stripped)
+        timeout-minutes: 5
+        run: |
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | sort -V | tail -1)
+          echo "=== file"; ls -l "$APK"; sha256sum "$APK"
+          echo "=== zip integrity"; unzip -tq "$APK"
+          echo "=== required entries"
+          for e in AndroidManifest.xml classes.dex resources.arsc; do
+            unzip -l "$APK" | grep -q " $e$" && echo "present: $e" || { echo "::error::MISSING $e in release APK"; exit 1; }
+          done
+          unzip -l "$APK" | grep -E "assets/" | head -20
+          echo "entries total: $(unzip -Z1 "$APK" | wc -l)"; unzip -l "$APK" | tail -1
+          echo "=== badging (package, versions, SDK range, permissions, locales)"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package:|^sdkVersion|^targetSdkVersion|^uses-permission|^locales|^application-label:|^launchable-activity|^supports-screens" 
+          LOC=$("$BT/aapt2" dump badging "$APK" | grep -c "^locales:")
+          "$BT/aapt2" dump badging "$APK" | grep "^locales:" | tr ' ' '\n' | grep -E "^'(ar|bn|es|fil|hi|in|pt|ru|ur|zh-rCN)'$" | sort | tr '\n' ' '; echo
+          echo "=== signature"; "$BT/apksigner" verify --verbose --print-certs "$APK" | head -12
+      - name: Record the release candidate APK (hash, full signature schemes) and keep a copy
+        if: matrix.api-level == 36
+        timeout-minutes: 5
+        run: |
+          BT=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/* | sort -V | tail -1)
+          mkdir -p /tmp/rc
+          cp "$APK" /tmp/rc/yeehaw-release-candidate-ci-signed.apk
+          (cd /tmp/rc && sha256sum yeehaw-release-candidate-ci-signed.apk | tee SHA256SUMS)
+          "$BT/apksigner" verify --verbose --print-certs /tmp/rc/yeehaw-release-candidate-ci-signed.apk | tee /tmp/rc/apksigner.txt
+          echo "git commit: $GITHUB_SHA" | tee /tmp/rc/COMMIT.txt
+          echo "NOTE: signed with a throwaway CI key, NOT the production key. Not for distribution." | tee -a /tmp/rc/COMMIT.txt
+          # GitHub's artifact download host is not reachable from every environment, so the same bytes are also in this log.
+          echo "-----BEGIN YEEHAW APK BASE64-----"
+          base64 -w 100 /tmp/rc/yeehaw-release-candidate-ci-signed.apk
+          echo "-----END YEEHAW APK BASE64-----"
+      - name: Upload release candidate APK
+        if: matrix.api-level == 36
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-candidate-ci-signed-apk
+          path: /tmp/rc/
+          retention-days: 30
+      - name: Install the release APK and cold-start it
+        if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 10
+        run: |
+          adb shell input keyevent 82 || true
+          adb install -r "$APK"
+          PKG=app.yehaw.browser
+          echo "=== RELEASE API ${{ matrix.api-level }} @ 1.5 GB RAM emulator"
+          for i in 1 2 3 4 5; do
+            adb shell am force-stop $PKG; sleep 2
+            OUT=$(adb shell am start -W -n $PKG/app.yehaw.browser.MainActivity)
+            echo "$OUT" | grep -E "Status|ThisTime|TotalTime" | tr '\n' ' '; echo
+            echo "$OUT" | grep -q "Status: ok" || { echo "::error::release APK did not start"; exit 1; }
+          done
+          sleep 8
+          adb shell pidof $PKG || { echo "::error::release app died after start"; exit 1; }
+          adb shell dumpsys meminfo $PKG | grep -E "TOTAL|Java Heap|Native Heap" | head -6
+      - name: Stress the release build (monkey input + memory trim) 
+        if: steps.emu.outputs.started == 'true'
+        timeout-minutes: 15
+        run: |
+          PKG=app.yehaw.browser
+          adb logcat -c
+          # Random taps/swipes across the real UI of the minified build. 700 events, fixed seed for repeatability.
+          adb shell monkey -p $PKG --throttle 120 --pct-syskeys 0 --pct-appswitch 0 -s 42 -v 700 2>&1 | tail -15 | tee /tmp/monkey.txt
+          if grep -q "// CRASH" /tmp/monkey.txt; then echo "::error::monkey crashed the release build"; exit 1; fi
+          adb shell am start -n $PKG/app.yehaw.browser.MainActivity >/dev/null; sleep 3
+          for L in RUNNING_LOW RUNNING_CRITICAL UI_HIDDEN COMPLETE; do
+            adb shell am send-trim-memory $PKG $L || true; sleep 2
+            adb shell pidof $PKG >/dev/null || { echo "::error::release app died on trim-memory $L"; exit 1; }
+          done
+          echo "release build survived monkey + all trim-memory levels"
+      - name: Crash and ANR scan
+        if: steps.emu.outputs.started == 'true'
+        run: |
+          if adb logcat -d | grep -E "FATAL EXCEPTION|ANR in app.yehaw|ClassNotFoundException|NoSuchMethodError|NoSuchFieldError"; then
+            echo "::error::crash, ANR or R8-stripped class in release logcat"; adb logcat -d | grep -B2 -A15 -E "FATAL EXCEPTION|ClassNotFound|NoSuchMethod" | head -80; exit 1
+          fi
+          echo "no crash/ANR/R8 stripping errors in logcat"
+      - name: Upload R8 mapping and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-smoke-api-${{ matrix.api-level }}
+          path: |
+            app/build/outputs/mapping/release/
+            /tmp/emulator.log
+            /tmp/monkey.txt
+          if-no-files-found: ignore
+          retention-days: 7

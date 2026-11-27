@@ -1,0 +1,35 @@
+name: Maintenance agents
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches: ["integration/reconcile-main", "wip/quick-tools"]
+    paths:
+      - "agents/**"
+      - ".github/workflows/agents.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  agents:
+    name: Run maintenance agents and report to the founder console
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install console backend dependencies (for npm audit)
+        run: node --version && cd console/backend && npm ci --omit=dev
+      - name: Test the always-on scheduler
+        run: node --test agents/worker/worker.test.mjs
+      - name: Agents
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+        run: |
+          rc=0; for a in site-health ci-watch size-watch deps-watch; do node agents/$a.cjs || { echo "::error::agent $a crashed"; rc=1; }; done; exit $rc

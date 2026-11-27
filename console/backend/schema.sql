@@ -100,3 +100,72 @@ CREATE TABLE IF NOT EXISTS health_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS health_events_kind_idx ON health_events (kind, created_at);
+
+CREATE TABLE IF NOT EXISTS entitlements (
+  device_id     uuid PRIMARY KEY,
+  product_id    text NOT NULL,
+  token_hash    text NOT NULL,
+  state         text NOT NULL,
+  active        boolean NOT NULL,
+  expires_at    timestamptz,
+  verified_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Reports from the automated maintenance agents (agents/*.js and any scheduled agent). Written only through
+-- POST /v1/agent/report with the separate AGENT_TOKEN; read by the founder console.
+CREATE TABLE IF NOT EXISTS agent_reports (
+  id         bigserial PRIMARY KEY,
+  agent      text NOT NULL CHECK (agent ~ '^[a-z0-9_-]{2,40}$'),
+  status     text NOT NULL CHECK (status IN ('ok','warn','fail','fixed')),
+  title      text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 200),
+  details    jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ref        text CHECK (ref IS NULL OR char_length(ref) <= 80),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_reports_agent_idx ON agent_reports (agent, created_at DESC);
+
+-- Agent orchestration: findings (detected problems with a proposed fix), actions (what was done and how it was verified),
+-- runs (every orchestrator pass) and a lease so overlapping or duplicate scheduled runs cannot execute together.
+CREATE TABLE IF NOT EXISTS agent_findings (
+  id          bigserial PRIMARY KEY,
+  fingerprint text NOT NULL,
+  agent       text NOT NULL,
+  severity    text NOT NULL CHECK (severity IN ('info','low','medium','high','critical')),
+  title       text NOT NULL,
+  evidence    jsonb NOT NULL DEFAULT '{}'::jsonb,
+  root_cause  text,
+  proposal    text,
+  risk        text NOT NULL DEFAULT 'medium' CHECK (risk IN ('none','low','medium','high')),
+  repair      text,
+  status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open','approved','applied','verified','failed','rejected','dismissed','resolved')),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS agent_findings_status_idx ON agent_findings (status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS agent_findings_live_idx ON agent_findings (fingerprint) WHERE status IN ('open','approved','applied','failed');
+
+CREATE TABLE IF NOT EXISTS agent_actions (
+  id           bigserial PRIMARY KEY,
+  finding_id   bigint REFERENCES agent_findings (id) ON DELETE CASCADE,
+  actor        text NOT NULL,
+  action       text NOT NULL,
+  result       text,
+  verification text,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_actions_finding_idx ON agent_actions (finding_id, created_at);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id          bigserial PRIMARY KEY,
+  started_at  timestamptz NOT NULL DEFAULT now(),
+  finished_at timestamptz,
+  ok          boolean,
+  summary     jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS agent_lease (
+  id    int PRIMARY KEY CHECK (id = 1),
+  until timestamptz NOT NULL DEFAULT 'epoch'
+);
+INSERT INTO agent_lease (id) VALUES (1) ON CONFLICT DO NOTHING;

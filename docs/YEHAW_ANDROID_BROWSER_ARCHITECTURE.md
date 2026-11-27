@@ -11,8 +11,12 @@ Engine capability is bounded by the installed provider version and Android OS. W
 ## Low-memory policy
 
 - Keep the APK independent of a bundled browser engine.
-- Limit live tabs conservatively on constrained devices.
+- Limit live tabs conservatively using Android's low-RAM device signal and memory class (two live tabs on low-RAM/128 MB-class devices, three through 192 MB, otherwise four).
+- Default memory saver on low-RAM devices only when the user has not already selected a preference; users can explicitly override it.
+- Keep WebView off-screen pre-rasterization disabled to avoid extra memory use.
 - Evict background WebViews under memory pressure, retaining their last URL/title and approximate scroll position; recreate them on demand using the shared browser profile.
+- Do not purge WebView's in-memory resource cache when evicting a tab. Android System WebView continues to manage its disk cache; cache reuse remains subject to HTTP cache headers and provider behavior.
+- Turbo mode is an explicit opt-in that blocks network images; it does not claim to block video or rewrite website content.
 - Keep persistent history bounded.
 - Offer an explicit memory-saver mode; never silently disable JavaScript or rewrite pages.
 - Do not claim that every 1 GB device can run every modern website. A page's own memory requirements can exceed device capacity.
@@ -22,7 +26,7 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - HTTP/HTTPS navigation, back, forward, reload, home, and tabs.
 - Persistent local bookmarks and bounded browsing history, including SPA history API URL changes.
 - Durable local session continuity: up to four normal-browser tabs, active tab, page URL/title and approximate vertical scroll position are saved to SQLite when the app pauses/stops and restored after process death or device restart. This does not capture passwords, payment data, live form values or every website's in-memory application state.
-- User-triggered offline reading snapshots: capture up to 250,000 characters of readable page text per page, stored locally with a bounded 100-page library and controls to open, delete one or clear all. These are text-only reading copies, not full offline clones; images, scripts, embedded media, interactive forms and server-dependent features are not guaranteed offline.
+- User-triggered offline reading snapshots: capture readable page text, capped at 256 KiB of actual UTF-8 content per page and 8 MiB total across the library, with a maximum of 100 pages. The oldest copies are evicted first when the byte budget is reached. Users can open, delete one or clear all. These are text-only reading copies, not full offline clones; images, scripts, embedded media, interactive forms and server-dependent features are not guaranteed offline.
 - Optional cache-first browsing preference uses WebView's local HTTP cache before network access. It is best-effort only: server cache headers, site design, storage eviction and Android's WebView provider determine what is available without connectivity.
 - Website file chooser integration for upload forms.
 - Long-press link actions to open a link in the current tab, open it in a new tab, or copy its URL.
@@ -30,7 +34,8 @@ Engine capability is bounded by the installed provider version and Android OS. W
 - In-page text search and a shortcut to the Android downloads manager.
 - Selectable Google, DuckDuckGo, Bing, and Brave Search providers, with the preference saved locally.
 - Optional desktop user-agent mode, persisted across launches and applied to new tabs.
-- Optional memory saver that suppresses automatic image loading and pauses background tabs, persisted across launches.
+- Adaptive memory saver default on Android low-RAM devices (unless overridden by the user), suppressing automatic image loading and pausing background tabs; preference persists across launches.
+- Optional Turbo mode blocks network images only after the user enables it; JavaScript and page markup remain unchanged.
 - Clear history, bookmarks, cookies, cache, and Web Storage.
 - User-controlled third-party-cookie compatibility toggle, persisted across launches.
 - User-initiated popup windows in tabs and immersive full-screen HTML5 video.
