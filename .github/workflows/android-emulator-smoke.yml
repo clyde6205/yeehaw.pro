@@ -151,7 +151,7 @@ jobs:
             echo "== $f"; grep -B1 -A3 "<failure\|<error" "$f" | cut -c1-400 | head -40
           done
       - name: Emulator measurements (cold start, memory) - emulator numbers, not a phone
-        if: steps.emu.outputs.started == 'true'
+        if: always() && steps.emu.outputs.started == 'true'
         timeout-minutes: 10
         run: |
           gradle --no-daemon :app:installDebug -q
