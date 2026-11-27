@@ -60,3 +60,14 @@ Not covered: physical phone, real camera scan, TalkBack, native-speaker review o
 - Production deployment dpl_J7N62aG3F4oxQ5DwoL1FDXeucQMN (b4f2353, state READY, aliased to api.yeehaw.pro) was built with the static-site build (`npm run build`, output `public`). Tested from a Vercel sandbox: `GET /` returns the static product site, every API route returns 404 HTML (`/healthz`, `/v1/config/app-config`, `/v1/agent/*`, `/v1/admin/*`, `/admin`). READY did not mean the API was serving.
 - dpl_6AKoNk36F6E8oEzzBq3P1n7GbGSV (same commit, built with root directory console/backend) served the API correctly (tick 200, db ok, Neon rows) and is a rollback candidate. A rollback to it was attempted and denied by the session's permission control; nothing was changed.
 - Worker yeehaw-agents is deployed (source matches integration b236451: 403 handled as warn). It has only a scheduled handler, so it cannot be invoked from outside; no Worker-originated rows exist in Neon, so the Worker/Vercel token match is NOT VERIFIED.
+
+
+## Production re-verification after rollback (2026-11-27 13:45 Manila)
+
+- Owner approved the rollback; dpl_6AKoNk36F6E8oEzzBq3P1n7GbGSV promoted (aliased to api.yeehaw.pro). dpl_J7N62 kept. No project settings changed.
+- Route tests from a Vercel sandbox, 32 expectations: 27 pass. Misses: 4 admin requests got 429 from the failed-admin-auth limiter after 10 deliberate bad attempts (expected, 10 per 15 min per IP), and malformed JSON to /v1/agent/report returned 500 (defect; generic 4xx handling added in 8959661, backend suite 38/38, NOT yet deployed so production still has the 500).
+- 40 rapid wrong-token ticks: 26x 401 then 14x 429 (rate limit works). Preflight from a foreign origin: 404 and no allow-origin header (no CORS granted). HSTS on, nosniff on, no x-powered-by.
+- Agent authorized path: tick 200, Neon rows scheduler/db-health/fleet-health and agent_runs id 2. Test row removed afterwards.
+- npm audit (production dependencies of console/backend): 0 vulnerabilities. SQL review: user input is parameterised; the only interpolated identifiers are allowlisted and regex-checked.
+- Console CSP no longer lists cdn.jsdelivr.net / cdn.tailwindcss.com (the console loads no external scripts).
+- NOT VERIFIED: Worker-to-Vercel token match (needs the owner to run Test scheduled event), admin authorized routes on production (admin token not available to me), Android cold start / memory / physical devices.
