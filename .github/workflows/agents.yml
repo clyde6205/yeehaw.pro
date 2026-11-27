@@ -26,17 +26,6 @@ jobs:
         run: node --version && cd console/backend && npm ci --omit=dev
       - name: Test the always-on scheduler
         run: node --test agents/worker/worker.test.mjs
-      - name: Verify the AGENT_TOKEN secret is the one the API accepts (never prints it)
-        env:
-          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
-          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
-        run: |
-          if [ -z "$AGENT_TOKEN" ] || [ -z "$CONSOLE_URL" ]; then echo "::error::AGENT_TOKEN or CONSOLE_URL secret is not set"; exit 1; fi
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CONSOLE_URL/v1/agent/report" -H "authorization: Bearer $AGENT_TOKEN" -H 'content-type: application/json' \
-            -d "{\"agent\":\"actions-token-check\",\"status\":\"ok\",\"title\":\"GitHub Actions token accepted by the API\",\"ref\":\"actions-${GITHUB_RUN_ID}\",\"details\":{\"run\":\"${GITHUB_RUN_ID}\"}}")
-          echo "console answered HTTP $code"
-          if [ "$code" = 401 ] || [ "$code" = 403 ]; then echo "::error::The GitHub secret AGENT_TOKEN is stale (rotate it: docs/FOUNDER_ACCESS.md)"; exit 1; fi
-          [ "$code" = 201 ] || [ "$code" = 200 ] || { echo "::error::unexpected HTTP $code"; exit 1; }
       - name: Test the infrastructure collector
         run: node --test agents/infra/collect.test.mjs agents/infra/analyze.test.mjs
       - name: Infrastructure usage, cost and health (read-only; skips providers whose credential is not configured)
@@ -54,3 +43,15 @@ jobs:
           AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
         run: |
           rc=0; for a in site-health ci-watch size-watch deps-watch; do node agents/$a.cjs || { echo "::error::agent $a crashed"; rc=1; }; done; exit $rc
+      - name: Verify the AGENT_TOKEN secret is the one the API accepts (never prints it)
+        if: always()
+        env:
+          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+        run: |
+          if [ -z "$AGENT_TOKEN" ] || [ -z "$CONSOLE_URL" ]; then echo "::error::AGENT_TOKEN or CONSOLE_URL secret is not set"; exit 1; fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CONSOLE_URL/v1/agent/report" -H "authorization: Bearer $AGENT_TOKEN" -H 'content-type: application/json' \
+            -d "{\"agent\":\"actions-token-check\",\"status\":\"ok\",\"title\":\"GitHub Actions token accepted by the API\",\"ref\":\"actions-${GITHUB_RUN_ID}\",\"details\":{\"run\":\"${GITHUB_RUN_ID}\"}}")
+          echo "console answered HTTP $code"
+          if [ "$code" = 401 ] || [ "$code" = 403 ]; then echo "::error::The GitHub secret AGENT_TOKEN is stale (rotate it: docs/FOUNDER_ACCESS.md)"; exit 1; fi
+          [ "$code" = 201 ] || [ "$code" = 200 ] || { echo "::error::unexpected HTTP $code"; exit 1; }
