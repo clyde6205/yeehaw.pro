@@ -680,3 +680,52 @@ test('end to end over real HTTP: watcher detects "API serving the static site", 
     assert.deepEqual(acts, ['detected', 'auto-resolved']);
   } finally { srv.close(); }
 });
+
+// ------------------------------------------------------------------ agent write API: findings, evidence, independent verification, rollback, costs
+test('agent API: findings and actions need the agent token; verification only by QA, only for the prepared commit, never from the same run; secrets are redacted; rollback is recorded', async () => {
+  const agentToken = crypto.randomBytes(32).toString('base64url');
+  const a2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, agentToken });
+  const srv = a2.listen(0); const u = 'http://127.0.0.1:' + srv.address().port;
+  const ag = (p, body, token = agentToken, method = 'POST') => fetch(u + p, { method, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: method === 'GET' ? undefined : JSON.stringify(body) });
+  try {
+    assert.equal((await ag('/v1/agent/finding', {}, 'wrong')).status, 401);
+    assert.equal((await ag('/v1/agent/finding', { agent: 'nobody', fingerprint: 'x:y1', severity: 'high', title: 't' })).status, 400);
+    const c = await (await ag('/v1/agent/finding', { agent: 'repair', fingerprint: 'code:bug-1', severity: 'high', title: 'bug', repair: 'drop_all_tables', evidence: { log: 'token ghp_abcdefghijklmnop leaked postgres://u:p@h/db' }, proposal: 'fix it' })).json();
+    assert.ok(c.created);
+    const row = (await pool.query('SELECT repair, evidence FROM agent_findings WHERE id = $1', [c.id])).rows[0];
+    assert.equal(row.repair, null, 'agents cannot inject automatic repairs'); assert.ok(!JSON.stringify(row.evidence).includes('ghp_abc') && !JSON.stringify(row.evidence).includes('postgres://'));
+    // no fix prepared yet: nobody can verify
+    const ev = { commit: 'abc1234', run_id: 'qa-1', tests: { exit: 0, passed: 10, failed: 0 } };
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'qa', action: 'verify', verification: 'passed', evidence: ev })).status, 409);
+    // a repair cannot verify itself, and a fix must carry evidence
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'repair', action: 'fix prepared', verification: 'passed', evidence: ev })).status, 403);
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'repair', action: 'fix prepared', evidence: {} })).status, 400);
+    const prep = { commit: 'abc1234', run_id: 'repair-1', branch: 'repair/1', tests: { exit: 0, passed: 10, failed: 0 } };
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'repair', action: 'fix prepared', evidence: prep })).status, 201);
+    assert.equal((await pool.query('SELECT status FROM agent_findings WHERE id=$1', [c.id])).rows[0].status, 'applied');
+    // same run id, wrong commit -> refused; independent run on the right commit -> verified
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'qa', action: 'verify', verification: 'passed', evidence: { ...ev, run_id: 'repair-1' } })).status, 409);
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'qa', action: 'verify', verification: 'passed', evidence: { ...ev, commit: 'deadbee' } })).status, 409);
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'qa', action: 'verify', verification: 'passed', evidence: ev })).status, 201);
+    assert.equal((await pool.query('SELECT status FROM agent_findings WHERE id=$1', [c.id])).rows[0].status, 'verified');
+    // a failing independent run marks it failed
+    const c2 = await (await ag('/v1/agent/finding', { agent: 'repair', fingerprint: 'code:bug-2', severity: 'high', title: 'bug2' })).json();
+    await ag('/v1/agent/action', { finding_id: c2.id, actor: 'repair', action: 'fix prepared', evidence: { ...prep, commit: 'bbb2222' } });
+    await ag('/v1/agent/action', { finding_id: c2.id, actor: 'qa', action: 'verify', verification: 'failed', evidence: { commit: 'bbb2222', run_id: 'qa-2', tests: { exit: 1, passed: 8, failed: 2 } } });
+    assert.equal((await pool.query('SELECT status FROM agent_findings WHERE id=$1', [c2.id])).rows[0].status, 'failed');
+    // evidence is visible in the console; rollback is only possible for a prepared change
+    const d = await (await admin('/agents')).json();
+    assert.ok(d.actions.some((x) => x.actor === 'qa' && x.evidence && x.evidence.tests));
+    const c3 = await (await ag('/v1/agent/finding', { agent: 'infrastructure', fingerprint: 'infra:x1', severity: 'low', title: 'no code' })).json();
+    assert.equal((await admin(`/findings/${c3.id}/rollback`, { method: 'POST', body: '{}' })).status, 409);
+    assert.equal((await admin(`/findings/${c.id}/rollback`, { method: 'POST', body: '{}' })).status, 202);
+    const pend = await (await ag('/v1/agent/pending-rollbacks', null, agentToken, 'GET')).json();
+    assert.deepEqual(pend.requests, [{ finding_id: c.id, branch: 'repair/1', commit: 'abc1234' }]);
+    await ag('/v1/agent/action', { finding_id: c.id, actor: 'repair', action: 'rollback done', evidence: { commit: 'fed1234' } });
+    assert.deepEqual((await (await ag('/v1/agent/pending-rollbacks', null, agentToken, 'GET')).json()).requests, []);
+    // costs: honest empty state, then real report
+    assert.equal((await (await admin('/costs')).json()).costs.length, 0);
+    await ag('/v1/agent/report', { agent: 'infra-cost', status: 'ok', title: 'costs', details: { costs: [{ provider: 'neon', metric: 'compute_hours', value: 1.5, unit: 'h' }] } });
+    assert.equal((await (await admin('/costs')).json()).costs[0].provider, 'neon');
+  } finally { srv.close(); }
+});

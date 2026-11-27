@@ -248,6 +248,79 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     res.status(201).json({ ok: true });
   }));
 
+  // ---- agent write API used by the repair / infrastructure / QA agents (same write-only AGENT_TOKEN; never reads devices or config)
+  const agentAuth = (req, res) => {
+    if (!agentToken) { res.status(503).json({ error: 'agent_reporting_disabled' }); return false; }
+    const hd = req.get('authorization') || '';
+    const t = hd.startsWith('Bearer ') ? hd.slice(7) : '';
+    if (!t || !safeEqual(t, agentToken)) { res.status(401).json({ error: 'unauthorized' }); return false; }
+    return true;
+  };
+  const SECRET_RE = /(ghp_|gho_|github_pat_|sk-|npm_|xox[bp]-)[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._~+\/=-]{12,}|postgres(?:ql)?:\/\/[^\s"']+/g;
+  const redact = (v) => JSON.parse(JSON.stringify(v ?? null, (_k, x) => (typeof x === 'string' ? x.replace(SECRET_RE, '[redacted]') : x)));
+  const FINDING_AGENTS = ['infrastructure', 'repair', 'performance', 'security', 'qa', 'diagnostic', 'availability', 'db-optimizer', 'android'];
+  const SEV = ['info', 'low', 'medium', 'high', 'critical'];
+  app.post('/v1/agent/finding', limiter(60_000, 60), express.json({ limit: '16kb' }), wrap(async (req, res) => {
+    if (!agentAuth(req, res)) return;
+    const b = req.body || {};
+    if (!FINDING_AGENTS.includes(b.agent)) return res.status(400).json({ error: 'bad_agent' });
+    if (typeof b.fingerprint !== 'string' || !/^[a-z0-9_:.\/-]{3,120}$/.test(b.fingerprint)) return res.status(400).json({ error: 'bad_fingerprint' });
+    if (!SEV.includes(b.severity)) return res.status(400).json({ error: 'bad_severity' });
+    const title = typeof b.title === 'string' ? b.title.trim().slice(0, 200) : '';
+    if (!title) return res.status(400).json({ error: 'bad_title' });
+    const evidence = redact(b.evidence && typeof b.evidence === 'object' ? b.evidence : {});
+    if (JSON.stringify(evidence).length > 8000) return res.status(400).json({ error: 'details_too_large' });
+    const str = (v) => (typeof v === 'string' ? redact(v).slice(0, 1000) : null);
+    // `repair` is never accepted from outside: automatic server-side repairs exist only in the orchestrator allowlist.
+    const ex = await pool.query(`SELECT id FROM agent_findings WHERE fingerprint = $1 AND status IN ('open','approved','applied','failed')`, [b.fingerprint]);
+    if (ex.rowCount) {
+      await pool.query(`UPDATE agent_findings SET evidence=$2, title=$3, severity=$4, root_cause=$5, proposal=$6, updated_at=now() WHERE id=$1`, [ex.rows[0].id, evidence, title, b.severity, str(b.root_cause), str(b.proposal)]);
+      return res.status(200).json({ ok: true, id: Number(ex.rows[0].id), created: false });
+    }
+    const ins = await pool.query(`INSERT INTO agent_findings (fingerprint, agent, severity, title, evidence, root_cause, proposal, risk) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [b.fingerprint, b.agent, b.severity, title, evidence, str(b.root_cause), str(b.proposal), ['none', 'low', 'medium', 'high'].includes(b.risk) ? b.risk : 'medium']);
+    await pool.query('INSERT INTO agent_actions (finding_id, actor, action, result) VALUES ($1,$2,$3,$4)', [ins.rows[0].id, b.agent, 'detected', title]);
+    res.status(201).json({ ok: true, id: Number(ins.rows[0].id), created: true });
+  }));
+
+  // An agent records what it did. A finding can become `verified` only through actor `qa`, and only for the very commit a `repair`
+  // action prepared, and only from a different run (so an agent can never mark its own work successful).
+  app.post('/v1/agent/action', limiter(60_000, 120), express.json({ limit: '16kb' }), wrap(async (req, res) => {
+    if (!agentAuth(req, res)) return;
+    const b = req.body || {};
+    const id = Number(b.finding_id);
+    if (!Number.isSafeInteger(id)) return res.status(400).json({ error: 'bad_finding' });
+    if (!['repair', 'qa', 'infrastructure', 'performance', 'security'].includes(b.actor)) return res.status(400).json({ error: 'bad_actor' });
+    const action = typeof b.action === 'string' ? b.action.trim().slice(0, 80) : '';
+    if (!action) return res.status(400).json({ error: 'bad_action' });
+    if (b.verification != null && !['passed', 'failed'].includes(b.verification)) return res.status(400).json({ error: 'bad_verification' });
+    if (b.verification != null && b.actor !== 'qa') return res.status(403).json({ error: 'only_qa_verifies', detail: 'Only the QA agent can record a verification outcome.' });
+    const evidence = redact(b.evidence && typeof b.evidence === 'object' ? b.evidence : {});
+    if (JSON.stringify(evidence).length > 8000) return res.status(400).json({ error: 'details_too_large' });
+    const f = (await pool.query('SELECT id, status FROM agent_findings WHERE id = $1', [id])).rows[0];
+    if (!f) return res.status(404).json({ error: 'no_finding' });
+    if (b.actor === 'repair' && /^fix prepared/.test(action) && !(/^[0-9a-f]{7,40}$/.test(evidence.commit || '') && evidence.run_id && evidence.tests)) return res.status(400).json({ error: 'evidence_required', detail: 'A prepared fix must carry commit, run_id and test results.' });
+    let status = null;
+    if (b.verification != null) {
+      const prior = (await pool.query(`SELECT evidence FROM agent_actions WHERE finding_id = $1 AND actor = 'repair' AND action LIKE 'fix prepared%' ORDER BY id DESC LIMIT 1`, [id])).rows[0];
+      if (!prior || !prior.evidence || prior.evidence.commit !== evidence.commit || prior.evidence.run_id === evidence.run_id || !evidence.run_id || !evidence.tests)
+        return res.status(409).json({ error: 'not_independent', detail: 'Verification must cover the commit the repair agent prepared, come from a different run, and include test results.' });
+      status = b.verification === 'passed' ? 'verified' : 'failed';
+    }
+    await pool.query('INSERT INTO agent_actions (finding_id, actor, action, result, verification, evidence) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, b.actor, action, typeof b.result === 'string' ? redact(b.result).slice(0, 1000) : null, b.verification || null, evidence]);
+    if (status) await pool.query(`UPDATE agent_findings SET status = $2, updated_at = now(), resolved_at = CASE WHEN $2 = 'verified' THEN now() END WHERE id = $1`, [id, status]);
+    else if (b.actor === 'repair' && /^fix prepared/.test(action)) await pool.query(`UPDATE agent_findings SET status = 'applied', updated_at = now() WHERE id = $1 AND status IN ('open','approved','failed')`, [id]);
+    else if (b.actor === 'repair' && action === 'rollback done') await pool.query(`UPDATE agent_findings SET status = 'dismissed', updated_at = now() WHERE id = $1`, [id]);
+    res.status(201).json({ ok: true, status });
+  }));
+  app.get('/v1/agent/pending-rollbacks', limiter(60_000, 60), wrap(async (req, res) => {
+    if (!agentAuth(req, res)) return;
+    const r = await pool.query(`SELECT a.finding_id, a.evidence FROM agent_actions a WHERE a.action = 'rollback requested'
+      AND NOT EXISTS (SELECT 1 FROM agent_actions d WHERE d.finding_id = a.finding_id AND d.action = 'rollback done' AND d.id > a.id) ORDER BY a.id`);
+    res.json({ requests: r.rows.map((x) => ({ finding_id: Number(x.finding_id), branch: x.evidence && x.evidence.branch, commit: x.evidence && x.evidence.commit })) });
+  }));
+
   // The server-side agent tick. Called every 5 minutes by the always-on scheduler (agents/worker). It measures the database
   // (round trip, schema read, write), checks fleet crash rate, then runs the orchestrator (specialist agents -> findings ->
   // approved or low-risk repairs -> verification). It needs no admin power and returns no device data.
@@ -585,7 +658,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       q(`SELECT DISTINCT ON (agent) agent, status, title, details, ref, created_at FROM agent_reports ORDER BY agent, created_at DESC`),
       q(`SELECT id, agent, status, title, ref, created_at FROM agent_reports ORDER BY created_at DESC LIMIT 100`),
       q(`SELECT id, fingerprint, agent, severity, title, evidence, root_cause, proposal, risk, repair, status, created_at, updated_at FROM agent_findings ORDER BY (status IN ('open','approved','applied','failed')) DESC, id DESC LIMIT 100`),
-      q(`SELECT a.id, a.finding_id, a.actor, a.action, a.result, a.verification, a.created_at FROM agent_actions a ORDER BY a.id DESC LIMIT 100`),
+      q(`SELECT a.id, a.finding_id, a.actor, a.action, a.result, a.verification, a.evidence, a.created_at FROM agent_actions a ORDER BY a.id DESC LIMIT 100`),
       q(`SELECT id, started_at, finished_at, ok, summary FROM agent_runs ORDER BY id DESC LIMIT 20`),
     ]);
     const engine = await getEngineSettings(pool);
@@ -619,6 +692,23 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     const out = await runOrchestrator(pool);
     await audit('agent.engine.run', { lease: out.lease });
     res.json(out);
+  }));
+
+  // Roll back a prepared/verified code change: records the owner's request; the repair agent then reverts the commit on its own
+  // branch (never on a protected branch) and records `rollback done`. Findings without a recorded code change cannot be rolled back.
+  admin.post('/findings/:id/rollback', small, wrap(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id)) return res.status(400).json({ error: 'bad_id' });
+    const prior = (await pool.query(`SELECT evidence FROM agent_actions WHERE finding_id = $1 AND actor = 'repair' AND action LIKE 'fix prepared%' ORDER BY id DESC LIMIT 1`, [id])).rows[0];
+    if (!prior) return res.status(409).json({ error: 'nothing_to_roll_back', detail: 'No code change was prepared for this finding.' });
+    await pool.query('INSERT INTO agent_actions (finding_id, actor, action, result, evidence) VALUES ($1,$2,$3,$4,$5)', [id, 'owner', 'rollback requested', 'owner asked for the prepared change to be reverted', { branch: prior.evidence.branch, commit: prior.evidence.commit }]);
+    await audit('agent.finding.rollback', { finding: id });
+    res.status(202).json({ ok: true });
+  }));
+  // Resource and operating costs as last measured by the infrastructure agent. Nothing is estimated here.
+  admin.get('/costs', wrap(async (_req, res) => {
+    const r = (await pool.query(`SELECT details, created_at FROM agent_reports WHERE agent = 'infra-cost' ORDER BY created_at DESC LIMIT 1`)).rows[0];
+    res.json(r ? { measured_at: r.created_at, costs: r.details.costs || [], note: r.details.note || null } : { measured_at: null, costs: [], note: 'No cost measurement has been reported yet.' });
   }));
 
   // Owner decisions on findings. Approving a finding that has an allowlisted repair lets the next orchestrator pass run and verify it.

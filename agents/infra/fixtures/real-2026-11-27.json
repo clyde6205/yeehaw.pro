@@ -1,0 +1,144 @@
+{
+ "captured": "2026-11-27 via Vercel/Cloudflare/Neon connectors (real values; ids/timestamps as returned)",
+ "serving": {
+  "id": "dpl_5tkQW4b6BknmKmUBz4PNTjmwBv1g",
+  "state": "READY",
+  "target": "production",
+  "createdAt": 1795789921053,
+  "buildingAt": 1795789923167,
+  "ready": 1795789934621,
+  "meta": {
+   "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+  },
+  "alias": [
+   "api.yeehaw.pro"
+  ],
+  "source": "redeploy"
+ },
+ "deployments": [
+  {
+   "id": "dpl_5tkQW4b6BknmKmUBz4PNTjmwBv1g",
+   "state": "READY",
+   "target": "production",
+   "createdAt": 1795789921053,
+   "buildingAt": 1795789923167,
+   "ready": 1795789934621,
+   "meta": {
+    "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+   },
+   "alias": [
+    "api.yeehaw.pro"
+   ],
+   "source": "redeploy"
+  },
+  {
+   "id": "dpl_5zYMkAYjHVM8dweJ7hsq9kTrFWMR",
+   "state": "READY",
+   "target": "production",
+   "createdAt": 1795789760996,
+   "buildingAt": 1795789762769,
+   "ready": 1795789774782,
+   "meta": {
+    "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+   },
+   "alias": [
+    "api.yeehaw.pro"
+   ]
+  },
+  {
+   "id": "dpl_4g3NF26bJ5KmycYoymRDuvnHoUaH",
+   "state": "READY",
+   "target": "production",
+   "createdAt": 1795789681727,
+   "buildingAt": null,
+   "ready": null,
+   "meta": {
+    "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+   },
+   "alias": []
+  },
+  {
+   "id": "dpl_B3GX7fcmVoLDktCpLK7tNa5tUvge",
+   "state": "READY",
+   "target": "production",
+   "createdAt": 1795788303216,
+   "buildingAt": 1795788304489,
+   "ready": 1795788308722,
+   "meta": {
+    "githubCommitSha": "50f0ee81cc18c39a0190e855ecda97f81a177bed"
+   },
+   "alias": [
+    "api.yeehaw.pro"
+   ]
+  },
+  {
+   "id": "dpl_J7N62aG3F4oxQ5DwoL1FDXeucQMN",
+   "state": "READY",
+   "target": "production",
+   "createdAt": 1795756533864,
+   "buildingAt": null,
+   "ready": null,
+   "meta": {
+    "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+   },
+   "alias": []
+  },
+  {
+   "id": "dpl_84GWCFMcvYcTAH8gfgA1XhFGtApA",
+   "state": "ERROR",
+   "target": "production",
+   "createdAt": 1795755979465,
+   "buildingAt": null,
+   "ready": null,
+   "meta": {
+    "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+   },
+   "alias": []
+  },
+  {
+   "id": "dpl_6AKoNk36F6E8oEzzBq3P1n7GbGSV",
+   "state": "READY",
+   "target": "production",
+   "createdAt": 1795751905231,
+   "buildingAt": 1795751906755,
+   "ready": 1795751917618,
+   "meta": {
+    "githubCommitSha": "b4f2353cbe6a381dc0ff641252bec479ee498760"
+   },
+   "alias": [
+    "api.yeehaw.pro"
+   ]
+  }
+ ],
+ "badDeployment": {
+  "id": "dpl_B3GX7fcmVoLDktCpLK7tNa5tUvge",
+  "state": "READY",
+  "target": "production",
+  "createdAt": 1795788303216,
+  "buildingAt": 1795788304489,
+  "ready": 1795788308722,
+  "meta": {
+   "githubCommitSha": "50f0ee81cc18c39a0190e855ecda97f81a177bed"
+  },
+  "alias": [
+   "api.yeehaw.pro"
+  ]
+ },
+ "cloudflare": {
+  "fight_mode": false,
+  "schedules": {
+   "yeehaw-agents": [],
+   "yeehaw-site": []
+  }
+ },
+ "neon": {
+  "compute_time_seconds": 7383,
+  "active_time_seconds": 29296,
+  "data_transfer_bytes": 548541,
+  "data_storage_bytes_hour": 0,
+  "autoscaling_limit_max_cu": 0.25,
+  "subscription_type": "free_v3",
+  "consumption_period_start": "2026-11-01T00:00:00Z"
+ },
+ "branchHeadSha": "888f1bcc1653eb22c18342a56562d99f7ab0420a"
+}

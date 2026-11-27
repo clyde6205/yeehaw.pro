@@ -180,3 +180,5 @@ CREATE TABLE IF NOT EXISTS engine_settings (
   updated_at       timestamptz NOT NULL DEFAULT now()
 );
 INSERT INTO engine_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS evidence jsonb;
