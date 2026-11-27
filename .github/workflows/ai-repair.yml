@@ -1,0 +1,39 @@
+name: AI repair cycle
+
+# Unattended, bounded, never merges. Runs the watched tests; ONLY if one fails does it call the model (one attempt per run),
+# verifies the proposal independently, and opens a DRAFT pull request from a repair/* branch. No secret => it reports "provider not configured" and stops.
+on:
+  schedule:
+    - cron: "41 3 * * *"   # once a day
+  workflow_dispatch:
+
+permissions:
+  contents: write        # push repair/* branches only (the script never pushes any other branch)
+  pull-requests: write   # open DRAFT pull requests
+
+concurrency:
+  group: ai-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the development branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: wip/quick-tools
+          fetch-depth: 0
+      - name: Git identity for the repair agent
+        run: git config user.name "YeeHaw Repair Agent" && git config user.email "repair@yeehaw.pro"
+      - name: Unit tests of the repair pipeline itself
+        run: node --test agents/repair/repair.test.mjs agents/repair/ai-fixer.test.mjs agents/repair/unattended.test.mjs
+      - name: Repair cycle
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: wip/quick-tools
+        run: node agents/repair/unattended.mjs

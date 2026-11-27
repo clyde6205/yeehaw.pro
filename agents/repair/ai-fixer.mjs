@@ -7,7 +7,8 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 
-export const FORBIDDEN = [/(^|\/)\.env/, /(^|\/)node_modules\//, /\.(jks|keystore|p12|pem|key)$/i, /(^|\/)package-lock\.json$/, /(^|\/)\.git\//, /^main$/];
+// Tests are never editable by the fixer: a repair must make the existing tests pass, not change what they check.
+export const FORBIDDEN = [/\.(test|spec)\.[cm]?[jt]sx?$/, /(^|\/)(test|tests|__tests__|androidTest)\//, /(^|\/)\.env/, /(^|\/)node_modules\//, /\.(jks|keystore|p12|pem|key)$/i, /(^|\/)package-lock\.json$/, /(^|\/)\.git\//, /^main$/];
 // Allowed, but a human (the founder) must approve before it is merged or deployed.
 export const SENSITIVE = [/^\.github\//, /^vercel\.json$/, /(^|\/)wrangler\./, /\.gradle(\.kts)?$/, /AndroidManifest\.xml$/, /network_security_config\.xml$/,
   /(^|\/)migrations?\//, /\.sql$/, /(^|\/)(auth|security)[^/]*\.(js|mjs|cjs|ts|kt)$/i, /console\/backend\/server\.js$/];
