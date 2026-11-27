@@ -105,6 +105,22 @@ export async function runOnce(env, storage, fetchFn = fetch, now = Date.now()) {
   return { next, report };
 }
 
+/** Proves, from inside the Worker and with the Worker's own secret, that the console accepts this Worker's AGENT_TOKEN.
+ *  Rate limited (one send per 10 minutes) so the public URL cannot be used to flood the console. Never returns the token. */
+export async function selfTest(env, storage, fetchFn = fetch, now = Date.now()) {
+  const last = (await storage.get('selftestAt')) || 0;
+  if (now - last < 10 * 60_000) return { sent: false, reason: 'rate limited: one self-test per 10 minutes', retryInSeconds: Math.ceil((10 * 60_000 - (now - last)) / 1000) };
+  const token = String(env.AGENT_TOKEN || '').trim();
+  if (!token || /[^\x21-\x7e]/.test(token)) return { sent: false, reason: 'AGENT_TOKEN missing or unsendable in the Worker' };
+  await storage.put('selftestAt', now);
+  const base = String(env.CONSOLE_URL || '').replace(/\/$/, '');
+  try {
+    const r = await fetchFn(base + '/v1/agent/report', { method: 'POST', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json', 'user-agent': UA },
+      body: JSON.stringify({ agent: 'watch-selftest', status: 'ok', title: 'Worker self-test: the console accepted this Worker\'s token', ref: 'selftest-' + now, details: { at: new Date(now).toISOString() } }), signal: sig() });
+    return { sent: true, httpStatus: r.status, accepted: r.status === 201 };
+  } catch (e) { return { sent: true, accepted: false, error: e.message }; }
+}
+
 export class Watch {
   constructor(state, env) { this.state = state; this.env = env; }
   async fetch(request) {
@@ -114,6 +130,7 @@ export class Watch {
       if (at == null) await this.state.storage.setAlarm(Date.now() + 1000);
       return Response.json({ running: true, nextAlarm: at ?? 'soon' });
     }
+    if (url.pathname === '/selftest') return Response.json(await selfTest(this.env, this.state.storage));
     const s = (await this.state.storage.get('state')) || {};
     const alarm = await this.state.storage.getAlarm();
     return Response.json({ running: alarm != null, status: s.status || 'unknown', since: s.since ? new Date(s.since).toISOString() : null,

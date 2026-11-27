@@ -98,3 +98,20 @@ test('queue: reports are held while the console refuses them, then delivered in 
   o = await runOnce(env, storage, f, t + 20 * 60_000); // no new state change, but queue flushes
   assert.equal(o.next.queued, 0); assert.equal(o.next.deliveryError, undefined);
 });
+
+import { selfTest } from './index.js';
+test('selfTest sends one report with the Worker token, is rate limited, and never returns the token', async () => {
+  const store = new Map(); const storage = { get: async (k) => store.get(k), put: async (k, v) => { store.set(k, v); } };
+  const calls = [];
+  const f = async (u, o) => { calls.push({ u, o }); return { status: 201 }; };
+  const env = { CONSOLE_URL: 'https://api.example/', AGENT_TOKEN: 'sekret-token-value' };
+  const a = await selfTest(env, storage, f, 1_000_000);
+  assert.equal(a.accepted, true); assert.equal(calls.length, 1);
+  assert.equal(calls[0].u, 'https://api.example/v1/agent/report'); assert.equal(calls[0].o.headers.authorization, 'Bearer sekret-token-value');
+  assert.ok(!JSON.stringify(a).includes('sekret'));
+  const b = await selfTest(env, storage, f, 1_000_000 + 60_000);
+  assert.equal(b.sent, false); assert.equal(calls.length, 1);
+  assert.equal((await selfTest({ CONSOLE_URL: 'x' }, new Map().constructor === Map ? { get: async () => 0, put: async () => {} } : null, f, 9e9)).sent, false);
+  const rej = await selfTest(env, { get: async () => 0, put: async () => {} }, async () => ({ status: 401 }), 9e9);
+  assert.equal(rej.accepted, false); assert.equal(rej.httpStatus, 401);
+});
