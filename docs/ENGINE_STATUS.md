@@ -62,3 +62,10 @@ Caveat that must stay attached to the table: scenarios 4-8, 10-12 ran against a 
 - Found and fixed in production: duplicate deliveries with the same (agent, ref) were stored twice (2 rows); after deploy 2 the retry returns 200 `{duplicate:true}` and the table holds 1 row (verified in Neon).
 - Persistence: rows written during deploy 1 are still present after deploy 2 (new instances) — survives backend restart.
 - Not yet verified on production: Worker→API delivery end to end (Worker not yet exercised since secret set), engine pass on production data, rollback execution.
+
+## Production redeploy 2 (2026-11-27, production evidence)
+- Source: wip/quick-tools @ ef32094 (remote SHA verified equal to local). Root Directory console/backend. Env WATCH_STATUS_URL added (plain, production). Existing env vars untouched.
+- dpl_6nAYZwbAmtV5cT65n7WTE7cyV9MF: ERROR at build ("npm run build" script missing: the project had no explicit build command). Never promoted; production stayed on the previous deployment.
+- dpl_AmretwwuKFeUCScQ6kdvmMiRfcai: READY, alias api.yeehaw.pro assigned (buildCommand set explicitly to a no-op). Rollback targets preserved: dpl_Brab6vqt…, dpl_5tkQW4b6….
+- Probes from a Vercel sandbox against the live domain: /healthz 200, /livez 200, /v1/config/app-config 200, /admin/ 200, /v1/admin/agents|trends and /v1/agent/pending-rollbacks 401 without credentials, /v1/agent/report malformed JSON 400, https://yeehaw.pro/ 200, Worker /status ok with no queued reports.
+- NOT yet verified in production: authenticated roster/trends payloads (need ADMIN_TOKEN, which I do not hold), engine pass on production data, rendered console cards. Those cards are tested locally only.
