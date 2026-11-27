@@ -1,0 +1,169 @@
+You are the YeeHaw repair agent. Fix ONE real defect with the smallest correct change.
+Rules: change only what the defect requires; never weaken, skip or delete a test; no new dependencies; no secrets; keep behaviour otherwise identical.
+Answer with ONLY a JSON object: {"rationale": string, "edits": [{"path": string, "old": string, "new": string}]}.
+"old" must be copied EXACTLY from the file (without the line-number prefix) and occur exactly once in it. If you cannot find the defect, answer {"rationale": "...", "edits": []}.
+FINDING: scanAndroidManifest reports cleartext as pinned when yeehaw.pro is in a domain-config that PERMITS cleartext
+DETAIL: Test agents/repair/real-defect.test.mjs fails: expected android:cleartext, got android:cleartext-residual. The test file must not be changed.
+FAILING TEST OUTPUT:
+TAP version 13
+# Subtest: cleartext to yeehaw.pro is not reported as pinned when its own domain-config permits cleartext
+not ok 1 - cleartext to yeehaw.pro is not reported as pinned when its own domain-config permits cleartext
+  ---
+  duration_ms: 2.241247
+  type: 'test'
+  location: '/tmp/claude-0/-home-claude/ec3ef49a-eab6-5e63-a285-82f8eb9dbd08/scratchpad/demo-base-wt/agents/repair/real-defect.test.mjs:7:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+    +   'security:android:cleartext-residual'
+    -   'security:android:cleartext'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'security:android:cleartext'
+  actual:
+    0: 'security:android:cleartext-residual'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///tmp/claude-0/-home-claude/ec3ef49a-eab6-5e63-a285-82f8eb9dbd08/scratchpad/demo-base-wt/agents/repair/real-defect.test.mjs:14:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 61.150262
+
+SOURCE:
+=== agents/security/scan.mjs ===
+   1| // Security agent tooling. Read-only: it probes, it never changes anything. Findings use the same shape as every other agent
+   2| // ({fingerprint, agent:'security', severity, title, evidence, root_cause, proposal, risk}) and are published through the agent API.
+   3| //   scanApi   : active checks of a running API (authentication, authorization, exposure, headers, error handling, rate limiting)
+   4| //   scanSecrets: secret patterns in tracked files (secret protection)
+   5| //   parseAudit : `npm audit --json` output -> dependency findings
+   6| //   scanAndroidManifest: Android attack-surface checks used by the Android agent too
+   7| const F = (fingerprint, severity, title, evidence, root_cause, proposal, risk = 'medium') => ({ fingerprint: 'security:' + fingerprint, agent: 'security', severity, title, evidence, root_cause, proposal, risk });
+   8| 
+   9| const ADMIN_PATHS = ['/v1/admin/agents', '/v1/admin/devices', '/v1/admin/config', '/v1/admin/costs', '/v1/admin/engine'];
+  10| const AGENT_POST = ['/v1/agent/report', '/v1/agent/finding', '/v1/agent/action'];
+  11| const LEAK_PATHS = ['/.env', '/.git/config', '/package.json', '/server.js', '/schema.sql', '/vercel.json', '/node_modules/.package-lock.json', '/test/api.test.js'];
+  12| 
+  13| export async function scanApi(base, { fetchFn = fetch, burst = 0, https = base.startsWith('https://') } = {}) {
+  14|   base = base.replace(/\/$/, '');
+  15|   const checks = [], findings = [];
+  16|   const rec = (name, ok, detail, finding) => { checks.push({ name, ok, detail }); if (!ok && finding) findings.push(finding); };
+  17|   const req = async (path, o = {}) => { try { const r = await fetchFn(base + path, { redirect: 'manual', ...o }); return { r, text: await r.text().catch(() => '') }; } catch (e) { return { err: e.message }; } };
+  18| 
+  19|   // Authentication / authorization: every admin route must refuse missing and wrong credentials.
+  20|   for (const p of ADMIN_PATHS) for (const [label, headers] of [['no credentials', {}], ['wrong token', { authorization: 'Bearer not-a-real-token' }]]) {
+  21|     const { r, err } = await req(p, { headers });
+  22|     const ok = !!r && r.status === 401;
+  23|     rec(`auth: GET ${p} with ${label} -> 401`, ok, err || `HTTP ${r && r.status}`, F(`auth:${p}:${label.replace(/\s/g, '-')}`, 'critical', `Admin endpoint ${p} did not refuse ${label} (HTTP ${r ? r.status : 'error'})`, { path: p, status: r && r.status },
+  24|       'Authorization is missing or bypassable on an admin route.', 'Put the route behind the admin token check and add a regression test.', 'high'));
+  25|   }
+  26|   for (const p of AGENT_POST) for (const [label, headers] of [['no credentials', {}], ['wrong token', { authorization: 'Bearer nope' }]]) {
+  27|     const { r, err } = await req(p, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{}' });
+  28|     const ok = !!r && (r.status === 401 || r.status === 503);
+  29|     rec(`auth: POST ${p} with ${label} -> 401`, ok, err || `HTTP ${r && r.status}`, F(`auth:${p}:${label.replace(/\s/g, '-')}`, 'critical', `Agent endpoint ${p} accepted ${label} (HTTP ${r ? r.status : 'error'})`, { path: p, status: r && r.status },
+  30|       'The agent write API does not enforce its token.', 'Enforce AGENT_TOKEN on every agent route.', 'high'));
+  31|   }
+  32|   // Exposure: source, config and secrets must never be served.
+  33|   for (const p of LEAK_PATHS) {
+  34|     const { r, text, err } = await req(p);
+  35|     const served = !!r && r.status === 200 && !/<html/i.test(text.slice(0, 400)) ? true : !!r && r.status === 200 && /require\(|"dependencies"|DATABASE_URL/.test(text);
+  36|     rec(`exposure: ${p} is not served`, !served, err || `HTTP ${r && r.status}`, F('exposure:' + p, 'high', `${p} is publicly readable`, { path: p, status: r && r.status },
+  37|       'Static serving or routing exposes a project file.', 'Remove the route or restrict static serving to public/.', 'high'));
+  38|   }
+  39|   // Headers on a normal response.
+  40|   const h = await req('/healthz');
+  41|   if (h.r) {
+  42|     const g = (n) => h.r.headers.get(n);
+  43|     rec('headers: x-content-type-options nosniff', g('x-content-type-options') === 'nosniff', String(g('x-content-type-options')), F('headers:nosniff', 'low', 'Missing X-Content-Type-Options: nosniff', {}, 'Helmet not applied.', 'Enable helmet defaults.', 'none'));
+  44|     rec('headers: x-powered-by absent', !g('x-powered-by'), String(g('x-powered-by')), F('headers:powered-by', 'low', 'X-Powered-By discloses the framework', { value: g('x-powered-by') }, 'Express default header.', 'app.disable("x-powered-by").', 'none'));
+  45|     if (https) rec('headers: HSTS present', !!g('strict-transport-security'), String(g('strict-transport-security')), F('headers:hsts', 'medium', 'Missing Strict-Transport-Security on an HTTPS API', {}, 'HSTS not sent.', 'Enable HSTS (helmet).', 'none'));
+  46|     const acao = g('access-control-allow-origin');
+  47|     rec('cors: no wildcard origin on the API', acao !== '*', String(acao), F('cors:wildcard', 'medium', 'API answers Access-Control-Allow-Origin: *', { value: acao }, 'Permissive CORS lets any web page call the API from a browser.', 'Restrict CORS or remove it (the app is native, not a web client).', 'low'));
+  48|   } else rec('headers: /healthz reachable', false, h.err, null);
+  49|   // Error handling: bad input gets a clean 4xx and never a stack trace.
+  50|   const bad = await req('/v1/telemetry/boot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{bad' });
+  51|   const clean = !!bad.r && bad.r.status >= 400 && bad.r.status < 500 && !/\bat .*\(|node_modules|stack/i.test(bad.text);
+  52|   rec('errors: malformed JSON -> 4xx without stack trace', clean, bad.err || `HTTP ${bad.r && bad.r.status}`, F('errors:stack-or-5xx', 'medium', `Malformed JSON produced HTTP ${bad.r ? bad.r.status : 'error'} or leaked internals`, { status: bad.r && bad.r.status, sample: (bad.text || '').slice(0, 120) }, 'Body-parser errors reach the generic 500 handler.', 'Map parser errors to 400 invalid_request.', 'low'));
+  53|   const oversize = await req('/v1/telemetry/boot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ x: 'y'.repeat(20000) }) });
+  54|   rec('limits: oversized body rejected (413/400)', !!oversize.r && [400, 413].includes(oversize.r.status), oversize.err || `HTTP ${oversize.r && oversize.r.status}`, F('limits:body-size', 'medium', 'Oversized request body was not rejected', { status: oversize.r && oversize.r.status }, 'No body size limit.', 'Add express.json({limit}).', 'low'));
+  55|   // Rate limiting: only when asked (it deliberately sends a burst).
+  56|   if (burst > 0) {
+  57|     const codes = []; for (let i = 0; i < burst; i++) { const x = await req('/v1/telemetry/boot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); codes.push(x.r && x.r.status); }
+  58|     rec(`rate limit: ${burst} rapid requests produce a 429`, codes.includes(429), `statuses seen: ${[...new Set(codes)].join(',')}`, F('ratelimit:telemetry', 'medium', 'Public telemetry endpoint did not rate limit a burst', { burst, statuses: [...new Set(codes)] }, 'No effective rate limiter.', 'Enable express-rate-limit on public routes.', 'low'));
+  59|   }
+  60|   return { checks, findings, passed: checks.filter((c) => c.ok).length, total: checks.length };
+  61| }
+  62| 
+  63| // ---- secret protection: patterns for real credentials in tracked files (values are never copied into findings)
+  64| const SECRET_PATTERNS = [
+  65|   ['GitHub token', /\bgh[pousr]_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{30,}\b/],
+  66|   ['npm token', /\bnpm_[A-Za-z0-9]{30,}\b/],
+  67|   ['Slack token', /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/],
+  68|   ['AWS access key', /\bAKIA[0-9A-Z]{16}\b/],
+  69|   ['private key block', /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/],
+  70|   ['database URL with password', /postgres(?:ql)?:\/\/[^:\s/]+:[^@\s/]{6,}@[^\s'"]+/],
+  71|   ['Stripe live key', /\bsk_live_[A-Za-z0-9]{16,}\b/],
+  72| ];
+  73| const PLACEHOLDER = /(\.\.\.|yhpass|localhost|127\.0\.0\.1|example|user:pass|password@|<[^>]+>|\$\{|xxxx)/i;
+  74| export function scanSecrets(files) {
+  75|   const hits = [];
+  76|   for (const { path, content } of files) {
+  77|     if (/\.test\.[mc]?[jt]s$/.test(path)) continue; // test files hold deliberate fake secrets for the scanner's own tests
+  78|     if (/\.(png|jpg|jpeg|webp|ico|jar|keystore|jks|zip|apk|aab|woff2?)$/i.test(path) || /package-lock\.json$/.test(path)) continue;
+  79|     const lines = String(content).split('\n');
+  80|     lines.forEach((line, i) => { for (const [kind, re] of SECRET_PATTERNS) { const m = line.match(re); if (m && !PLACEHOLDER.test(/key|database/.test(kind) ? line : m[0])) hits.push({ path, line: i + 1, kind }); } });
+  81|   }
+  82|   const findings = hits.length ? [F('secrets:repo', 'critical', `${hits.length} possible credential(s) in tracked files`, { hits: hits.slice(0, 20), note: 'values deliberately not included' },
+  83|     'A credential-shaped string is committed.', 'Revoke the credential, remove it from history and load it from the environment.', 'high')] : [];
+  84|   return { hits, findings };
+  85| }
+  86| 
+  87| // ---- dependency vulnerabilities from `npm audit --json`
+  88| export function parseAudit(j) {
+  89|   const v = (j && j.metadata && j.metadata.vulnerabilities) || {};
+  90|   const crit = v.critical || 0, high = v.high || 0, mod = v.moderate || 0;
+  91|   const names = Object.entries((j && j.vulnerabilities) || {}).filter(([, x]) => ['critical', 'high'].includes(x.severity)).map(([n, x]) => ({ name: n, severity: x.severity, fixAvailable: !!x.fixAvailable })).slice(0, 15);
+  92|   const findings = [];
+  93|   if (crit + high > 0) findings.push(F('deps:high', crit ? 'critical' : 'high', `${crit} critical and ${high} high dependency vulnerabilities`, { counts: v, packages: names },
+  94|     'Installed production dependencies have known advisories.', 'Update the packages listed (run the test suite after) and redeploy.', 'medium'));
+  95|   else if (mod > 0) findings.push(F('deps:moderate', 'low', `${mod} moderate dependency vulnerabilities`, { counts: v }, 'Production dependencies have moderate advisories.', 'Update at the next maintenance window.', 'low'));
+  96|   return { counts: v, findings };
+  97| }
+  98| 
+  99| // ---- Android attack surface from a manifest (shared with the Android agent)
+ 100| export function scanAndroidManifest(xml, networkConfig = '') {
+ 101|   const out = [];
+ 102|   const has = (re) => re.test(xml);
+ 103|   if (has(/usesCleartextTraffic\s*=\s*"true"/)) {
+ 104|     // Mitigated only when a network security config exists AND forbids cleartext to the project's own domain.
+ 105|     const pinned = has(/android:networkSecurityConfig\s*=/) && /<domain-config[^>]*cleartextTrafficPermitted\s*=\s*"false"[\s\S]*?yeehaw\.pro/.test(networkConfig);
+ 106|     out.push(pinned
+ 107|       ? F('android:cleartext-residual', 'low', 'Cleartext (http) allowed for user-chosen sites (accepted: a browser must open http pages); app endpoints on yeehaw.pro are pinned to https', { attribute: 'android:usesCleartextTraffic="true"', mitigation: 'network_security_config.xml domain-config yeehaw.pro cleartext=false' }, 'Only pages the user chooses to open can use http; app-owned calls cannot be downgraded.', 'None needed; keep the domain-config. HTTPS-first upgrade for user navigation is a separate product decision.', 'low')
+ 108|       : F('android:cleartext', 'medium', 'App allows cleartext (http) traffic globally', { attribute: 'android:usesCleartextTraffic="true"' },
+ 109|         'A browser must open http pages, so cleartext cannot simply be disabled; but app-owned API calls should be https only.', 'Keep cleartext for WebView page loads only; use a network security config that forbids cleartext to api.yeehaw.pro.', 'low'));
+ 110|   }
+ 111|   if (has(/android:allowBackup\s*=\s*"true"/)) out.push(F('android:backup', 'medium', 'allowBackup is enabled', {}, 'Browser data can be extracted with adb backup.', 'Set android:allowBackup="false".', 'low'));
+ 112|   if (has(/android:debuggable\s*=\s*"true"/)) out.push(F('android:debuggable', 'high', 'Manifest sets debuggable=true', {}, 'Debuggable release builds expose app internals.', 'Remove the attribute; build types control it.', 'low'));
+ 113|   const exported = [...xml.matchAll(/<(activity|service|receiver|provider)\b[^>]*>/g)].filter((m) => /android:exported\s*=\s*"true"/.test(m[0]) && !/intent-filter/.test(m[0]));
+ 114|   const names = exported.map((m) => (m[0].match(/android:name="([^"]+)"/) || [])[1]).filter(Boolean);
+ 115|   const nonLauncher = names.filter((n) => !/MainActivity$/.test(n));
+ 116|   if (nonLauncher.length) out.push(F('android:exported', 'medium', `${nonLauncher.length} exported component(s) besides the launcher`, { components: nonLauncher }, 'Exported components can be started by other apps.', 'Set exported=false unless an intent-filter requires it.', 'low'));
+ 117|   return out;
+ 118| }
+ 119| 

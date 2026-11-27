@@ -102,7 +102,7 @@ export function scanAndroidManifest(xml, networkConfig = '') {
   const has = (re) => re.test(xml);
   if (has(/usesCleartextTraffic\s*=\s*"true"/)) {
     // Mitigated only when a network security config exists AND forbids cleartext to the project's own domain.
-    const pinned = has(/android:networkSecurityConfig\s*=/) && /<domain-config[^>]*cleartextTrafficPermitted\s*=\s*"false"[\s\S]*?yeehaw\.pro/.test(networkConfig);
+    const pinned = has(/android:networkSecurityConfig\s*=/) && (String(networkConfig).match(/<domain-config\b[\s\S]*?<\/domain-config>/g) || []).some((b) => /^<domain-config[^>]*cleartextTrafficPermitted\s*=\s*"false"/.test(b) && /yeehaw\.pro/.test(b));
     out.push(pinned
       ? F('android:cleartext-residual', 'low', 'Cleartext (http) allowed for user-chosen sites (accepted: a browser must open http pages); app endpoints on yeehaw.pro are pinned to https', { attribute: 'android:usesCleartextTraffic="true"', mitigation: 'network_security_config.xml domain-config yeehaw.pro cleartext=false' }, 'Only pages the user chooses to open can use http; app-owned calls cannot be downgraded.', 'None needed; keep the domain-config. HTTPS-first upgrade for user navigation is a separate product decision.', 'low')
       : F('android:cleartext', 'medium', 'App allows cleartext (http) traffic globally', { attribute: 'android:usesCleartextTraffic="true"' },

@@ -1,0 +1,57 @@
+{
+ "result": {
+  "ok": false,
+  "stage": "tests",
+  "before": {
+   "cmd": "node --test agents/repair/real-defect.test.mjs agents/android/analyze.test.mjs",
+   "exit": 1,
+   "passed": 5,
+   "failed": 1,
+   "ms": 174,
+   "tail": "    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 5\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 129.371538"
+  },
+  "after": {
+   "cmd": "node --test agents/repair/real-defect.test.mjs agents/android/analyze.test.mjs",
+   "exit": 1,
+   "passed": 5,
+   "failed": 1,
+   "ms": 180,
+   "tail": "  duration_ms: 1.820279\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 5\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 147.1422"
+  }
+ },
+ "fixer": {
+  "rationale": "DELIBERATELY WRONG proposal (hand-written negative control): always treat cleartext as unpinned",
+  "needsFounderApproval": false
+ },
+ "log": [
+  {
+   "finding_id": 22,
+   "actor": "repair",
+   "action": "fix failed",
+   "result": "tests still fail after the change; nothing is proposed",
+   "evidence": {
+    "run_id": "repair-9b410bbb",
+    "branch": "repair/22-code-scan-android-cleartext-pi",
+    "tests": {
+     "before": {
+      "cmd": "node --test agents/repair/real-defect.test.mjs agents/android/analyze.test.mjs",
+      "exit": 1,
+      "passed": 5,
+      "failed": 1,
+      "ms": 174,
+      "tail": "    Test.start (node:internal/test_runner/test:944:17)\n    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 5\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 129.371538"
+     },
+     "after": {
+      "cmd": "node --test agents/repair/real-defect.test.mjs agents/android/analyze.test.mjs",
+      "exit": 1,
+      "passed": 5,
+      "failed": 1,
+      "ms": 180,
+      "tail": "  duration_ms: 1.820279\n  type: 'test'\n  ...\n1..6\n# tests 6\n# suites 0\n# pass 5\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 147.1422"
+     }
+    }
+   }
+  }
+ ],
+ "qa": null
+}
