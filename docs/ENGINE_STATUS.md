@@ -52,3 +52,13 @@ Findings from real data and measured Neon consumption: 0.51 of 100 free CU-hours
 | 12 | Measurable before/after performance | PASS: boot telemetry DB round trips 4 -> 1 (counted); local p50 2.79 -> 2.28 ms; projected at 20 ms RTT 82.8 -> 22.3 ms (arithmetic, labelled) |
 
 Caveat that must stay attached to the table: scenarios 4-8, 10-12 ran against a local console and Postgres, not against the production deployment, because deploying the new code needs your approval and a database migration.
+
+## Production deployment evidence (2026-11-27, ~15:00–15:07 UTC) — PRODUCTION, not local
+
+- Pre-deploy: Neon backup branch `pre-engine-backup-2026-11-27` (br-steep-leaf-ao3cyirb); additive migration applied (`engine_settings` 1 row, `agent_actions.evidence` column present).
+- AGENT_TOKEN: set in Vercel (production+preview, sensitive) and as Worker `yeehaw-agents` secret; values never printed in reports. Match proven behaviourally (below), not by reading secrets back.
+- Deploy 1 `dpl_4hNWumoxbo2Ygnq6MVwtzoBWKcTh` (d7a595d) and deploy 2 `dpl_Brab6vqtCRoyUCJcrTU5MkhP3GWw` (85f95b2), both with rootDirectory `console/backend`; aliased to api.yeehaw.pro. Previous good deployment `dpl_5tkQW4b6…` kept as rollback target.
+- Probed from a Vercel sandbox against https://api.yeehaw.pro: /healthz 200 (DB), /livez 200, /v1/config/app-config 200 signed, /admin/ 200, admin without token 401, /v1/agent/report no/wrong token 401, correct token 201 (previously 503), malformed JSON 400, yeehaw.pro 200.
+- Found and fixed in production: duplicate deliveries with the same (agent, ref) were stored twice (2 rows); after deploy 2 the retry returns 200 `{duplicate:true}` and the table holds 1 row (verified in Neon).
+- Persistence: rows written during deploy 1 are still present after deploy 2 (new instances) — survives backend restart.
+- Not yet verified on production: Worker→API delivery end to end (Worker not yet exercised since secret set), engine pass on production data, rollback execution.
