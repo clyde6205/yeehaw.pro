@@ -98,5 +98,5 @@ export async function runAgents(env, fetchFn = fetch, opts = {}) {
 }
 
 export default {
-  async scheduled(_event, env, ctx) { ctx.waitUntil(runAgents(env)); },
+  async scheduled(_event, env, ctx) { ctx.waitUntil(runAgents(env).then((r) => { if (r && r.error) console.error('[agents] ' + r.error); })); },
 };
