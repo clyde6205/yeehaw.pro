@@ -25,3 +25,16 @@ No plugin is required for the monitoring above. For an AI agent that reads a fai
 - A scheduled Claude task in the owner's Claude account (uses the owner's plan, no extra API bill). It would run the prompt in `agents/FIXER_PROMPT.md`.
 - `anthropics/claude-code-action` in GitHub Actions: needs an `ANTHROPIC_API_KEY` secret and bills per use. Not enabled because of the no-paid-services rule.
 Guardrails for either: pull requests to `integration/reconcile-main` only, draft, never merge, never touch `main`, signing keys, secrets or the live database, every PR must pass the full CI matrix, every action reported through `/v1/agent/report`.
+
+## Always-on mode (works with no GitHub at all)
+`agents/worker/` is a Cloudflare Worker (free plan, Cron Trigger every 5 minutes) that does not depend on GitHub:
+1. checks yeehaw.pro (home, privacy, support) and `/healthz` on the API and reports exactly which URLs fail;
+2. calls `POST /v1/agent/tick`, where the API itself looks at crash/freeze counts in the last hour against the previous 24 hours and at database response time, and writes `fleet-health` and `db-health` reports (fail at 5 or more bad events that are more than 3x the usual rate; warn at 3 or more and 2x).
+It holds only `AGENT_TOKEN`: no admin power and no database credentials. Tested with mocked network (`worker.test.mjs`) and the API tick is covered by the backend tests.
+
+Deploy (OWNER, not done): `cd agents/worker && npx wrangler secret put AGENT_TOKEN && npx wrangler deploy`. It needs the same `AGENT_TOKEN` set on the API. Cloudflare Workers Cron Triggers are on the free plan; check current limits before relying on that.
+
+Why not Neon or Vercel for the scheduler: Neon is the database and has no scheduler of its own that I could verify; Vercel Hobby cron is limited to once a day and Hobby forbids commercial use. A Worker cron is the cheapest always-on option I can verify from here.
+
+## What "real time to Claude" can and cannot mean
+Reports land in the console database within seconds of each check. A Claude session cannot sit connected forever and be pushed to: it can (a) watch while a session is open, (b) run as a scheduled task that wakes up periodically, reads the latest reports and CI, and opens draft pull requests per `agents/FIXER_PROMPT.md`. The scheduled task needs a way to read the console (a read-only credential) that has not been created; until then it can only see CI and public pages.

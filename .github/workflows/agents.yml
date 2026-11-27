@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install console backend dependencies (for npm audit)
         run: node --version && cd console/backend && npm ci --omit=dev
+      - name: Test the always-on scheduler
+        run: node --test agents/worker/worker.test.mjs
       - name: Agents
         env:
           GITHUB_TOKEN: ${{ github.token }}

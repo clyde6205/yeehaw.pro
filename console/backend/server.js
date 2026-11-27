@@ -225,6 +225,32 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     res.status(201).json({ ok: true });
   }));
 
+  // The server-side health agent. Called every few minutes by the always-on scheduler (agents/worker). It reads only
+  // aggregate counts, decides, and writes its own report. It needs no admin power and returns no device data.
+  app.post('/v1/agent/tick', limiter(60_000, 30), wrap(async (req, res) => {
+    if (!agentToken) return res.status(503).json({ error: 'agent_reporting_disabled' });
+    const h = req.get('authorization') || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+    if (!token || !safeEqual(token, agentToken)) return res.status(401).json({ error: 'unauthorized' });
+    const t0 = Date.now();
+    await pool.query('SELECT 1');
+    const dbMs = Date.now() - t0;
+    const { rows } = await pool.query(`SELECT
+        COALESCE(sum(value) FILTER (WHERE kind IN ('crash','freeze') AND created_at > now() - interval '1 hour'), 0)::int AS bad_1h,
+        COALESCE(sum(value) FILTER (WHERE kind IN ('crash','freeze') AND created_at <= now() - interval '1 hour' AND created_at > now() - interval '25 hours'), 0)::int AS bad_prev24h,
+        (SELECT count(DISTINCT device_id) FROM sessions WHERE day = (now() AT TIME ZONE 'UTC')::date)::int AS active_today
+      FROM health_events`);
+    const r = rows[0];
+    const baseHourly = r.bad_prev24h / 24;
+    let status = 'ok', title = `crashes+freezes last hour: ${r.bad_1h} (usual ${baseHourly.toFixed(1)}/h); active devices today: ${r.active_today}`;
+    if (r.bad_1h >= 5 && r.bad_1h > 3 * baseHourly) status = 'fail';
+    else if (r.bad_1h >= 3 && r.bad_1h > 2 * baseHourly) status = 'warn';
+    await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['fleet-health', status, title, { bad_1h: r.bad_1h, bad_prev24h: r.bad_prev24h, active_today: r.active_today }]);
+    const dbStatus = dbMs > 1500 ? 'warn' : 'ok';
+    await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['db-health', dbStatus, `database answered in ${dbMs} ms`, { ms: dbMs }]);
+    res.json({ ok: true, fleet: status, db: dbStatus });
+  }));
+
   // ------------------------------------------------------------------ admin
   const failedAuth = limiter(15 * 60_000, 10);
   const requireAdmin = (req, res, next) => {

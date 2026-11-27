@@ -443,3 +443,22 @@ test('agent reports: disabled without a token, write-only with one, shown to the
     assert.equal((await fetch(b2 + '/v1/admin/agents', { headers: { authorization: 'Bearer ' + AT } })).status, 401);
   } finally { s2.close(); }
 });
+
+test('agent tick: fleet-health goes ok, then fail on a crash spike, with no device data returned', async () => {
+  const AT = crypto.randomBytes(32).toString('base64url');
+  const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, agentToken: AT });
+  const s2 = app2.listen(0); const b2 = 'http://127.0.0.1:' + s2.address().port;
+  try {
+    const tick = (tok = AT) => fetch(b2 + '/v1/agent/tick', { method: 'POST', headers: { authorization: 'Bearer ' + tok } });
+    assert.equal((await tick('wrong')).status, 401);
+    const ok = await (await tick()).json();
+    assert.deepEqual(ok, { ok: true, fleet: 'ok', db: 'ok' });
+    const id = uuid(); await post('/v1/telemetry/boot', boot(id));
+    assert.equal((await post('/v1/telemetry/health', { device_id: id, deltas: { crash: 6 } })).status, 200);
+    const bad = await (await tick()).json();
+    assert.equal(bad.fleet, 'fail');
+    const r = await (await fetch(b2 + '/v1/admin/agents', { headers: adminH })).json();
+    assert.equal(r.latest.find((x) => x.agent === 'fleet-health').status, 'fail');
+    assert.ok(r.latest.find((x) => x.agent === 'db-health'));
+  } finally { s2.close(); }
+});

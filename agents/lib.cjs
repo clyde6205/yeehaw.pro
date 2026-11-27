@@ -17,6 +17,7 @@ async function gh(path, opts = {}) {
 async function report(agent, status, title, details = {}, ref = null) {
   const line = `[${agent}] ${status.toUpperCase()}: ${title}`;
   console.log(line);
+  if (details && Object.keys(details).length) console.log(`[${agent}] details: ${JSON.stringify(details).slice(0, 1500)}`);
   if (process.env.GITHUB_STEP_SUMMARY) require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- ${line}\n`);
   if (!CONSOLE_URL || !AGENT_TOKEN) { console.log(`[${agent}] console reporting skipped: CONSOLE_URL / AGENT_TOKEN not set`); return false; }
   try {
