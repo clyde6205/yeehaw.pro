@@ -40,18 +40,27 @@ export async function runAgents(env, fetchFn = fetch, opts = {}) {
 
   // 1. public endpoints, judged by content where we can
   const bad = [];
+  const warnings = [];
   const probes = [...SITE.map((u) => [u, 'page']), [base + '/healthz', 'api']];
   for (const [url, kind] of probes) {
     try {
       const r = await withRetry(fetchFn, url, { redirect: 'follow', headers: { 'user-agent': UA } }, 2, wait);
-      if (!r.ok) { bad.push(`${url} -> HTTP ${r.status}${r.status === 403 ? ' (possibly bot protection, not an outage)' : ''}`); continue; }
+      if (!r.ok) {
+        const message = url + ' -> HTTP ' + r.status;
+        if (r.status === 403) warnings.push(message + ' (access/bot protection; availability is unverified)');
+        else bad.push(message);
+        continue;
+      }
       if (kind === 'api') {
         const j = await r.json().catch(() => null);
         if (!j || j.ok !== true) bad.push(`${url} -> unhealthy body`);
       }
     } catch (e) { bad.push(`${url} -> ${e.message}`); }
   }
-  await send('site-health', bad.length ? 'fail' : 'ok', bad.length ? `${bad.length} of ${probes.length} endpoints failing` : `${probes.length} of ${probes.length} endpoints healthy`, { bad });
+  await send('site-health', bad.length ? 'fail' : warnings.length ? 'warn' : 'ok',
+    bad.length ? (bad.length + ' of ' + probes.length + ' endpoints failing') :
+    warnings.length ? (warnings.length + ' of ' + probes.length + ' endpoints blocked; availability unverified') :
+    (probes.length + ' of ' + probes.length + ' endpoints healthy'), { bad, warnings });
 
   // 2. the orchestrator tick: interpret what it says
   let tick = { status: 'not run' }; let tickOk = false;
@@ -59,7 +68,11 @@ export async function runAgents(env, fetchFn = fetch, opts = {}) {
     const r = await withRetry(fetchFn, base + '/v1/agent/tick', { method: 'POST', headers: auth, body: '{}' }, 2, wait);
     const j = await r.json().catch(() => null);
     if (r.status === 202) { tick = { status: 'skipped: another run holds the lease' }; tickOk = true; }
-    else if (!r.ok || !j) { tick = { status: `HTTP ${r.status}` }; await send('scheduler', 'fail', `agent tick failed: HTTP ${r.status}`, { http: r.status }); }
+    else if (r.status === 403) {
+      tick = { status: 'blocked: HTTP 403 (access protection; not a confirmed outage)' };
+      await send('scheduler', 'warn', 'agent tick blocked by access protection; execution is unverified', { http: 403 });
+    }
+    else if (!r.ok || !j) { tick = { status: 'HTTP ' + r.status }; await send('scheduler', 'fail', 'agent tick failed: HTTP ' + r.status, { http: r.status }); }
     else {
       tick = { status: 'ran', fleet: j.fleet, db: j.db, db_ms: j.db_ms, open_findings: j.open_findings };
       const problems = [];
