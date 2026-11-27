@@ -112,3 +112,23 @@ test('network failure of the tick is reported as not ok', async () => {
     'POST https://api.example/v1/agent/tick': () => { throw new Error('timeout'); } }));
   assert.equal((await runAgents(env, f, W)).ok, false);
 });
+
+test('token with a trailing line break is trimmed and sent cleanly', async () => {
+  let auth;
+  const f = mk({
+    'GET https://yeehaw.pro/': res(200), 'GET https://yeehaw.pro/privacy/': res(200), 'GET https://yeehaw.pro/support/': res(200),
+    'GET https://api.example/healthz': res(200, { ok: true }),
+    'POST https://api.example/v1/agent/report': (o) => { auth = o.headers.authorization; return res(201); },
+    'POST https://api.example/v1/agent/tick': res(200, { ok: true, fleet: 'ok', db: 'ok', db_ms: 3, open_findings: 0 }),
+  });
+  const r = await runAgents({ ...env, AGENT_TOKEN: 'abc123\n' }, f, W);
+  assert.equal(r.ok, true);
+  assert.equal(auth, 'Bearer abc123');
+});
+
+test('token with unsendable characters is refused with a count, never echoed', async () => {
+  const r = await runAgents({ ...env, AGENT_TOKEN: 'abc“def\nxyz' }, async () => { throw new Error('must not call'); }, W);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /2 character\(s\)/);
+  assert.ok(!r.error.includes('abc'));
+});

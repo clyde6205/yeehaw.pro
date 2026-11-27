@@ -27,8 +27,12 @@ export async function withRetry(fetchFn, url, opts = {}, tries = 3, wait = 400) 
 export async function runAgents(env, fetchFn = fetch, opts = {}) {
   const base = String(env.CONSOLE_URL || '').replace(/\/$/, '');
   if (!base || !env.AGENT_TOKEN) return { ok: false, error: 'CONSOLE_URL and AGENT_TOKEN must be set' };
+  // A pasted secret often carries a trailing line break or space; trim it, and refuse (never log the value) if anything unsendable remains.
+  const token = String(env.AGENT_TOKEN).trim();
+  const badChars = (token.match(/[^\x21-\x7e]/g) || []).length;
+  if (badChars) return { ok: false, error: 'AGENT_TOKEN has ' + badChars + ' character(s) that cannot be sent in an HTTP header (length ' + token.length + '); re-enter it without quotes, spaces or line breaks' };
   const wait = opts.wait ?? 400;
-  const auth = { authorization: 'Bearer ' + env.AGENT_TOKEN, 'content-type': 'application/json', 'user-agent': UA };
+  const auth = { authorization: 'Bearer ' + token, 'content-type': 'application/json', 'user-agent': UA };
   const delivery = [];
   const send = async (agent, status, title, details = {}) => {
     try {
