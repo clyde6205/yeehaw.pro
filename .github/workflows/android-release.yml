@@ -105,6 +105,9 @@ jobs:
   verify:
     needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -116,10 +119,10 @@ jobs:
     env:
       ANDROID_AVD_HOME: /home/runner/.android/avd
     steps:
-      - uses: actions/download-artifact@v4 # tag-pinned: the commit SHA could not be looked up from this session
-        with:
-          name: release-dist
-          path: dist
+      - name: Download the build's files (gh CLI on the runner; no third-party action)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" -n release-dist -D dist
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -164,11 +167,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
     steps:
-      - uses: actions/download-artifact@v4 # tag-pinned: the commit SHA could not be looked up from this session
-        with:
-          name: release-dist
-          path: dist
+      - name: Download the build's files (gh CLI on the runner; no third-party action)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" -n release-dist -D dist
       - name: Create the GitHub Release (pre-release unless production-signed)
         env:
           GH_TOKEN: ${{ github.token }}
