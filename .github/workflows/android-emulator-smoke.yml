@@ -144,6 +144,11 @@ jobs:
           done
           tail -150 /tmp/gradle-android-test.log
           exit $rc
+      - name: Save the browser performance numbers logged by the tests
+        if: always()
+        run: |
+          adb logcat -d -s YHPERF > /tmp/yhperf.txt || true
+          echo "=== YHPERF (emulator numbers from the instrumented regression suite)"; grep -ao "YHPERF.*" /tmp/yhperf.txt | sed 's/^YHPERF *: *//' | sort | uniq
       - name: Name every failed test (the Gradle log above is truncated)
         if: failure() && steps.emu.outputs.started == 'true'
         run: |
@@ -171,7 +176,7 @@ jobs:
           for i in 1 2 3 4 5 6 7 8 9 10; do adb shell input swipe 540 1500 540 500 250; adb shell input swipe 540 500 540 1500 250; done
           adb shell dumpsys gfxinfo $PKG | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|95th percentile|99th percentile|Number Missed Vsync|Number Slow" | head -10
           echo "=== CPU while busy swiping (top, one sample)"; adb shell top -n 1 -m 12 2>/dev/null | grep -E "$PKG|CPU|%cpu" | head -4
-          echo "=== YHPERF lines from the instrumented browser regression test"; adb logcat -d -s YHPERF | grep -oE "[a-z_0-9]+=[-a-zA-Z0-9.]+" | sort | uniq
+          echo "=== YHPERF lines from the instrumented browser regression test"; cat /tmp/yhperf.txt 2>/dev/null | grep -aoE "[a-z_0-9]+=[-a-zA-Z0-9.]+" | sort | uniq
       - name: Crash and ANR scan of the whole run (own processes fail the job; other processes are reported)
         if: always() && steps.emu.outputs.started == 'true'
         timeout-minutes: 3
