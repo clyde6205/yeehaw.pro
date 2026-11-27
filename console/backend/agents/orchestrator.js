@@ -42,6 +42,22 @@ const parseRepair = (key) => { const [name, arg] = String(key).split(':'); retur
 const log = (pool, id, actor, action, result, verification = null) =>
   pool.query('INSERT INTO agent_actions (finding_id, actor, action, result, verification) VALUES ($1,$2,$3,$4,$5)', [id, actor, action, result, verification]);
 
+// Dependencies between agents' findings: a downstream problem is not repaired while the upstream one that probably causes it is still open.
+const DEPENDS = { 'perf:': ['availability:', 'db:', 'dbr:'], 'security:android': [], 'qa:': ['availability:', 'db:'] };
+async function blockedBy(pool, f) {
+  const key = Object.keys(DEPENDS).find((k) => f.fingerprint.startsWith(k));
+  if (!key || !DEPENDS[key].length) return null;
+  const rows = (await pool.query(`SELECT fingerprint FROM agent_findings WHERE id <> $1 AND status IN ('open','approved','applied','failed') AND severity IN ('critical','high')`, [f.id])).rows;
+  const hit = rows.find((r) => DEPENDS[key].some((p) => r.fingerprint.startsWith(p)));
+  return hit ? hit.fingerprint : null;
+}
+// Learning from earlier outcomes: an automatic repair that independent QA has rejected twice in 14 days stops running by itself.
+async function failedBefore(pool, f) {
+  const r = await pool.query(`SELECT count(*)::int AS n FROM agent_actions a JOIN agent_findings g ON g.id = a.finding_id WHERE a.action = 'independent verification' AND a.verification = 'failed' AND g.repair = $1 AND a.created_at > now() - interval '14 days'`, [f.repair]);
+  return r.rows[0].n;
+}
+const logOnce = async (pool, id, actor, action, result) => { if (!(await pool.query('SELECT 1 FROM agent_actions WHERE finding_id = $1 AND action = $2 AND result = $3 LIMIT 1', [id, action, result])).rowCount) await log(pool, id, actor, action, result); };
+
 async function detect(pool, specialists, disabled = [], perAgent = {}) {
   const found = [], errors = [];
   for (const [name, fn] of Object.entries(specialists)) {
@@ -99,6 +115,9 @@ async function runOnce(pool, { specialists = S, now = Date.now, respectInterval 
       const rp = parseRepair(f.repair);
       if (!rp) { await log(pool, f.id, 'orchestrator', 'repair refused', `repair "${f.repair}" is not on the allowlist`); continue; }
       if (f.status === 'open' && !cfg.auto_repairs.includes(rp.name)) continue; // not permitted to run by itself; waits for the owner
+      const dep = await blockedBy(pool, f);
+      if (dep) { await logOnce(pool, f.id, 'orchestrator', 'deferred', `waiting on upstream finding ${dep}; it is the more likely cause`); continue; }
+      if (f.status === 'open') { const n = await failedBefore(pool, f); if (n >= 2) { await logOnce(pool, f.id, 'orchestrator', 'repair skipped (learned)', `repair ${rp.name} was rejected by independent QA ${n} times in the last 14 days; it will not run automatically, the owner must approve it`); continue; } }
       try {
         const result = await rp.fn(pool, rp.arg); summary.repaired++;
         await pool.query(`UPDATE agent_findings SET status = 'applied', updated_at = now() WHERE id = $1`, [f.id]);

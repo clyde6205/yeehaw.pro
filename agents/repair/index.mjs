@@ -103,7 +103,7 @@ export async function rollbackRepair({ repoDir, base, finding, branch, commit, r
 }
 
 /** Independent QA of a rollback: a fresh checkout of the rollback commit must (1) have exactly the file tree the branch had BEFORE the fix
- *  and (2) pass the tests. Different run id from the rollback itself. Only this verdict makes a rollback count as verified. */
+ *  and (2) behave like the pre-fix commit under the same tests. Different run id from the rollback itself. Only this verdict makes a rollback count as verified. */
 export async function verifyRollback({ repoDir, finding, fixCommit, rollbackCommit, testCmd, report, runId = 'qa-rb-' + randomUUID().slice(0, 8) }) {
   const work = mkdtempSync(join(tmpdir(), 'yh-qarb-')), wt = join(work, 'wt'); const reasons = [];
   try {
@@ -111,11 +111,16 @@ export async function verifyRollback({ repoDir, finding, fixCommit, rollbackComm
     const preTree = git(repoDir, 'rev-parse', `${fixCommit}^^{tree}`), nowTree = git(wt, 'rev-parse', 'HEAD^{tree}');
     const treeMatches = preTree === nowTree;
     if (!treeMatches) reasons.push('the file tree after rollback differs from the tree before the fix');
+    // A rollback restores the code as it was, including the defect the fix addressed, so "tests green" is the wrong bar. The bar is: the
+    // rolled-back checkout behaves exactly like the pre-fix commit (same exit code and same pass/fail counts when the same tests run).
     const tests = runTests(wt, testCmd);
-    if (tests.exit !== 0) reasons.push(`tests fail on a fresh checkout of the rollback (exit ${tests.exit})`);
+    const wt2 = join(work, 'pre'); git(repoDir, 'worktree', 'add', '-q', '--detach', wt2, `${fixCommit}^`);
+    const pre = runTests(wt2, testCmd); try { git(repoDir, 'worktree', 'remove', '--force', wt2); } catch {}
+    const same = tests.exit === pre.exit && tests.failed === pre.failed && tests.passed === pre.passed;
+    if (!same) reasons.push(`tests behave differently from the pre-fix commit (rollback exit ${tests.exit}, pass ${tests.passed}, fail ${tests.failed}; pre-fix exit ${pre.exit}, pass ${pre.passed}, fail ${pre.failed})`);
     await report({ finding_id: finding.id, actor: 'qa', action: 'rollback verified', verification: reasons.length ? 'failed' : 'passed',
-      result: reasons.length ? 'FAILED: ' + reasons.join('; ') : 'passed: fresh checkout equals the pre-fix tree and tests are green', evidence: { commit: rollbackCommit, run_id: runId, tests, tree_matches_pre_fix: treeMatches, reasons } });
-    return { ok: !reasons.length, treeMatches, tests, reasons };
+      result: reasons.length ? 'FAILED: ' + reasons.join('; ') : `passed: fresh checkout equals the pre-fix tree and the tests behave exactly as before the fix (exit ${pre.exit}, pass ${pre.passed}, fail ${pre.failed})`, evidence: { commit: rollbackCommit, run_id: runId, tests, tests_pre_fix: pre, tree_matches_pre_fix: treeMatches, reasons } });
+    return { ok: !reasons.length, treeMatches, tests, pre, reasons };
   } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} rmSync(work, { recursive: true, force: true }); }
 }
 
