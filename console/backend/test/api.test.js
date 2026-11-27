@@ -556,3 +556,17 @@ test('client errors raised by libraries are 4xx JSON, never 500', async () => {
   assert.equal(r.status, 400);
   assert.equal((await r.json()).error, 'invalid_request');
 });
+
+
+test('a crash report triggers one agents pass without any timer, debounced, and /livez needs no database', async () => {
+  assert.equal((await fetch(base + '/livez')).status, 200);
+  await pool.query('TRUNCATE agent_runs RESTART IDENTITY CASCADE');
+  const id = uuid();
+  assert.equal((await post('/v1/telemetry/boot', boot(id))).status, 200);
+  assert.equal((await post('/v1/telemetry/health', { device_id: id, deltas: { skipped_requests: 5 } })).status, 200);
+  assert.equal((await pool.query('SELECT count(*)::int n FROM agent_runs')).rows[0].n, 0, 'non-crash events do not trigger a pass');
+  assert.equal((await post('/v1/telemetry/health', { device_id: id, deltas: { crash: 1 } })).status, 200);
+  assert.equal((await pool.query('SELECT count(*)::int n FROM agent_runs')).rows[0].n, 1, 'a crash triggers one pass');
+  assert.equal((await post('/v1/telemetry/health', { device_id: id, deltas: { crash: 1 } })).status, 200);
+  assert.equal((await pool.query('SELECT count(*)::int n FROM agent_runs')).rows[0].n, 1, 'a second crash within 2 minutes is debounced');
+});

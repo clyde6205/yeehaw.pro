@@ -110,6 +110,24 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     res.status(200).json({ ok: true });
   }));
 
+  // One agents pass triggered by a real event instead of a clock. Debounced through the database (at most one per 2 minutes
+  // across all instances); the orchestrator takes its own lease. Never fails the request that triggered it.
+  const agentsOnEvent = async (reason) => {
+    try {
+      const last = await pool.query(`SELECT 1 FROM agent_runs WHERE started_at > now() - interval '2 minutes' LIMIT 1`);
+      if (last.rowCount) return { skipped: 'recent_run' };
+      const { rows } = await pool.query(`SELECT
+          COALESCE(sum(value) FILTER (WHERE kind IN ('crash','freeze') AND created_at > now() - interval '1 hour'), 0)::int AS bad_1h,
+          COALESCE(sum(value) FILTER (WHERE kind IN ('crash','freeze') AND created_at <= now() - interval '1 hour' AND created_at > now() - interval '25 hours'), 0)::int AS bad_prev24h
+        FROM health_events`);
+      const r = rows[0]; const base = r.bad_prev24h / 24;
+      const fleet = r.bad_1h >= 5 && r.bad_1h > 3 * base ? 'fail' : r.bad_1h >= 3 && r.bad_1h > 2 * base ? 'warn' : 'ok';
+      if (fleet !== 'ok') await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['fleet-health', fleet,
+        `crashes+freezes last hour: ${r.bad_1h} (usual ${base.toFixed(1)}/h); triggered by ${reason}`, { bad_1h: r.bad_1h, bad_prev24h: r.bad_prev24h, trigger: reason }]);
+      return await runOrchestrator(pool);
+    } catch (e) { return { error: e.message }; }
+  };
+
   // Device-reported health and measured savings (deltas). Counts only: no URLs, no page content.
   app.post('/v1/telemetry/health', limiter(60_000, 30), small, wrap(async (req, res) => {
     const h = V.healthPayload(req.body);
@@ -121,6 +139,8 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       `INSERT INTO health_events (device_id, kind, value) SELECT $1, k, v FROM unnest($2::text[], $3::bigint[]) AS t(k, v)`,
       [h.device_id, kinds, vals]
     );
+    // Event-driven monitoring: a crash or freeze report is exactly when the agents should look, so run one pass now (no timer).
+    if (kinds.some((k) => k === 'crash' || k === 'freeze')) await agentsOnEvent('crash-or-freeze');
     res.status(200).json({ ok: true });
   }));
 
@@ -593,6 +613,8 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     res.sendFile(path.join(__dirname, 'admin', 'index.html'));
   });
 
+  // Liveness without touching the database, so an external prober can check the API every few seconds without keeping the database awake.
+  app.get('/livez', (_req, res) => res.json({ ok: true, live: true }));
   app.get('/healthz', wrap(async (_req, res) => { await pool.query('SELECT 1'); res.json({ ok: true }); }));
   app.get('/', (_req, res) => res.json({ service: 'yeehaw-console-api', ok: true }));
 
