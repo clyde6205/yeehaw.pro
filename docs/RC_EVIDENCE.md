@@ -71,3 +71,10 @@ Not covered: physical phone, real camera scan, TalkBack, native-speaker review o
 - npm audit (production dependencies of console/backend): 0 vulnerabilities. SQL review: user input is parameterised; the only interpolated identifiers are allowlisted and regex-checked.
 - Console CSP no longer lists cdn.jsdelivr.net / cdn.tailwindcss.com (the console loads no external scripts).
 - NOT VERIFIED: Worker-to-Vercel token match (needs the owner to run Test scheduled event), admin authorized routes on production (admin token not available to me), Android cold start / memory / physical devices.
+
+## Worker-to-API token path VERIFIED (2026-11-27 19:40 Manila)
+
+- Cause of earlier failures: the Worker's stored AGENT_TOKEN could not be sent as an HTTP header (96 chars, 32 unsendable) after the first re-entry; earlier still a 401 (mismatch) before the 12:58 Manila secret update.
+- Fix: Worker trims and validates the token (repo 29c256a, deployed to yeehaw-agents), then the secret was set to the token production already uses (no Vercel change, no redeploy).
+- Result: scheduled runs at 11:38:40, 11:39:36 and 11:40:36 UTC wrote Worker-originated rows to Neon (scheduler "tick ok: db N ms, 1 open finding(s)", site-health). Cron was added only for the test and removed; schedule list is empty (Cloudflare took ~6 min to start and ~3 min to stop it, so a few runs landed after removal).
+- Open defect found: Worker reports https://yeehaw.pro/, /privacy/, /support/ as HTTP 404. DNS for the apex has four A records, one of which (185.198.110.153) is not a GitHub Pages address (the others are 185.199.108/109/111.153; the fourth Pages address would be 185.199.110.153). Not changed yet.
