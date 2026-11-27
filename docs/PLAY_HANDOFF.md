@@ -11,7 +11,7 @@ Every claim below is limited to what CI evidence shows (see `docs/RC_EVIDENCE.md
 | Release APK, R8-minified, installs and runs API 23 and 36 | Ready | release-smoke run 45787022375 |
 | Emulator suite API 23, 23 low-end (1 GB, 1 core), 29, 35, 36 | Green | run 45787022259 |
 | Release size | 972,592 bytes (limit in gate doc: 12 MiB) | CI log |
-| Release AAB (Play upload format) built and inspected in CI | See section 2 | android-bundle workflow |
+| Release AAB (Play upload format) built and inspected in CI | Built: 1,002,978 bytes, zip intact, manifest/dex/resources present, no native libraries, version 0.6.0 and package app.yehaw.browser in the manifest. Contains `proguard.map` (normal: Play uses it to read crash traces; not shipped to users) and a harmless `DebugProbesKt.bin` from Kotlin coroutines. Not installed or run from the bundle (bundletool was not run) | run 45932048722 |
 | Six Quick Tools (Calculator, Unit Converter, QR Scanner, QR Generator, Notes, PDF Reader) | Ready, emulator-tested | `docs/QUICK_TOOLS.md` |
 | Privacy policy page (mentions Quick Tools, camera use) | Ready, in the repo, deployed by the static site | `public/privacy/index.html` |
 | Terms and Support pages | Ready, in the repo | `public/terms`, `public/support` |
