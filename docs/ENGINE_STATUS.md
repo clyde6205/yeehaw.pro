@@ -75,3 +75,23 @@ Caveat that must stay attached to the table: scenarios 4-8, 10-12 ran against a 
 - **Self-inflicted incident, detected by the engine.** Redeploying with `deploymentId` (redeploy) built WITHOUT the console/backend root: api.yeehaw.pro served the static site's 404 HTML page instead of JSON (the Nov 27 wrong-directory failure mode). I saw it in my own probe, rolled back (request_rollback) and API /healthz returned {"ok":true} again within about a minute. Then deployed from gitSource with rootDirectory console/backend (dpl_E1nWM9uAgN8R622fCuRWKLAV1Do3, commit 7e0a22e) and promoted it. The Worker's own probes recorded the outage and the engine opened critical finding #2 "wrong-deployment (api)" with the evidence "api /livez: HTTP 404 returned an HTML page where the API must answer JSON". Lesson: never use deploymentId redeploys for this project; always gitSource + rootDirectory.
 - Tool reports posted to production (HTTP 201): security-scan (30/30 live API checks, 0 secret hits, 1 manifest finding), android-analysis (2 static findings; limitation text included, no device), 3 perf-bench rows (4 -> 1 DB round trips per boot request; ms values are local, labelled).
 - Engine pass on production: run 8, all seven specialists state ok, per-agent ms recorded, fleet ok, db_ms 9.
+
+## Production = 66d2136 (dpl_7yZFX6kBPUxKtdro9YLExW9FCbZL), 2026-11-27 ~16:00 UTC
+Branch head and production differed only by docs/tests/orchestrator changes before this deploy; now identical code. Verified after deploy: /healthz, /v1/config/app-config 200, /v1/agent/report 401 without token and 200 with it, Worker /selftest accepted, site 200.
+
+## The 12 scenarios and their evidence class (honest)
+| # | Scenario | Local | Preview | Production |
+|---|---|---|---|---|
+| 1 | API failure detection | yes (watch tests) | none | YES: finding #2, HTML 404 where JSON expected, seen by the Worker |
+| 2 | Diagnostic investigation | yes | none | YES: finding #2 has root cause + evidence + next step |
+| 3 | Orchestrator assignment | yes (incident -> infrastructure vs availability) | none | YES: finding #2 owned by infrastructure |
+| 4 | Real repair preparation | yes (isolated worktree/branch/commit, orchestration.test.js) | none | NO (the code writer is scripted in tests; no AI code repair has run in production) |
+| 5 | Automated tests | yes (before/after counts in evidence) | none | NO |
+| 6 | Independent QA | yes (separate run id, fresh checkout, exact commit) | none | NO for code repairs; production orchestrator verification of server-side repairs: none occurred yet |
+| 7 | Console history | yes (UI render test, 8 agents, audit rows) | none | rows persisted in production DB; console not viewed with production data (no ADMIN_TOKEN) |
+| 8 | Failed repair rejected | yes (cheat fix, still-failing fix, deleted tests) | none | NO |
+| 9 | Protected operations need approval | yes (agent token cannot approve; main/base refused; non-allowlisted refused) | none | production 401s for no/wrong tokens: YES |
+| 10 | Website outage vs API outage | yes | none | partly: the Worker classified the real wrong-deployment case; a pure website outage was not induced |
+| 11 | Wrong Vercel configuration | yes | none | YES (real incident, auto-resolved by run 9) |
+| 12 | Measurable performance improvement | yes (4 -> 1 DB round trips per boot; ms local) | none | report posted to production; improvement itself measured locally only |
+No preview deployments were used.
