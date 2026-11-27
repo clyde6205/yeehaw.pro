@@ -26,6 +26,16 @@ jobs:
         run: node --version && cd console/backend && npm ci --omit=dev
       - name: Test the always-on scheduler
         run: node --test agents/worker/worker.test.mjs
+      - name: Test the infrastructure collector
+        run: node --test agents/infra/collect.test.mjs agents/infra/analyze.test.mjs
+      - name: Infrastructure usage, cost and health (read-only; skips providers whose credential is not configured)
+        env:
+          CONSOLE_URL: ${{ secrets.CONSOLE_URL }}
+          AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: node agents/infra/collect.mjs
       - name: Agents
         env:
           GITHUB_TOKEN: ${{ github.token }}
