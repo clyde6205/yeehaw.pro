@@ -53,3 +53,10 @@ Not covered: physical phone, real camera scan, TalkBack, native-speaker review o
 - Live proof: `POST https://api.yeehaw.pro/v1/agent/tick` from a Vercel sandbox returned 200 `{ok:true, fleet:"ok", db:"ok", db_ms:6, orchestrator:{lease:"acquired", run:"1"...}}`. Neon then held rows: scheduler/db-health/fleet-health reports and agent_runs id 1 (ok). A wrong token was not used against the new build; 401 behaviour is covered by the backend tests only.
 - NOT deployed: the Cloudflare Worker (no Cloudflare deploy credential in this session). So the five-minute Cron Trigger has NOT been demonstrated; only a manual tick was. Owner steps are in AGENTS.md.
 - NOT yet observed: the founder console Agents tab on the live site (tested in a headless browser against a local database only).
+
+
+## Production verification 2026-11-27 13:30 Manila (NOT a pass)
+
+- Production deployment dpl_J7N62aG3F4oxQ5DwoL1FDXeucQMN (b4f2353, state READY, aliased to api.yeehaw.pro) was built with the static-site build (`npm run build`, output `public`). Tested from a Vercel sandbox: `GET /` returns the static product site, every API route returns 404 HTML (`/healthz`, `/v1/config/app-config`, `/v1/agent/*`, `/v1/admin/*`, `/admin`). READY did not mean the API was serving.
+- dpl_6AKoNk36F6E8oEzzBq3P1n7GbGSV (same commit, built with root directory console/backend) served the API correctly (tick 200, db ok, Neon rows) and is a rollback candidate. A rollback to it was attempted and denied by the session's permission control; nothing was changed.
+- Worker yeehaw-agents is deployed (source matches integration b236451: 403 handled as warn). It has only a scheduled handler, so it cannot be invoked from outside; no Worker-originated rows exist in Neon, so the Worker/Vercel token match is NOT VERIFIED.

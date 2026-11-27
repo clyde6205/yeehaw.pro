@@ -79,14 +79,32 @@ test('transient 503 is retried and then succeeds; duplicate-run 202 is not a fai
   assert.equal(r.delivery.length, 0); assert.equal(r.ok, true); assert.match(r.tick.status, /skipped/);
 });
 
-test('unhealthy API body is a failure even with HTTP 200; 403 is worded as possible bot protection', async () => {
+test('unhealthy API body is a failure even with HTTP 200', async () => {
+  const f = mk(base({ 'GET https://api.example/healthz': res(200, { ok: false }),
+    'POST https://api.example/v1/agent/report': res(201),
+    'POST https://api.example/v1/agent/tick': res(200, { ok: true, fleet: 'ok', db: 'ok' }) }));
+  const r = await runAgents(env, f, W);
+  assert.equal(r.ok, false); assert.ok(r.bad.some((x) => /unhealthy body/.test(x)));
+});
+
+test('a 403 from the site is a warning (access protection, availability unverified), not a confirmed outage', async () => {
   const sent = [];
-  const f = mk(base({ 'GET https://yeehaw.pro/': res(403), 'GET https://api.example/healthz': res(200, { ok: false }),
+  const f = mk(base({ 'GET https://yeehaw.pro/': res(403),
     'POST https://api.example/v1/agent/report': (o) => { sent.push(JSON.parse(o.body)); return res(201); },
     'POST https://api.example/v1/agent/tick': res(200, { ok: true, fleet: 'ok', db: 'ok' }) }));
   const r = await runAgents(env, f, W);
+  assert.deepEqual(r.bad, []);
+  const s = sent.find((x) => x.agent === 'site-health');
+  assert.equal(s.status, 'warn'); assert.match(s.details.warnings[0], /403.*protection/);
+});
+
+test('a 403 on the agent tick is reported as warn and never as ok', async () => {
+  const sent = [];
+  const f = mk(base({ 'POST https://api.example/v1/agent/report': (o) => { sent.push(JSON.parse(o.body)); return res(201); },
+    'POST https://api.example/v1/agent/tick': res(403) }));
+  const r = await runAgents(env, f, W);
   assert.equal(r.ok, false);
-  assert.ok(r.bad.some((x) => /bot protection/.test(x))); assert.ok(r.bad.some((x) => /unhealthy body/.test(x)));
+  assert.equal(sent.find((x) => x.agent === 'scheduler').status, 'warn');
 });
 
 test('network failure of the tick is reported as not ok', async () => {
