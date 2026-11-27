@@ -82,6 +82,7 @@ class MainActivity : Activity() {
         var failed: Boolean = false,
         /** False when the failed request was not a GET (e.g. a form POST): never re-sent automatically. */
         var failedWasGet: Boolean = true,
+        var failedAtMs: Long = 0L,
         var evicted: Boolean = false,
         var savedScrollY: Int = 0,
         var lastHistoryUrl: String? = null
@@ -719,6 +720,9 @@ class MainActivity : Activity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
+                // Some WebView versions start a second navigation for the browser's own error page right after onReceivedError.
+                // That must not erase the failure, or the retry panel never appears and the page is announced as loaded.
+                if (tab.failed && url == tab.currentUrl && android.os.SystemClock.elapsedRealtime() - tab.failedAtMs < 2000L) return
                 tab.failed = false
                 tab.lastHistoryUrl = null
                 if (view != null && !isStartPageUrl(url)) {
@@ -852,6 +856,7 @@ class MainActivity : Activity() {
                 if (request?.isForMainFrame == true && view != null) {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true
+                    tab.failedAtMs = android.os.SystemClock.elapsedRealtime()
                     tab.failedWasGet = request.method.equals("GET", ignoreCase = true)
                     if (tab.failedWasGet) request.url?.toString()?.takeIf { isWebUrl(it) }?.let { tab.currentUrl = it }
                     cancelStallWatch(view)
