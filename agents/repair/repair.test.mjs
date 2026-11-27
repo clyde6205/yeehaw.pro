@@ -62,3 +62,9 @@ test('QA rejects a "fix" that goes green by deleting the tests, and one that tou
   const v = await verifyRepair({ repoDir: d, base: 'main', finding: { id: 9 }, commit: o.commit, testCmd: 'node -e "process.exit(0)"', report: q });
   assert.equal(v.ok, false); assert.equal(q.log[0].verification, 'failed'); assert.match(q.log[0].result, /deletes test files/); assert.match(q.log[0].result, /protected paths/);
 });
+
+test('prepared fix carries the actual diff for the console to show', async () => {
+  const d = repo(), r = rec();
+  await runRepair({ repoDir: d, base: 'main', finding: { id: 5, fingerprint: 'diff' }, testCmd: CMD, report: r, fixer: (wt) => writeFileSync(join(wt, 'add.js'), 'module.exports = (a, b) => a + b;\n') });
+  assert.match(r.log[0].evidence.patch, /-module\.exports = \(a, b\) => a - b;/); assert.match(r.log[0].evidence.patch, /\+module\.exports = \(a, b\) => a \+ b;/);
+});

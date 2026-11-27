@@ -281,7 +281,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
 
   // An agent records what it did. A finding can become `verified` only through actor `qa`, and only for the very commit a `repair`
   // action prepared, and only from a different run (so an agent can never mark its own work successful).
-  app.post('/v1/agent/action', limiter(60_000, 120), express.json({ limit: '16kb' }), wrap(async (req, res) => {
+  app.post('/v1/agent/action', limiter(60_000, 120), express.json({ limit: '32kb' }), wrap(async (req, res) => {
     if (!agentAuth(req, res)) return;
     const b = req.body || {};
     const id = Number(b.finding_id);
@@ -292,7 +292,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     if (b.verification != null && !['passed', 'failed'].includes(b.verification)) return res.status(400).json({ error: 'bad_verification' });
     if (b.verification != null && b.actor !== 'qa') return res.status(403).json({ error: 'only_qa_verifies', detail: 'Only the QA agent can record a verification outcome.' });
     const evidence = redact(b.evidence && typeof b.evidence === 'object' ? b.evidence : {});
-    if (JSON.stringify(evidence).length > 8000) return res.status(400).json({ error: 'details_too_large' });
+    if (JSON.stringify(evidence).length > 24000) return res.status(400).json({ error: 'details_too_large' });
     const f = (await pool.query('SELECT id, status FROM agent_findings WHERE id = $1', [id])).rows[0];
     if (!f) return res.status(404).json({ error: 'no_finding' });
     if (b.actor === 'repair' && /^fix prepared/.test(action) && !(/^[0-9a-f]{7,40}$/.test(evidence.commit || '') && evidence.run_id && evidence.tests)) return res.status(400).json({ error: 'evidence_required', detail: 'A prepared fix must carry commit, run_id and test results.' });

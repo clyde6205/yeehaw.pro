@@ -60,7 +60,7 @@ export async function runRepair({ repoDir, base, finding, fixer, testCmd, report
     const commit = git(wt, 'rev-parse', 'HEAD'), diffstat = git(wt, 'diff', '--stat', `${base}..HEAD`).slice(-800);
     let pr = null;
     if (push) { git(wt, 'push', '-q', 'origin', branch); if (draftPr) pr = execFileSync('gh', ['pr', 'create', '--draft', '--base', base, '--head', branch, '--title', `repair: ${finding.title}`, '--body', `Automated repair for finding #${finding.id}. Tests before/after attached in the console. Needs human review.`], { cwd: wt, encoding: 'utf8' }).trim(); }
-    await report({ finding_id: finding.id, actor: 'repair', action: 'fix prepared', result: 'change committed on an isolated branch; awaiting independent QA and owner review', evidence: { commit, branch, run_id: runId, tests: { before, after }, diffstat, pushed: push, pr } });
+    await report({ finding_id: finding.id, actor: 'repair', action: 'fix prepared', result: 'change committed on an isolated branch; awaiting independent QA and owner review', evidence: { commit, branch, run_id: runId, tests: { before, after }, diffstat, patch: git(wt, 'diff', `${base}..HEAD`).slice(0, 5000), pushed: push, pr } });
     prepared = true;
     return { ok: true, commit, branch, before, after };
   } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} if (!prepared) { try { git(repoDir, 'branch', '-D', branch); } catch {} } rmSync(work, { recursive: true, force: true }); }
