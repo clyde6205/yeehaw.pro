@@ -104,3 +104,24 @@ No preview deployments were used.
 - 1 GB RAM / 1 core profile: cold start TotalTime 612, 815, 721, 598, 723 ms (median 721); PSS total 66,610 KB (Java heap 4,352 KB, native 8,660 KB).
 - 1.5 GB profile: cold start 793, 641, 822, 717, 662 ms (median 717); PSS 67,499 KB.
 **Not measured by any workflow yet:** CPU %, frame jank, data consumption, battery, low-bandwidth and network-interruption behaviour on a device; API 35/36 emulator jobs failed on Maven 429 rate limiting (re-run requested).
+
+## Final evidence matrix (2026-11-28, branch wip/quick-tools; production API = 66d2136, site Worker redeployed with /download/)
+Class: P = production, L = local (embedded Postgres/unit), E = emulator in GitHub Actions CI (x86 emulator, NOT a physical phone), CI = GitHub Actions, N = not tested.
+| # | Scenario | Agent | Class | Result / limitation |
+|---|---|---|---|---|
+| 1 | API failure detection | availability (Worker probe) | P | finding #2 recorded from the live API 404 |
+| 2 | Diagnostic investigation | diagnostic | P | root cause + evidence + next step stored in finding #2 |
+| 3 | Orchestrator assignment | orchestrator | P | finding #2 owned by infrastructure; auto-resolved in run 9 |
+| 4 | Code repair preparation | repair | L + CI | real model-assisted fix of scanner defect (isolated worktree, tests, QA, rejected control) done with a Claude instance in this session. The unattended GitHub workflow (needs ANTHROPIC_API_KEY secret) has NOT run: N for production |
+| 5 | Automated tests | qa | L + CI + E | agents tests, repair tests (19), watch tests (16), Android unit tests, instrumented suite on emulators |
+| 6 | Independent QA | qa | L | separate run id and fresh checkout; N in production until the unattended workflow has a key |
+| 7 | Console history | console | P data / L UI | production DB holds runs 1-12, 2 findings, 4 actions (read by SQL). The founder's own-browser view of /admin/ not yet confirmed by the owner |
+| 8 | Failed repair rejected | qa | L + CI | negative-control run rejected; N in production |
+| 9 | Protected ops need founder approval | orchestrator | L + P | agent token cannot approve; production returns 401 without/with wrong token |
+| 10 | Website vs API outage | availability | L; partial P | Worker classified the real wrong-deployment incident; a pure website outage was not induced |
+| 11 | Wrong Vercel configuration | diagnostic | P | real incident, resolved automatically |
+| 12 | Measurable performance gain | performance | L (+E for Android) | 4 -> 1 DB round trips per boot (local timing). Android cold start/memory are emulator numbers |
+
+Autonomous engine (P): Worker `yeehaw-agents` running since 15:29Z, probes every 30 s; orchestrator runs 11 (16:06Z) and 12 (17:06Z) were started by the Worker itself, no manual call; 0 tick failures.
+Android (CI): debug+release build, lint, unit tests green; release workflow published a test APK and install-verified it on Android 6 (1 GB / 1 core) and Android 12 emulators. Browser regression suite (9 tests) passed on API 29 and API 35 emulators; API 23 failed one back-navigation test (test made URL-aware in a6c352c, re-run pending); API 36 untested after a Maven failure (earlier WebView native crash in LocalizationTest unresolved). Emulator frame stats are software-rendered and not meaningful.
+Not tested: any physical phone, real mobile networks, battery, Google Play pre-launch, production-signed APK/AAB, unattended AI repair in CI, owner view of the production console, GitHub Actions secrets (CONSOLE_URL/AGENT_TOKEN empty), infrastructure collector with real read-only tokens.
