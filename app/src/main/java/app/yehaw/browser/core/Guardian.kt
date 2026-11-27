@@ -96,9 +96,12 @@ object Guardian {
         val thread = Thread({
             while (true) {
                 try {
-                    main.post { lastBeat = SystemClock.uptimeMillis() }
-                    Thread.sleep(2_000L)
-                    if (resumed && SystemClock.uptimeMillis() - lastBeat > FREEZE_RESTART_MS) {
+                    // Only watch while the UI is in front. In the background the thread sleeps 30 s per cycle instead of waking every 2 s
+                    // (battery), and no freeze verdict is taken in a cycle that started in the background because no beat was posted.
+                    val watching = resumed
+                    if (watching) main.post { lastBeat = SystemClock.uptimeMillis() }
+                    Thread.sleep(if (watching) 2_000L else 30_000L)
+                    if (watching && resumed && SystemClock.uptimeMillis() - lastBeat > FREEZE_RESTART_MS) {
                         record(app, IllegalStateException("ui_freeze"))
                         scheduleRestart(app, 800L)
                         Process.killProcess(Process.myPid())

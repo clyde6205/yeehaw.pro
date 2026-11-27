@@ -9,9 +9,9 @@ test('real project facts are read correctly', () => {
   assert.equal(r.facts.webViewOffscreenPreRaster, true); assert.equal(r.facts.mixedContentBlocked, true); assert.equal(r.facts.safeBrowsing, true);
   assert.ok(r.facts.dependencies.length <= 6);
 });
-test('real project: the always-waking watchdog and cleartext traffic are the honest findings', () => {
+test('real project: the watchdog no longer polls in the background; the only finding is the accepted cleartext residual', () => {
   const fp = analyzeRepo(root).findings.map((f) => f.fingerprint);
-  assert.ok(fp.includes('android:background-polling:Guardian.kt'), fp.join());
+  assert.deepEqual(fp, ['security:android:cleartext-residual']);
   assert.ok(fp.includes('security:android:cleartext-residual'));
 });
 test('rules fire on a deliberately bad project and stay quiet on a good one', () => {

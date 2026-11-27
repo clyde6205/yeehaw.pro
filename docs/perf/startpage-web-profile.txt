@@ -1,0 +1,40 @@
+{
+  "evidence_class": "representative-web-layer (NOT a physical device)",
+  "profile": "slow-3g-low-end",
+  "runs": 3,
+  "median": {
+    "dcl_ms": 187,
+    "load_ms": 188,
+    "fcp_ms": 204,
+    "dom_nodes": 105,
+    "heap_mb": 9.5,
+    "requests": 1,
+    "transferred_kb": 47.1,
+    "network_requests_off_device": 0,
+    "touch_targets_total": 15,
+    "touch_targets_under_44px": 0,
+    "page_errors": 0
+  },
+  "horizontal_overflow": false,
+  "file_bytes": 48236
+}
+{
+  "evidence_class": "representative-web-layer (NOT a physical device)",
+  "profile": "fast-wifi-reference",
+  "runs": 3,
+  "median": {
+    "dcl_ms": 26,
+    "load_ms": 30,
+    "fcp_ms": 52,
+    "dom_nodes": 105,
+    "heap_mb": 9.5,
+    "requests": 1,
+    "transferred_kb": 47.1,
+    "network_requests_off_device": 0,
+    "touch_targets_total": 15,
+    "touch_targets_under_44px": 0,
+    "page_errors": 0
+  },
+  "horizontal_overflow": false,
+  "file_bytes": 48236
+}
