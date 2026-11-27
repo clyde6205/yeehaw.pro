@@ -296,7 +296,18 @@ views.agents = async function (el) {
   var lastRun = d.runs[0];
   var beat = d.latest.filter(function (r) { return r.agent === 'scheduler'; })[0];
   el.append(
-    h('div', { class: 'card' }, h('h2', {}, 'Agent fleet'),
+    h('div', { class: 'card' }, h('h2', {}, 'Engine controls'),
+      h('p', { class: 'small mute' }, 'Every change here is saved to the audit trail with who/when/what. Agents that are switched off are skipped; automatic repairs not ticked wait for your approval.'),
+      h('p', {}, h('label', {}, h('input', { type: 'checkbox', id: 'eng-on', checked: d.engine.enabled }), ' Engine enabled'), ' · Minimum minutes between passes: ', h('input', { type: 'number', id: 'eng-int', min: '1', max: '1440', value: String(d.engine.interval_minutes), style: 'width:80px' })),
+      h('p', {}, h('b', {}, 'Agents: '), d.engine.agents.map(function (a) { var st = lastRun && lastRun.summary && lastRun.summary.per_agent && lastRun.summary.per_agent[a]; return h('label', { style: 'margin-right:14px;white-space:nowrap' }, h('input', { type: 'checkbox', 'data-agent': a, checked: d.engine.disabled_agents.indexOf(a) < 0 }), ' ' + a + ' ', h('span', { class: 'mute small' }, st ? '(' + st.state + (st.found != null ? ', ' + st.found + ' found, ' + st.ms + ' ms' : '') + ')' : '(no run yet)')); })),
+      h('p', {}, h('b', {}, 'Permitted automatic repairs: '), d.engine.permitted_repairs_available.map(function (r) { return h('label', { style: 'margin-right:14px' }, h('input', { type: 'checkbox', 'data-repair': r, checked: d.engine.auto_repairs.indexOf(r) >= 0 }), ' ' + r); })),
+      h('p', {}, act('Save engine settings', async function () {
+        var dis = [].slice.call(document.querySelectorAll('[data-agent]')).filter(function (c) { return !c.checked; }).map(function (c) { return c.getAttribute('data-agent'); });
+        var rep = [].slice.call(document.querySelectorAll('[data-repair]')).filter(function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-repair'); });
+        await api('/engine', { method: 'PUT', body: { enabled: $('#eng-on').checked, interval_minutes: Number($('#eng-int').value), disabled_agents: dis, auto_repairs: rep } });
+        toast('Engine settings saved'); show('agents');
+      }), ' ', act('Run one pass now', async function () { var r = await api('/engine/run', { method: 'POST', body: {} }); toast(r.lease === 'acquired' ? 'Pass finished: ' + short(r.summary, 120) : 'Not run: ' + (r.reason || r.lease)); show('agents'); }, 'alt'))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Agent fleet'),
       h('p', { class: 'small mute' }, d.enabled ? 'Reporting is on. Everything here is read from the database; nothing is simulated. Refreshes every 15 s.' : 'Reporting is OFF: set AGENT_TOKEN on the API (see docs/AGENTS.md). No agent results can arrive until then.'),
       h('p', {}, 'Scheduler heartbeat: ', beat ? [badge(beat.status), ' ', ago(beat.created_at)] : 'none received yet', ' · Last orchestrator run: ', lastRun ? [badge(lastRun.ok ? 'ok' : 'fail'), ' ', ago(lastRun.finished_at || lastRun.started_at)] : 'none yet', ' · Open findings: ', String(active.length), ' · Waiting for your approval: ', h('b', {}, String(d.pending_approvals)))),
     h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Detected problems and proposed corrections'),

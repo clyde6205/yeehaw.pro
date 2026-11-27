@@ -21,14 +21,34 @@ const REPAIRS = {
     return `ANALYZE ${table} completed`;
   },
 };
+// Independent verification (QA agent): a check that does NOT reuse the detector that raised the finding. A repair is only
+// "verified" when this check AND the original detector re-run both pass. Returns null when verified, else the failure reason.
+const REPAIR_VERIFY = {
+  async prune_agent_reports(pool) {
+    const n = Number((await pool.query(`SELECT count(*) AS n FROM agent_reports WHERE created_at < now() - interval '30 days'`)).rows[0].n);
+    return n === 0 ? null : `${n} agent report rows older than 30 days still exist`;
+  },
+  async analyze(pool, table) {
+    const r = (await pool.query(`SELECT greatest(last_analyze, last_autoanalyze) AS t FROM pg_stat_user_tables WHERE relname = $1`, [table])).rows[0];
+    return r && r.t && Date.now() - new Date(r.t).getTime() < 120_000 ? null : `${table} shows no ANALYZE in the last 2 minutes`;
+  },
+};
+const DEFAULTS = { enabled: true, disabled_agents: [], interval_minutes: 5, auto_repairs: ['prune_agent_reports', 'analyze'] };
+async function getSettings(pool) {
+  const r = await pool.query('SELECT enabled, disabled_agents, interval_minutes, auto_repairs, updated_at FROM engine_settings WHERE id = 1');
+  return r.rows[0] || { ...DEFAULTS };
+}
 const parseRepair = (key) => { const [name, arg] = String(key).split(':'); return REPAIRS[name] ? { fn: REPAIRS[name], arg, name } : null; };
 const log = (pool, id, actor, action, result, verification = null) =>
   pool.query('INSERT INTO agent_actions (finding_id, actor, action, result, verification) VALUES ($1,$2,$3,$4,$5)', [id, actor, action, result, verification]);
 
-async function detect(pool, specialists) {
+async function detect(pool, specialists, disabled = [], perAgent = {}) {
   const found = [], errors = [];
   for (const [name, fn] of Object.entries(specialists)) {
-    try { found.push(...(await fn({ pool }))); } catch (e) { errors.push(`${name}: ${e.message}`); }
+    if (disabled.includes(name)) { perAgent[name] = { state: 'disabled' }; continue; }
+    const t0 = Date.now();
+    try { const got = await fn({ pool }); found.push(...got); perAgent[name] = { state: 'ok', found: got.length, ms: Date.now() - t0 }; }
+    catch (e) { errors.push(`${name}: ${e.message}`); perAgent[name] = { state: 'error', error: e.message, ms: Date.now() - t0 }; }
   }
   return { found, errors };
 }
@@ -41,13 +61,20 @@ function diagnose(found) {
   return found;
 }
 
-async function runOnce(pool, { specialists = S, now = Date.now } = {}) {
+async function runOnce(pool, { specialists = S, now = Date.now, respectInterval = false } = {}) {
+  const cfg = await getSettings(pool);
+  if (!cfg.enabled) return { lease: 'skipped', reason: 'engine is switched off in the founder console' };
+  if (respectInterval) {
+    const recent = await pool.query(`SELECT 1 FROM agent_runs WHERE started_at > now() - ($1 || ' minutes')::interval LIMIT 1`, [String(cfg.interval_minutes)]);
+    if (recent.rowCount) return { lease: 'skipped', reason: `ran within the configured ${cfg.interval_minutes} minute interval` };
+  }
   const lease = await pool.query(`UPDATE agent_lease SET until = now() + interval '2 minutes' WHERE id = 1 AND until < now() RETURNING id`);
   if (!lease.rowCount) return { lease: 'skipped', reason: 'another run is in progress or ran within the last 2 minutes' };
   const run = (await pool.query('INSERT INTO agent_runs DEFAULT VALUES RETURNING id')).rows[0].id;
-  const summary = { detected: 0, opened: 0, resolved: 0, repaired: 0, verified: 0, failed: 0, errors: [] };
+  const perAgent = {};
+  const summary = { per_agent: perAgent, detected: 0, opened: 0, resolved: 0, repaired: 0, verified: 0, failed: 0, errors: [] };
   try {
-    const { found, errors } = await detect(pool, specialists);
+    const { found, errors } = await detect(pool, specialists, cfg.disabled_agents, perAgent);
     summary.errors = errors; summary.detected = found.length;
     diagnose(found);
     const live = new Set();
@@ -67,20 +94,23 @@ async function runOnce(pool, { specialists = S, now = Date.now } = {}) {
       await log(pool, r.id, 'orchestrator', 'auto-resolved', 'condition no longer detected', 'the detecting check re-ran and no longer reports it'); summary.resolved++;
     }
     // Repairs: low-risk allowlisted ones automatically, plus anything the owner approved.
-    const todo = (await pool.query(`SELECT * FROM agent_findings WHERE repair IS NOT NULL AND (status = 'approved' OR (status = 'open' AND risk IN ('none','low'))) ORDER BY id LIMIT 5`)).rows;
+    const todo = (await pool.query(`SELECT * FROM agent_findings WHERE repair IS NOT NULL AND (status = 'approved' OR (status = 'open' AND risk IN ('none','low') )) ORDER BY id LIMIT 5`)).rows;
     for (const f of todo) {
       const rp = parseRepair(f.repair);
       if (!rp) { await log(pool, f.id, 'orchestrator', 'repair refused', `repair "${f.repair}" is not on the allowlist`); continue; }
+      if (f.status === 'open' && !cfg.auto_repairs.includes(rp.name)) continue; // not permitted to run by itself; waits for the owner
       try {
         const result = await rp.fn(pool, rp.arg); summary.repaired++;
         await pool.query(`UPDATE agent_findings SET status = 'applied', updated_at = now() WHERE id = $1`, [f.id]);
-        await log(pool, f.id, 'orchestrator', 'repair ' + rp.name, result);
-        // verify: re-run the same specialist and see whether the fingerprint is gone
-        const again = await detect(pool, specialists);
+        await log(pool, f.id, 'repair', 'repair ' + rp.name, result);
+        // verify independently: (1) a check that does not reuse the detector, (2) the detector itself re-run. Both must pass.
+        const indep = REPAIR_VERIFY[rp.name] ? await REPAIR_VERIFY[rp.name](pool, rp.arg) : 'no independent verification is defined for this repair';
+        const again = await detect(pool, specialists, cfg.disabled_agents);
         const still = again.found.some((x) => x.fingerprint === f.fingerprint);
-        await pool.query(`UPDATE agent_findings SET status = $2, updated_at = now(), resolved_at = CASE WHEN $2 = 'verified' THEN now() END WHERE id = $1`, [f.id, still ? 'failed' : 'verified']);
-        await log(pool, f.id, 'orchestrator', 'verification', still ? 'FAILED: the problem is still detected after the repair' : 'verified: the problem is no longer detected', still ? 'failed' : 'passed');
-        still ? summary.failed++ : summary.verified++;
+        const failed = still || !!indep;
+        await pool.query(`UPDATE agent_findings SET status = $2, updated_at = now(), resolved_at = CASE WHEN $2 = 'verified' THEN now() END WHERE id = $1`, [f.id, failed ? 'failed' : 'verified']);
+        await log(pool, f.id, 'qa', 'independent verification', failed ? 'FAILED: ' + (indep || 'the problem is still detected after the repair') : 'verified: independent check passed and the problem is no longer detected', failed ? 'failed' : 'passed');
+        failed ? summary.failed++ : summary.verified++;
       } catch (e) {
         await pool.query(`UPDATE agent_findings SET status = 'failed', updated_at = now() WHERE id = $1`, [f.id]);
         await log(pool, f.id, 'orchestrator', 'repair error', e.message); summary.failed++;
@@ -94,4 +124,4 @@ async function runOnce(pool, { specialists = S, now = Date.now } = {}) {
   } finally { await pool.query(`UPDATE agent_lease SET until = now() + interval '45 seconds' WHERE id = 1`); }
 }
 
-module.exports = { runOnce, detect, diagnose, REPAIRS };
+module.exports = { runOnce, detect, diagnose, REPAIRS, REPAIR_VERIFY, getSettings };

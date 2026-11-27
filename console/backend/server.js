@@ -12,7 +12,8 @@ const crypto = require('node:crypto');
 const CONFIG_TTL_SECONDS = 3600;
 const bucketOf = (id) => parseInt(crypto.createHash('sha256').update(id).digest('hex').slice(0, 8), 16) % 100;
 
-const { runOnce: runOrchestrator } = require('./agents/orchestrator');
+const { runOnce: runOrchestrator, getSettings: getEngineSettings, REPAIRS: ENGINE_REPAIRS } = require('./agents/orchestrator');
+const ENGINE_AGENTS = Object.keys(require('./agents/specialists'));
 
 function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null, agentToken = null }) {
   if (!pool) throw new Error('pool is required');
@@ -124,7 +125,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       const fleet = r.bad_1h >= 5 && r.bad_1h > 3 * base ? 'fail' : r.bad_1h >= 3 && r.bad_1h > 2 * base ? 'warn' : 'ok';
       if (fleet !== 'ok') await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['fleet-health', fleet,
         `crashes+freezes last hour: ${r.bad_1h} (usual ${base.toFixed(1)}/h); triggered by ${reason}`, { bad_1h: r.bad_1h, bad_prev24h: r.bad_prev24h, trigger: reason }]);
-      return await runOrchestrator(pool);
+      return await runOrchestrator(pool, { respectInterval: true });
     } catch (e) { return { error: e.message }; }
   };
 
@@ -277,7 +278,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       `crashes+freezes last hour: ${r.bad_1h} (usual ${baseHourly.toFixed(1)}/h); active devices today: ${r.active_today}`, { bad_1h: r.bad_1h, bad_prev24h: r.bad_prev24h, active_today: r.active_today }]);
     await pool.query(`UPDATE agent_lease SET until = 'epoch' WHERE id = 1`); // release the short lease; the orchestrator takes its own
     let orch;
-    try { orch = await runOrchestrator(pool); } catch (e) { orch = { lease: 'error', error: e.message }; }
+    try { orch = await runOrchestrator(pool, { respectInterval: true }); } catch (e) { orch = { lease: 'error', error: e.message }; }
     const sev = (await pool.query(`SELECT severity, count(*)::int AS n FROM agent_findings WHERE status IN ('open','approved','applied','failed') GROUP BY 1`)).rows;
     res.json({ ok: orch.lease !== 'error', fleet, db: dbStatus, db_ms: dbMs, orchestrator: orch, open_findings: Object.fromEntries(sev.map((x) => [x.severity, x.n])) });
   }));
@@ -583,12 +584,41 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     const [latest, recent, findings, actions, runs] = await Promise.all([
       q(`SELECT DISTINCT ON (agent) agent, status, title, details, ref, created_at FROM agent_reports ORDER BY agent, created_at DESC`),
       q(`SELECT id, agent, status, title, ref, created_at FROM agent_reports ORDER BY created_at DESC LIMIT 100`),
-      q(`SELECT id, agent, severity, title, evidence, root_cause, proposal, risk, repair, status, created_at, updated_at FROM agent_findings ORDER BY (status IN ('open','approved','applied','failed')) DESC, id DESC LIMIT 100`),
+      q(`SELECT id, fingerprint, agent, severity, title, evidence, root_cause, proposal, risk, repair, status, created_at, updated_at FROM agent_findings ORDER BY (status IN ('open','approved','applied','failed')) DESC, id DESC LIMIT 100`),
       q(`SELECT a.id, a.finding_id, a.actor, a.action, a.result, a.verification, a.created_at FROM agent_actions a ORDER BY a.id DESC LIMIT 100`),
       q(`SELECT id, started_at, finished_at, ok, summary FROM agent_runs ORDER BY id DESC LIMIT 20`),
     ]);
-    res.json({ enabled: !!agentToken, latest, recent, findings, actions, runs,
+    const engine = await getEngineSettings(pool);
+    res.json({ enabled: !!agentToken, engine: { ...engine, agents: ENGINE_AGENTS, permitted_repairs_available: Object.keys(ENGINE_REPAIRS) }, latest, recent, findings, actions, runs,
       pending_approvals: findings.filter((f) => f.status === 'open' && (f.risk === 'medium' || f.risk === 'high' || !f.repair)).length });
+  }));
+
+  // Engine controls: on/off, per-agent switches, how often a pass may run, which automatic repairs are permitted. Every change is audited.
+  admin.put('/engine', small, wrap(async (req, res) => {
+    const b = req.body || {}; const cur = await getEngineSettings(pool); const next = { ...cur };
+    if (b.enabled !== undefined) { if (typeof b.enabled !== 'boolean') return res.status(400).json({ error: 'bad_enabled' }); next.enabled = b.enabled; }
+    if (b.disabled_agents !== undefined) {
+      if (!Array.isArray(b.disabled_agents) || b.disabled_agents.some((a) => !ENGINE_AGENTS.includes(a))) return res.status(400).json({ error: 'bad_agents', allowed: ENGINE_AGENTS });
+      next.disabled_agents = [...new Set(b.disabled_agents)];
+    }
+    if (b.interval_minutes !== undefined) {
+      if (!Number.isInteger(b.interval_minutes) || b.interval_minutes < 1 || b.interval_minutes > 1440) return res.status(400).json({ error: 'bad_interval' });
+      next.interval_minutes = b.interval_minutes;
+    }
+    if (b.auto_repairs !== undefined) {
+      if (!Array.isArray(b.auto_repairs) || b.auto_repairs.some((a) => !Object.prototype.hasOwnProperty.call(ENGINE_REPAIRS, a))) return res.status(400).json({ error: 'bad_repairs', allowed: Object.keys(ENGINE_REPAIRS) });
+      next.auto_repairs = [...new Set(b.auto_repairs)];
+    }
+    await pool.query('UPDATE engine_settings SET enabled=$1, disabled_agents=$2, interval_minutes=$3, auto_repairs=$4, updated_at=now() WHERE id=1', [next.enabled, next.disabled_agents, next.interval_minutes, next.auto_repairs]);
+    await pool.query('INSERT INTO agent_actions (finding_id, actor, action, result) VALUES (NULL,$1,$2,$3)', ['owner', 'engine settings changed', JSON.stringify({ from: { enabled: cur.enabled, disabled_agents: cur.disabled_agents, interval_minutes: cur.interval_minutes, auto_repairs: cur.auto_repairs }, to: { enabled: next.enabled, disabled_agents: next.disabled_agents, interval_minutes: next.interval_minutes, auto_repairs: next.auto_repairs } })]);
+    await audit('agent.engine.settings', { enabled: next.enabled });
+    res.json({ ok: true, engine: next });
+  }));
+  // Run one engine pass now (ignores the interval, still respects on/off, per-agent switches and the lease).
+  admin.post('/engine/run', small, wrap(async (_req, res) => {
+    const out = await runOrchestrator(pool);
+    await audit('agent.engine.run', { lease: out.lease });
+    res.json(out);
   }));
 
   // Owner decisions on findings. Approving a finding that has an allowlisted repair lets the next orchestrator pass run and verify it.

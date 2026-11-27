@@ -66,3 +66,11 @@ Until step 4 is seen, treat the always-on scheduler as not running.
 - Cron: removed from `yeehaw-agents`. It was only ever a scheduler, never the engine.
 - `agents/watch` (Durable Object, 30 s alarm): MONITORING + DIAGNOSIS only. Classifies website/API/database outage and "API serving HTML = wrong deployment", queues reports until the console accepts them. It does not repair anything.
 - `console/backend/agents/*` orchestrator + specialists: the engine core. Implemented: findings, lease, dedupe, allowlisted low-risk auto-repair, re-detection verification, audit log, approve/reject/dismiss. Partial: one correlation rule. Missing: code-repair agent (branch/PR), infrastructure agent, independent QA verification, performance before/after evidence, engine on/off and frequency controls, cost view, rollback control.
+
+## Engine v2 (committed on wip/quick-tools, NOT deployed; needs owner approval + a DB schema migration for `engine_settings`)
+- Diagnostic agent (`specialists.diagnostic`): reads the watcher's classified incident and opens an investigated finding (probe evidence, probable cause, next step), routed to `infrastructure` (wrong deployment, platform outage), `availability` (site/API outage) or `db-optimizer` (database outage). Production-deployment fixes are never automatic (`repair` is null, approve returns 409).
+- Founder controls: `PUT /v1/admin/engine` (enable/disable engine, per-agent switches, minimum interval, permitted automatic repairs) and `POST /v1/admin/engine/run`; every change is written to `agent_actions` (actor owner) and the admin audit log. Console: Agents tab > Engine controls.
+- Separation of duties: repairs are logged by actor `repair`; verification by actor `qa` uses an independent check (`REPAIR_VERIFY`) AND the detector re-run; a repair is `verified` only if both pass.
+- Per-agent status per run (`summary.per_agent`: ok/disabled/error, findings, ms) is shown in the console.
+- Tests: 44 backend (incl. watcher -> real HTTP -> console -> diagnosis -> recovery) and 12 watcher.
+- Still missing: code-repair agent (branch + draft PR), infrastructure probes of Vercel/Cloudflare/Neon APIs from the engine, performance before/after measurements, cost view, rollback control, test-evidence storage.

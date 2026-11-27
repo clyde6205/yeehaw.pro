@@ -105,4 +105,19 @@ async function qa({ pool }) {
   return out;
 }
 
-module.exports = { availability, database, androidCompat, security, performance, qa };
+/** 7. Diagnostic agent: turns the always-on watcher's classified incidents into investigated findings.
+ *  It does not just relay "something failed": it keeps the watcher's probe evidence, the classified kind (website vs API vs
+ *  database vs wrong deployment), the probable cause and the concrete next step, and routes it to the owning agent. */
+const OWNER = { 'wrong-deployment': 'infrastructure', 'platform-outage': 'infrastructure', 'api-outage': 'availability', 'website-outage': 'availability', 'database-outage': 'db-optimizer' };
+async function diagnostic({ pool }) {
+  const r = (await pool.query(`SELECT status, title, details, created_at FROM agent_reports WHERE agent = 'watch' AND created_at > now() - interval '40 minutes' ORDER BY created_at DESC LIMIT 1`)).rows[0];
+  if (!r || r.status !== 'fail') return [];
+  const inc = r.details && r.details.incident;
+  if (!inc || !OWNER[inc.kind]) return [{ fingerprint: 'incident:unclassified', agent: 'diagnostic', severity: 'high', title: 'Live probes failing: ' + r.title,
+    evidence: { bad: (r.details && r.details.bad) || [] }, root_cause: 'The watcher saw failures it could not classify.', proposal: 'Inspect the listed probe failures.', risk: 'high' }];
+  return [{ fingerprint: 'incident:' + inc.kind, agent: OWNER[inc.kind], severity: inc.severity === 'critical' ? 'critical' : 'high',
+    title: `${inc.kind} (${inc.scope}): ${r.title}`, evidence: { probes: inc.evidence, observed_at: r.created_at, diagnosed_by: 'diagnostic' },
+    root_cause: inc.cause, proposal: inc.next, risk: 'high' }];
+}
+
+module.exports = { availability, database, androidCompat, security, performance, qa, diagnostic };

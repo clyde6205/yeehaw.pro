@@ -169,3 +169,14 @@ CREATE TABLE IF NOT EXISTS agent_lease (
   until timestamptz NOT NULL DEFAULT 'epoch'
 );
 INSERT INTO agent_lease (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- Founder controls for the autonomous engine (one row). Defaults: engine on, every agent on, only the two safe repairs permitted.
+CREATE TABLE IF NOT EXISTS engine_settings (
+  id               int PRIMARY KEY CHECK (id = 1),
+  enabled          boolean NOT NULL DEFAULT true,
+  disabled_agents  text[] NOT NULL DEFAULT '{}',
+  interval_minutes int NOT NULL DEFAULT 5 CHECK (interval_minutes BETWEEN 1 AND 1440),
+  auto_repairs     text[] NOT NULL DEFAULT '{prune_agent_reports,analyze}',
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO engine_settings (id) VALUES (1) ON CONFLICT DO NOTHING;

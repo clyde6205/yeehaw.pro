@@ -30,6 +30,7 @@ after(async () => { server.close(); await pool.end(); });
 beforeEach(async () => {
   await pool.query('TRUNCATE agent_actions, agent_findings, agent_runs, agent_reports, entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
   await pool.query("UPDATE agent_lease SET until = 'epoch'");
+  await pool.query("DELETE FROM engine_settings"); await pool.query("INSERT INTO engine_settings (id) VALUES (1)");
   await migrate(pool); // re-seed the default config (version 1)
 });
 
@@ -484,7 +485,7 @@ test('orchestrator: opens a finding, runs an allowlisted low-risk repair, verifi
   const f = (await pool.query('SELECT * FROM agent_findings')).rows[0];
   assert.equal(f.status, 'verified');
   const acts = (await pool.query('SELECT action, verification FROM agent_actions WHERE finding_id = $1 ORDER BY id', [f.id])).rows.map((x) => x.action);
-  assert.deepEqual(acts, ['detected', 'repair prune_agent_reports', 'verification']);
+  assert.deepEqual(acts, ['detected', 'repair prune_agent_reports', 'independent verification']);
   assert.equal((await pool.query(`SELECT 1 FROM agent_reports WHERE agent = 'old-agent'`)).rowCount, 0);
 });
 
@@ -569,4 +570,113 @@ test('a crash report triggers one agents pass without any timer, debounced, and 
   assert.equal((await pool.query('SELECT count(*)::int n FROM agent_runs')).rows[0].n, 1, 'a crash triggers one pass');
   assert.equal((await post('/v1/telemetry/health', { device_id: id, deltas: { crash: 1 } })).status, 200);
   assert.equal((await pool.query('SELECT count(*)::int n FROM agent_runs')).rows[0].n, 1, 'a second crash within 2 minutes is debounced');
+});
+
+
+// ------------------------------------------------------------------ engine v2: diagnostic routing, controls, independent verification
+const incidentReport = (kind, scope, severity = 'critical', status = 'fail') => pool.query(
+  `INSERT INTO agent_reports (agent, status, title, details) VALUES ('watch',$1,$2,$3)`,
+  [status, `${kind}: ${scope}`, { bad: ['x'], incident: { kind, scope, severity, cause: 'cause for ' + kind, evidence: ['probe note'], next: 'next step for ' + kind } }]);
+
+test('diagnostic agent: watcher incidents become findings routed to the owning agent; site outage and API outage differ', async () => {
+  const { diagnostic } = require('../agents/specialists');
+  await incidentReport('wrong-deployment', 'api');
+  let r = await runOnce(pool, { specialists: { diagnostic } });
+  assert.equal(r.summary.opened, 1);
+  let f = (await pool.query(`SELECT * FROM agent_findings WHERE fingerprint = 'incident:wrong-deployment'`)).rows[0];
+  assert.equal(f.agent, 'infrastructure'); assert.equal(f.severity, 'critical'); assert.match(f.root_cause, /cause for wrong-deployment/); assert.match(f.proposal, /next step/); assert.equal(f.repair, null);
+  await pool.query(`UPDATE agent_lease SET until = 'epoch'`);
+  await pool.query(`TRUNCATE agent_reports`); await incidentReport('website-outage', 'site', 'high');
+  await runOnce(pool, { specialists: { diagnostic } });
+  const kinds = (await pool.query(`SELECT fingerprint, agent, status FROM agent_findings ORDER BY id`)).rows;
+  assert.deepEqual(kinds.map((k) => [k.fingerprint, k.agent, k.status]), [['incident:wrong-deployment', 'infrastructure', 'resolved'], ['incident:website-outage', 'availability', 'open']]);
+  // recovery report clears it, with the clearing recorded
+  await pool.query(`UPDATE agent_lease SET until = 'epoch'`);
+  await incidentReport('x', 'x', 'high', 'ok');
+  await runOnce(pool, { specialists: { diagnostic } });
+  assert.equal((await pool.query(`SELECT status FROM agent_findings WHERE fingerprint = 'incident:website-outage'`)).rows[0].status, 'resolved');
+});
+
+test('engine controls: validated, audited, and honoured (off = nothing runs; disabled agent is skipped; interval is enforced)', async () => {
+  const calls = []; const spec = { a: async () => { calls.push('a'); return []; }, b: async () => { calls.push('b'); return []; } };
+  assert.equal((await admin('/engine', { method: 'PUT', body: JSON.stringify({ interval_minutes: 0 }) })).status, 400);
+  assert.equal((await admin('/engine', { method: 'PUT', body: JSON.stringify({ auto_repairs: ['drop_everything'] }) })).status, 400);
+  assert.equal((await fetch(base + '/v1/admin/engine', { method: 'PUT', body: '{}', headers: { 'content-type': 'application/json' } })).status, 401);
+  assert.equal((await admin('/engine', { method: 'PUT', body: JSON.stringify({ enabled: false }) })).status, 200);
+  assert.equal((await runOnce(pool, { specialists: spec })).lease, 'skipped'); assert.deepEqual(calls, []);
+  await admin('/engine', { method: 'PUT', body: JSON.stringify({ enabled: true, disabled_agents: ['availability'] }) });
+  const ag = await (await admin('/agents')).json();
+  assert.equal(ag.engine.enabled, true); assert.deepEqual(ag.engine.disabled_agents, ['availability']); assert.ok(ag.engine.agents.includes('diagnostic'));
+  const r = await runOnce(pool, { specialists: { availability: async () => { calls.push('avail'); return []; }, b: spec.b } });
+  assert.deepEqual(calls, ['b']); assert.equal(r.summary.per_agent.availability.state, 'disabled'); assert.equal(r.summary.per_agent.b.state, 'ok');
+  await pool.query(`UPDATE agent_lease SET until = 'epoch'`);
+  const again = await runOnce(pool, { specialists: spec, respectInterval: true });
+  assert.equal(again.lease, 'skipped'); assert.match(again.reason, /interval/);
+  const log = (await pool.query(`SELECT actor, action FROM agent_actions WHERE action = 'engine settings changed'`)).rows;
+  assert.equal(log.length, 2); assert.equal(log[0].actor, 'owner');
+});
+
+test('permitted automatic repairs: removing a repair from the list stops it running by itself', async () => {
+  await pool.query(`INSERT INTO agent_reports (agent, status, title, details, created_at) VALUES ('old','ok','t','{}', now() - interval '40 days')`);
+  const spec = { sp: async () => (await pool.query(`SELECT 1 FROM agent_reports WHERE created_at < now() - interval '30 days'`)).rowCount
+    ? [{ fingerprint: 'maint:old', agent: 'db-optimizer', severity: 'low', title: 'old rows', risk: 'low', repair: 'prune_agent_reports' }] : [] };
+  await admin('/engine', { method: 'PUT', body: JSON.stringify({ auto_repairs: [] }) });
+  await runOnce(pool, { specialists: spec });
+  assert.equal((await pool.query(`SELECT status FROM agent_findings`)).rows[0].status, 'open');           // not auto-run
+  await admin('/engine', { method: 'PUT', body: JSON.stringify({ auto_repairs: ['prune_agent_reports'] }) });
+  await pool.query(`UPDATE agent_lease SET until = 'epoch'`);
+  const r = await runOnce(pool, { specialists: spec });
+  assert.equal(r.summary.verified, 1);
+  const acts = (await pool.query(`SELECT actor, action, verification FROM agent_actions ORDER BY id`)).rows;
+  assert.ok(acts.some((a) => a.actor === 'repair'), 'repair agent acted'); assert.ok(acts.some((a) => a.actor === 'qa' && a.verification === 'passed'), 'qa agent verified independently');
+});
+
+test('independent verification: a repair whose independent check fails is reported failed even if the detector goes quiet', async () => {
+  const { REPAIR_VERIFY, REPAIRS } = require('../agents/orchestrator');
+  const keep = REPAIR_VERIFY.prune_agent_reports;
+  REPAIR_VERIFY.prune_agent_reports = async () => 'independent check found leftover rows';
+  const keepRepair = REPAIRS.prune_agent_reports; REPAIRS.prune_agent_reports = async () => 'claimed success';
+  try {
+    let present = true; const spec = { sp: async () => present ? [{ fingerprint: 'maint:x', agent: 'db-optimizer', severity: 'low', title: 'x', risk: 'low', repair: 'prune_agent_reports' }] : [] };
+    const orig = spec.sp; spec.sp = async () => { const out = await orig(); if (out.length) present = false; return out; }; // detector goes quiet after first look
+    const r = await runOnce(pool, { specialists: spec });
+    assert.equal(r.summary.failed, 1); assert.equal(r.summary.verified, 0);
+    assert.equal((await pool.query(`SELECT status FROM agent_findings`)).rows[0].status, 'failed');
+    assert.match((await pool.query(`SELECT result FROM agent_actions WHERE action = 'independent verification'`)).rows[0].result, /FAILED: independent check found leftover rows/);
+  } finally { REPAIR_VERIFY.prune_agent_reports = keep; REPAIRS.prune_agent_reports = keepRepair; }
+});
+
+test('end to end over real HTTP: watcher detects "API serving the static site", console receives it, the engine diagnoses, routes and shows it, recovery clears it', async () => {
+  const { runOnce: watchOnce } = await import('../../../agents/watch/index.js');
+  const { diagnostic } = require('../agents/specialists');
+  const agentToken = crypto.randomBytes(32).toString('base64url');
+  const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, agentToken });
+  const srv = app2.listen(0); const url = 'http://127.0.0.1:' + srv.address().port;
+  try {
+    const st = new Map(); const storage = { get: async (k) => st.get(k), put: async (k, v) => { st.set(k, v); } };
+    const env = { CONSOLE_URL: url, AGENT_TOKEN: agentToken };
+    let apiBroken = true;
+    const f = async (u, o) => {
+      if (u.startsWith('https://yeehaw.pro')) return new Response('ok', { status: 200, headers: { 'content-type': 'text/html' } });
+      if (apiBroken && (u.endsWith('/livez') || u.endsWith('/healthz'))) return new Response('<html>static site</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+      return fetch(u, o); // real HTTP to the real Express app, incl. POST /v1/agent/report
+    };
+    let t = Date.now();
+    const w = await watchOnce(env, storage, f, t);
+    assert.equal(w.next.incident, 'wrong-deployment'); assert.equal(w.next.queued, 0, 'report delivered');
+    const run = await runOnce(pool, { specialists: { diagnostic } });
+    assert.equal(run.summary.opened, 1);
+    const d = await (await admin('/agents')).json();
+    const fnd = d.findings.find((x) => x.fingerprint === 'incident:wrong-deployment');
+    assert.equal(fnd.agent, 'infrastructure'); assert.equal(fnd.severity, 'critical'); assert.match(fnd.root_cause, /static site/); assert.match(fnd.proposal, /Root Directory/);
+    assert.equal(fnd.repair, null, 'a production deployment fix is never automatic');
+    assert.equal(d.pending_approvals, 1);
+    assert.equal((await admin(`/findings/${fnd.id}/approve`, { method: 'POST', body: '{}' })).status, 409, 'no automatic repair exists, so approval cannot trigger one');
+    apiBroken = false; t += 30_000; await pool.query(`UPDATE agent_lease SET until = 'epoch'`);
+    await watchOnce(env, storage, f, t);
+    await runOnce(pool, { specialists: { diagnostic } });
+    assert.equal((await pool.query(`SELECT status FROM agent_findings WHERE id = $1`, [fnd.id])).rows[0].status, 'resolved');
+    const acts = (await pool.query(`SELECT actor, action FROM agent_actions WHERE finding_id = $1 ORDER BY id`, [fnd.id])).rows.map((a) => a.action);
+    assert.deepEqual(acts, ['detected', 'auto-resolved']);
+  } finally { srv.close(); }
 });
