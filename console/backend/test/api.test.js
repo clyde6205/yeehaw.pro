@@ -438,6 +438,8 @@ test('agent reports: disabled without a token, write-only with one, shown to the
     assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: 'x', details: { big: 'y'.repeat(9000) } })).status, 400);
     assert.equal((await rep({ agent: 'ci-watch', status: 'fail', title: 'older failure', ref: 'abc123' })).status, 201);
     assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: 'all green', details: { jobs: 11 } })).status, 201);
+    const dup = await rep({ agent: 'ci-watch', status: 'fail', title: 'older failure', ref: 'abc123' });
+    assert.equal(dup.status, 200); assert.equal((await dup.json()).duplicate, true, 'a retried delivery with the same ref is not stored twice');
     const r = await (await fetch(b2 + '/v1/admin/agents', { headers: adminH })).json();
     assert.equal(r.enabled, true);
     assert.equal(r.latest.length, 1); assert.equal(r.latest[0].title, 'all green'); assert.equal(r.recent.length, 2);

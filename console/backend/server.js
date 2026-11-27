@@ -240,7 +240,11 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     if (!['ok', 'warn', 'fail', 'fixed'].includes(b.status)) return res.status(400).json({ error: 'bad_status' });
     if (!title) return res.status(400).json({ error: 'bad_title' });
     if (JSON.stringify(details).length > 8000) return res.status(400).json({ error: 'details_too_large' });
-    await pool.query('INSERT INTO agent_reports (agent, status, title, details, ref) VALUES ($1,$2,$3,$4,$5)', [agent, b.status, title, details, ref]);
+    // Duplicate-event protection: a retried delivery carrying the same (agent, ref) is acknowledged but not stored twice.
+    const ins = await pool.query(
+      'INSERT INTO agent_reports (agent, status, title, details, ref) SELECT $1,$2,$3,$4,$5 WHERE $5::text IS NULL OR NOT EXISTS (SELECT 1 FROM agent_reports WHERE agent=$1 AND ref=$5)',
+      [agent, b.status, title, details, ref]);
+    if (ins.rowCount === 0) return res.status(200).json({ ok: true, duplicate: true });
     res.status(201).json({ ok: true });
   }));
 
