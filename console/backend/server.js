@@ -57,27 +57,23 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     // Prefer the edge-derived country (Cloudflare / Vercel) over the device locale; never store IP addresses.
     const edge = String(req.get('cf-ipcountry') || req.get('x-vercel-ip-country') || '').toUpperCase();
     const country = /^[A-Z]{2}$/.test(edge) && edge !== 'XX' && edge !== 'T1' ? edge : p.country;
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const dev = await client.query(
-        `INSERT INTO devices (device_id, app_version, android_os_ver, ram_mb, country, version_code)
+    // One statement, one round trip, still atomic: device upsert + daily session upsert (skipped when the device is blocked).
+    const r = await pool.query(
+      `WITH d AS (
+         INSERT INTO devices (device_id, app_version, android_os_ver, ram_mb, country, version_code)
          VALUES ($1,$2,$3,$4,$5,$6)
          ON CONFLICT (device_id) DO UPDATE SET last_seen = now(), boot_count = devices.boot_count + 1,
            app_version = EXCLUDED.app_version, android_os_ver = EXCLUDED.android_os_ver,
            ram_mb = EXCLUDED.ram_mb, country = COALESCE(EXCLUDED.country, devices.country),
            version_code = COALESCE(EXCLUDED.version_code, devices.version_code)
-         RETURNING blocked`,
-        [p.device_id, p.app_version, p.android_os_ver, p.ram_mb, country, p.version_code]
-      );
-      if (dev.rows[0].blocked) { await client.query('COMMIT'); return res.status(200).json({ ok: true, blocked: true }); }
-      await client.query(
-        `INSERT INTO sessions (device_id, day) VALUES ($1, (now() AT TIME ZONE 'UTC')::date)
-         ON CONFLICT (device_id, day) DO UPDATE SET session_count = sessions.session_count + 1, last_at = now()`,
-        [p.device_id]
-      );
-      await client.query('COMMIT');
-    } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+         RETURNING device_id, blocked),
+       s AS (
+         INSERT INTO sessions (device_id, day) SELECT device_id, (now() AT TIME ZONE 'UTC')::date FROM d WHERE NOT blocked
+         ON CONFLICT (device_id, day) DO UPDATE SET session_count = sessions.session_count + 1, last_at = now()
+         RETURNING 1)
+       SELECT blocked FROM d`,
+      [p.device_id, p.app_version, p.android_os_ver, p.ram_mb, country, p.version_code]);
+    if (r.rows[0].blocked) return res.status(200).json({ ok: true, blocked: true });
     res.status(200).json({ ok: true });
   }));
 
