@@ -12,10 +12,11 @@ const crypto = require('node:crypto');
 const CONFIG_TTL_SECONDS = 3600;
 const bucketOf = (id) => parseInt(crypto.createHash('sha256').update(id).digest('hex').slice(0, 8), 16) % 100;
 
-function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null }) {
+function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null, agentToken = null }) {
   if (!pool) throw new Error('pool is required');
   if (!adminToken || adminToken.length < 32) throw new Error('ADMIN_TOKEN must be at least 32 characters');
   if (!signingKeyPem) throw new Error('CONFIG_SIGNING_KEY_PEM is required');
+  if (agentToken && (agentToken.length < 32 || agentToken === adminToken)) throw new Error('AGENT_TOKEN must be at least 32 characters and different from ADMIN_TOKEN');
   const signer = loadSigner(signingKeyPem.replace(/\\n/g, '\n'));
 
   const app = express();
@@ -202,6 +203,26 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     res.set({ ETag: etag, 'X-Config-Version': String(row.version), 'X-Config-Signature': hit.sig, 'Cache-Control': 'public, max-age=300' });
     if (req.get('if-none-match') === etag) return res.status(304).end();
     res.type('application/json').send(hit.body);
+  }));
+
+  // ------------------------------------------------------------------ maintenance agents
+  // A separate, write-only token: an agent can report but can never read devices or change the config.
+  app.post('/v1/agent/report', limiter(60_000, 60), express.json({ limit: '16kb' }), wrap(async (req, res) => {
+    if (!agentToken) return res.status(503).json({ error: 'agent_reporting_disabled' });
+    const h = req.get('authorization') || '';
+    const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+    if (!token || !safeEqual(token, agentToken)) return res.status(401).json({ error: 'unauthorized' });
+    const b = req.body || {};
+    const agent = typeof b.agent === 'string' ? b.agent : '';
+    const title = typeof b.title === 'string' ? b.title.trim().slice(0, 200) : '';
+    const ref = typeof b.ref === 'string' ? b.ref.slice(0, 80) : null;
+    const details = b.details && typeof b.details === 'object' && !Array.isArray(b.details) ? b.details : {};
+    if (!/^[a-z0-9_-]{2,40}$/.test(agent)) return res.status(400).json({ error: 'bad_agent' });
+    if (!['ok', 'warn', 'fail', 'fixed'].includes(b.status)) return res.status(400).json({ error: 'bad_status' });
+    if (!title) return res.status(400).json({ error: 'bad_title' });
+    if (JSON.stringify(details).length > 8000) return res.status(400).json({ error: 'details_too_large' });
+    await pool.query('INSERT INTO agent_reports (agent, status, title, details, ref) VALUES ($1,$2,$3,$4,$5)', [agent, b.status, title, details, ref]);
+    res.status(201).json({ ok: true });
   }));
 
   // ------------------------------------------------------------------ admin
@@ -500,6 +521,12 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       signing_key_fingerprint: signer.fingerprint, node: process.version, server_time: new Date().toISOString() });
   }));
 
+  admin.get('/agents', wrap(async (_req, res) => {
+    const latest = await pool.query(`SELECT DISTINCT ON (agent) agent, status, title, details, ref, created_at FROM agent_reports ORDER BY agent, created_at DESC`);
+    const recent = await pool.query(`SELECT id, agent, status, title, ref, created_at FROM agent_reports ORDER BY created_at DESC LIMIT 100`);
+    res.json({ enabled: !!agentToken, latest: latest.rows, recent: recent.rows });
+  }));
+
   app.use('/v1/admin', admin);
 
   // Founder console (single file). Served from this origin so the API needs no CORS.
@@ -534,6 +561,7 @@ if (require.main === module) {
     const app = createApp({
       pool,
       adminToken: process.env.ADMIN_TOKEN,
+      agentToken: process.env.AGENT_TOKEN || null,
       signingKeyPem: process.env.CONFIG_SIGNING_KEY_PEM,
       trustProxy: Number(process.env.TRUST_PROXY ?? 1),
       playVerify: makePlayVerifier({ serviceAccountJson: process.env.PLAY_SERVICE_ACCOUNT_JSON, packageName: process.env.PLAY_PACKAGE_NAME || 'app.yehaw.browser' }),

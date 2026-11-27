@@ -28,7 +28,7 @@ before(async () => {
 });
 after(async () => { server.close(); await pool.end(); });
 beforeEach(async () => {
-  await pool.query('TRUNCATE entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE agent_reports, entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
   await migrate(pool); // re-seed the default config (version 1)
 });
 
@@ -417,4 +417,29 @@ test('admin subscriptions view requires token and lists verified entitlements', 
   const j = await r.json();
   assert.equal(typeof j.active, 'number');
   assert.ok(Array.isArray(j.recent));
+});
+
+test('agent reports: disabled without a token, write-only with one, shown to the admin, never trusted blindly', async () => {
+  // No AGENT_TOKEN configured on the main test app: reporting is refused, not silently accepted.
+  assert.equal((await post('/v1/agent/report', { agent: 'ci-watch', status: 'ok', title: 'x' }, { authorization: 'Bearer nope' })).status, 503);
+  const AT = crypto.randomBytes(32).toString('base64url');
+  assert.throws(() => createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, agentToken: TOKEN }), /AGENT_TOKEN/);
+  const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, agentToken: AT });
+  const s2 = app2.listen(0); const b2 = 'http://127.0.0.1:' + s2.address().port;
+  try {
+    const rep = (body, tok = AT) => fetch(b2 + '/v1/agent/report', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok }, body: JSON.stringify(body) });
+    assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: 'x' }, 'wrong')).status, 401);
+    assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: 'x' }, TOKEN)).status, 401, 'the admin token is not an agent token');
+    assert.equal((await rep({ agent: 'Bad Name', status: 'ok', title: 'x' })).status, 400);
+    assert.equal((await rep({ agent: 'ci-watch', status: 'great', title: 'x' })).status, 400);
+    assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: '' })).status, 400);
+    assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: 'x', details: { big: 'y'.repeat(9000) } })).status, 400);
+    assert.equal((await rep({ agent: 'ci-watch', status: 'fail', title: 'older failure', ref: 'abc123' })).status, 201);
+    assert.equal((await rep({ agent: 'ci-watch', status: 'ok', title: 'all green', details: { jobs: 11 } })).status, 201);
+    const r = await (await fetch(b2 + '/v1/admin/agents', { headers: adminH })).json();
+    assert.equal(r.enabled, true);
+    assert.equal(r.latest.length, 1); assert.equal(r.latest[0].title, 'all green'); assert.equal(r.recent.length, 2);
+    // an agent token cannot read the admin API
+    assert.equal((await fetch(b2 + '/v1/admin/agents', { headers: { authorization: 'Bearer ' + AT } })).status, 401);
+  } finally { s2.close(); }
 });

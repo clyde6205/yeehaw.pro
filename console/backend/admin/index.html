@@ -286,8 +286,17 @@ views.system = async function (el) {
       h('div', { class: 'card' }, h('h2', {}, 'Audit log (every change you make)'), table([['When', function (r) { return ago(r.at); }], ['Action', function (r) { return r.action; }], ['Detail', function (r) { return JSON.stringify(r.detail).slice(0, 90); }]], a.entries))));
 };
 
+views.agents = async function (el) {
+  var d = await api('/agents');
+  var badge = function (st) { return h('b', { style: 'color:' + ({ ok: '#7be37b', fixed: '#7be37b', warn: '#ffd166', fail: '#ff6b6b' }[st] || '#ccc') }, st.toUpperCase()); };
+  el.append(
+    h('div', { class: 'card' }, h('h2', {}, 'Maintenance agents'), h('p', { class: 'small mute' }, d.enabled ? 'Reporting is on. Each agent shows its latest result below; nothing here is simulated.' : 'Reporting is OFF: set AGENT_TOKEN on the API (see docs/AGENTS.md). No agent results can arrive until then.'),
+      table([['Agent', function (r) { return r.agent; }], ['Latest', function (r) { return badge(r.status); }], ['What it found', function (r) { return r.title; }], ['Ref', function (r) { return r.ref || ''; }], ['When', function (r) { return ago(r.created_at); }]], d.latest)),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Recent reports'), table([['When', function (r) { return ago(r.created_at); }], ['Agent', function (r) { return r.agent; }], ['Status', function (r) { return badge(r.status); }], ['Title', function (r) { return r.title; }]], d.recent)));
+};
+
 /* ---------------- shell */
-var TABS = [['overview', 'Overview'], ['users', 'Users'], ['ads', 'Advertising'], ['updates', 'Updates & flags'], ['subs', 'Subscriptions'], ['ops', 'Operations'], ['config', 'Search & blocklist'], ['system', 'System & audit']];
+var TABS = [['overview', 'Overview'], ['users', 'Users'], ['ads', 'Advertising'], ['updates', 'Updates & flags'], ['subs', 'Subscriptions'], ['ops', 'Operations'], ['config', 'Search & blocklist'], ['agents', 'Agents'], ['system', 'System & audit']];
 async function show(tab, quiet) {
   S.tab = tab; $('#drawer').classList.remove('open');
   var main = $('#main'); if (!main) return;

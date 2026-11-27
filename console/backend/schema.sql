@@ -110,3 +110,16 @@ CREATE TABLE IF NOT EXISTS entitlements (
   expires_at    timestamptz,
   verified_at   timestamptz NOT NULL DEFAULT now()
 );
+
+-- Reports from the automated maintenance agents (agents/*.js and any scheduled agent). Written only through
+-- POST /v1/agent/report with the separate AGENT_TOKEN; read by the founder console.
+CREATE TABLE IF NOT EXISTS agent_reports (
+  id         bigserial PRIMARY KEY,
+  agent      text NOT NULL CHECK (agent ~ '^[a-z0-9_-]{2,40}$'),
+  status     text NOT NULL CHECK (status IN ('ok','warn','fail','fixed')),
+  title      text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 200),
+  details    jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ref        text CHECK (ref IS NULL OR char_length(ref) <= 80),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_reports_agent_idx ON agent_reports (agent, created_at DESC);
