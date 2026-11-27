@@ -41,6 +41,7 @@ export async function runRepair({ repoDir, base, finding, fixer, testCmd, report
   guardBranch(branch, base);
   const work = mkdtempSync(join(tmpdir(), 'yh-repair-'));
   const wt = join(work, 'wt');
+  let prepared = false;
   try {
     git(repoDir, 'worktree', 'add', '-q', '-b', branch, wt, base);
     const before = runTests(wt, testCmd);
@@ -60,8 +61,9 @@ export async function runRepair({ repoDir, base, finding, fixer, testCmd, report
     let pr = null;
     if (push) { git(wt, 'push', '-q', 'origin', branch); if (draftPr) pr = execFileSync('gh', ['pr', 'create', '--draft', '--base', base, '--head', branch, '--title', `repair: ${finding.title}`, '--body', `Automated repair for finding #${finding.id}. Tests before/after attached in the console. Needs human review.`], { cwd: wt, encoding: 'utf8' }).trim(); }
     await report({ finding_id: finding.id, actor: 'repair', action: 'fix prepared', result: 'change committed on an isolated branch; awaiting independent QA and owner review', evidence: { commit, branch, run_id: runId, tests: { before, after }, diffstat, pushed: push, pr } });
+    prepared = true;
     return { ok: true, commit, branch, before, after };
-  } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} rmSync(work, { recursive: true, force: true }); }
+  } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} if (!prepared) { try { git(repoDir, 'branch', '-D', branch); } catch {} } rmSync(work, { recursive: true, force: true }); }
 }
 
 /** Independent QA. Fresh checkout of the exact commit, different run id. Records the verdict through report(). */

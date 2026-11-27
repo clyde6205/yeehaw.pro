@@ -1,0 +1,35 @@
+{
+ "measured_at": "2026-11-27T14:50:40.639Z",
+ "node": "v22.23.5",
+ "rtt_assumed_ms": 20,
+ "note": "latency measured locally; projected_ms_at_rtt = measured p50 + round trips x assumed RTT (arithmetic, not a measurement)",
+ "endpoints": {
+  "POST /v1/telemetry/boot (new device)": {
+   "requests": 200,
+   "status": 200,
+   "db_round_trips_per_request": 1,
+   "p50_ms": 2.28,
+   "p95_ms": 4.24,
+   "response_bytes": 11,
+   "projected_ms_at_rtt": 22.3
+  },
+  "POST /v1/telemetry/boot (repeat launch)": {
+   "requests": 200,
+   "status": 200,
+   "db_round_trips_per_request": 1,
+   "p50_ms": 2.34,
+   "p95_ms": 4.11,
+   "response_bytes": 11,
+   "projected_ms_at_rtt": 22.3
+  },
+  "GET /v1/config/app-config": {
+   "requests": 200,
+   "status": 200,
+   "db_round_trips_per_request": 1,
+   "p50_ms": 1.12,
+   "p95_ms": 1.69,
+   "response_bytes": 291,
+   "projected_ms_at_rtt": 21.1
+  }
+ }
+}

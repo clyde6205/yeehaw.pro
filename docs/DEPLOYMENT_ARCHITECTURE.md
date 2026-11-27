@@ -21,4 +21,4 @@ A deployment created without `projectSettings.rootDirectory` built the repo root
 ## Known state after recovery (honest)
 - Serving: build of b4f2353 (older than the latest source). Newer fixes (generic 4xx handler, CSP, `/livez`, event-driven agent pass) are committed on `wip/quick-tools` but NOT deployed; deploying them needs owner approval.
 - `AGENT_TOKEN` is absent from the serving build, so agent reports are refused (503). The watcher queues reports and retries; nothing is lost. The owner must set Vercel `AGENT_TOKEN` to the value the Worker holds. No secret is handled by the assistant.
-- `/v1/app-config` returns 404 on this build; the route in the app is `/v1/config` family and was verified earlier: re-verify after the next approved deploy.
+- Verified live 2026-11-27 (sandbox probe): `/v1/config/app-config` 200 JSON with signature, ETag and 5-minute cache (the app's config path); `/admin/` 200 HTML; `/healthz` 200 (database); website 200. `POST /v1/telemetry/boot` with malformed JSON returns 500 on this older build (fixed in source, not deployed).

@@ -1,0 +1,368 @@
+{
+ "started": "2026-11-27T14:50:28.534Z",
+ "base": "quick-tools-local",
+ "steps": [
+  {
+   "name": "perf: baseline measured",
+   "boot": {
+    "requests": 200,
+    "status": 200,
+    "db_round_trips_per_request": 4,
+    "p50_ms": 2.79,
+    "p95_ms": 5.67,
+    "response_bytes": 11,
+    "projected_ms_at_rtt": 82.8
+   }
+  },
+  {
+   "name": "performance agent opened finding",
+   "id": 1
+  },
+  {
+   "name": "repair agent",
+   "ok": true,
+   "branch": "repair/1-perf-boot-round-trips",
+   "commit": "ba0da152c4a504dbb08f880199e2385fe26decb6",
+   "before_tests": {
+    "exit": 0,
+    "passed": 45,
+    "failed": 0
+   },
+   "after_tests": {
+    "exit": 0,
+    "passed": 45,
+    "failed": 0
+   }
+  },
+  {
+   "name": "qa agent",
+   "ok": true,
+   "reasons": [],
+   "passed": 45,
+   "failed": 0
+  },
+  {
+   "name": "perf: before/after",
+   "comparison": [
+    {
+     "endpoint": "POST /v1/telemetry/boot (new device)",
+     "round_trips": [
+      4,
+      1
+     ],
+     "p50_ms": [
+      2.79,
+      2.28
+     ],
+     "p95_ms": [
+      5.67,
+      4.24
+     ],
+     "projected_ms_at_rtt": [
+      82.8,
+      22.3
+     ],
+     "response_bytes": [
+      11,
+      11
+     ],
+     "improved": true
+    },
+    {
+     "endpoint": "POST /v1/telemetry/boot (repeat launch)",
+     "round_trips": [
+      4,
+      1
+     ],
+     "p50_ms": [
+      2.84,
+      2.34
+     ],
+     "p95_ms": [
+      5.38,
+      4.11
+     ],
+     "projected_ms_at_rtt": [
+      82.8,
+      22.3
+     ],
+     "response_bytes": [
+      11,
+      11
+     ],
+     "improved": true
+    },
+    {
+     "endpoint": "GET /v1/config/app-config",
+     "round_trips": [
+      1,
+      1
+     ],
+     "p50_ms": [
+      1.01,
+      1.12
+     ],
+     "p95_ms": [
+      2.54,
+      1.69
+     ],
+     "projected_ms_at_rtt": [
+      21,
+      21.1
+     ],
+     "response_bytes": [
+      291,
+      291
+     ],
+     "improved": false
+    }
+   ]
+  },
+  {
+   "name": "bad fix",
+   "reported_ok": false,
+   "stage": "tests"
+  },
+  {
+   "name": "protected operation",
+   "approve_status": 409,
+   "error": "no_automatic_repair"
+  },
+  {
+   "name": "console view",
+   "finding_perf": {
+    "id": 1,
+    "status": "verified",
+    "history": [
+     {
+      "actor": "performance",
+      "action": "detected",
+      "verification": null
+     },
+     {
+      "actor": "repair",
+      "action": "fix prepared",
+      "verification": null,
+      "tests": {
+       "after": {
+        "exit": 0,
+        "passed": 45,
+        "failed": 0
+       },
+       "before": {
+        "exit": 0,
+        "passed": 45,
+        "failed": 0
+       }
+      }
+     },
+     {
+      "actor": "qa",
+      "action": "independent verification",
+      "verification": "passed",
+      "tests": {
+       "ms": 2341,
+       "cmd": "cd console/backend && TEST_DATABASE_URL=[redacted] node --test test/api.test.js",
+       "exit": 0,
+       "tail": "  duration_ms: 83.125454\n  type: 'test'\n  ...\n1..45\n# tests 45\n# suites 0\n# pass 45\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 2300.513725",
+       "failed": 0,
+       "passed": 45
+      }
+     },
+     {
+      "actor": "performance",
+      "action": "before/after measured",
+      "verification": null
+     }
+    ]
+   },
+   "finding_bad_fix": {
+    "id": 2,
+    "status": "open",
+    "history": [
+     {
+      "actor": "performance",
+      "action": "detected",
+      "verification": null
+     },
+     {
+      "actor": "repair",
+      "action": "fix failed",
+      "verification": null,
+      "tests": {
+       "after": {
+        "exit": 1,
+        "passed": 43,
+        "failed": 2
+       },
+       "before": {
+        "exit": 0,
+        "passed": 45,
+        "failed": 0
+       }
+      }
+     }
+    ]
+   },
+   "finding_protected": {
+    "id": 3,
+    "status": "open"
+   }
+  }
+ ],
+ "finished": "2026-11-27T14:50:45.732Z",
+ "console": {
+  "finding_perf": {
+   "id": 1,
+   "status": "verified",
+   "history": [
+    {
+     "actor": "performance",
+     "action": "detected",
+     "verification": null
+    },
+    {
+     "actor": "repair",
+     "action": "fix prepared",
+     "verification": null,
+     "tests": {
+      "after": {
+       "exit": 0,
+       "passed": 45,
+       "failed": 0
+      },
+      "before": {
+       "exit": 0,
+       "passed": 45,
+       "failed": 0
+      }
+     }
+    },
+    {
+     "actor": "qa",
+     "action": "independent verification",
+     "verification": "passed",
+     "tests": {
+      "ms": 2341,
+      "cmd": "cd console/backend && TEST_DATABASE_URL=[redacted] node --test test/api.test.js",
+      "exit": 0,
+      "tail": "  duration_ms: 83.125454\n  type: 'test'\n  ...\n1..45\n# tests 45\n# suites 0\n# pass 45\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 2300.513725",
+      "failed": 0,
+      "passed": 45
+     }
+    },
+    {
+     "actor": "performance",
+     "action": "before/after measured",
+     "verification": null
+    }
+   ]
+  },
+  "finding_bad_fix": {
+   "id": 2,
+   "status": "open",
+   "history": [
+    {
+     "actor": "performance",
+     "action": "detected",
+     "verification": null
+    },
+    {
+     "actor": "repair",
+     "action": "fix failed",
+     "verification": null,
+     "tests": {
+      "after": {
+       "exit": 1,
+       "passed": 43,
+       "failed": 2
+      },
+      "before": {
+       "exit": 0,
+       "passed": 45,
+       "failed": 0
+      }
+     }
+    }
+   ]
+  },
+  "finding_protected": {
+   "id": 3,
+   "status": "open"
+  }
+ },
+ "comparison": [
+  {
+   "endpoint": "POST /v1/telemetry/boot (new device)",
+   "round_trips": [
+    4,
+    1
+   ],
+   "p50_ms": [
+    2.79,
+    2.28
+   ],
+   "p95_ms": [
+    5.67,
+    4.24
+   ],
+   "projected_ms_at_rtt": [
+    82.8,
+    22.3
+   ],
+   "response_bytes": [
+    11,
+    11
+   ],
+   "improved": true
+  },
+  {
+   "endpoint": "POST /v1/telemetry/boot (repeat launch)",
+   "round_trips": [
+    4,
+    1
+   ],
+   "p50_ms": [
+    2.84,
+    2.34
+   ],
+   "p95_ms": [
+    5.38,
+    4.11
+   ],
+   "projected_ms_at_rtt": [
+    82.8,
+    22.3
+   ],
+   "response_bytes": [
+    11,
+    11
+   ],
+   "improved": true
+  },
+  {
+   "endpoint": "GET /v1/config/app-config",
+   "round_trips": [
+    1,
+    1
+   ],
+   "p50_ms": [
+    1.01,
+    1.12
+   ],
+   "p95_ms": [
+    2.54,
+    1.69
+   ],
+   "projected_ms_at_rtt": [
+    21,
+    21.1
+   ],
+   "response_bytes": [
+    291,
+    291
+   ],
+   "improved": false
+  }
+ ]
+}

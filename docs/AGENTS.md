@@ -74,3 +74,7 @@ Until step 4 is seen, treat the always-on scheduler as not running.
 - Per-agent status per run (`summary.per_agent`: ok/disabled/error, findings, ms) is shown in the console.
 - Tests: 44 backend (incl. watcher -> real HTTP -> console -> diagnosis -> recovery) and 12 watcher.
 - Still missing: code-repair agent (branch + draft PR), infrastructure probes of Vercel/Cloudflare/Neon APIs from the engine, performance before/after measurements, cost view, rollback control, test-evidence storage.
+
+## Engine v2 additions (same branch)
+- Agent write API (agent token): `POST /v1/agent/finding`, `POST /v1/agent/action` (verification only by `qa`, only for the prepared commit, only from a different run), `GET /v1/agent/pending-rollbacks`; owner `POST /v1/admin/findings/:id/rollback`, `GET /v1/admin/costs`. Secrets are redacted from findings and evidence.
+- `agents/repair` (repair + QA + rollback), `agents/infra` (analyzer over real provider data), `agents/perf` (bench harness). Proof run: `node scripts/engine-e2e.mjs`. Requirement matrix: `docs/ENGINE_STATUS.md`.
