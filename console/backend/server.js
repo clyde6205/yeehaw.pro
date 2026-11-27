@@ -14,6 +14,7 @@ const bucketOf = (id) => parseInt(crypto.createHash('sha256').update(id).digest(
 
 const { runOnce: runOrchestrator, getSettings: getEngineSettings, REPAIRS: ENGINE_REPAIRS } = require('./agents/orchestrator');
 const ENGINE_AGENTS = Object.keys(require('./agents/specialists'));
+const { buildRoster } = require('./agents/roster');
 
 function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null, agentToken = null }) {
   if (!pool) throw new Error('pool is required');
@@ -301,7 +302,13 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     if (!f) return res.status(404).json({ error: 'no_finding' });
     if (b.actor === 'repair' && /^fix prepared/.test(action) && !(/^[0-9a-f]{7,40}$/.test(evidence.commit || '') && evidence.run_id && evidence.tests)) return res.status(400).json({ error: 'evidence_required', detail: 'A prepared fix must carry commit, run_id and test results.' });
     let status = null;
-    if (b.verification != null) {
+    if (b.verification != null && /^rollback verified/.test(action)) {
+      // A rollback is verified only against the exact rollback commit the repair agent reported, from a different run, with tests and a tree comparison.
+      const prior = (await pool.query(`SELECT evidence FROM agent_actions WHERE finding_id = $1 AND actor = 'repair' AND action = 'rollback done' ORDER BY id DESC LIMIT 1`, [id])).rows[0];
+      if (!prior || !prior.evidence || prior.evidence.commit !== evidence.commit || prior.evidence.run_id === evidence.run_id || !evidence.run_id || !evidence.tests || typeof evidence.tree_matches_pre_fix !== 'boolean')
+        return res.status(409).json({ error: 'not_independent', detail: 'A rollback is verified only for the exact rollback commit, from a different run, with test results and a tree comparison.' });
+      if (b.verification === 'passed' && evidence.tree_matches_pre_fix !== true) return res.status(409).json({ error: 'tree_mismatch' });
+    } else if (b.verification != null) {
       const prior = (await pool.query(`SELECT evidence FROM agent_actions WHERE finding_id = $1 AND actor = 'repair' AND action LIKE 'fix prepared%' ORDER BY id DESC LIMIT 1`, [id])).rows[0];
       if (!prior || !prior.evidence || prior.evidence.commit !== evidence.commit || prior.evidence.run_id === evidence.run_id || !evidence.run_id || !evidence.tests)
         return res.status(409).json({ error: 'not_independent', detail: 'Verification must cover the commit the repair agent prepared, come from a different run, and include test results.' });
@@ -317,7 +324,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
   app.get('/v1/agent/pending-rollbacks', limiter(60_000, 60), wrap(async (req, res) => {
     if (!agentAuth(req, res)) return;
     const r = await pool.query(`SELECT a.finding_id, a.evidence FROM agent_actions a WHERE a.action = 'rollback requested'
-      AND NOT EXISTS (SELECT 1 FROM agent_actions d WHERE d.finding_id = a.finding_id AND d.action = 'rollback done' AND d.id > a.id) ORDER BY a.id`);
+      AND NOT EXISTS (SELECT 1 FROM agent_actions d WHERE d.finding_id = a.finding_id AND d.action IN ('rollback done','rollback failed') AND d.id > a.id) ORDER BY a.id`);
     res.json({ requests: r.rows.map((x) => ({ finding_id: Number(x.finding_id), branch: x.evidence && x.evidence.branch, commit: x.evidence && x.evidence.commit })) });
   }));
 
@@ -662,8 +669,26 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       q(`SELECT id, started_at, finished_at, ok, summary FROM agent_runs ORDER BY id DESC LIMIT 20`),
     ]);
     const engine = await getEngineSettings(pool);
-    res.json({ enabled: !!agentToken, engine: { ...engine, agents: ENGINE_AGENTS, permitted_repairs_available: Object.keys(ENGINE_REPAIRS) }, latest, recent, findings, actions, runs,
+    res.json({ enabled: !!agentToken, engine: { ...engine, agents: ENGINE_AGENTS, permitted_repairs_available: Object.keys(ENGINE_REPAIRS) }, roster: buildRoster({ runs, latest, findings, actions, disabled: engine.disabled_agents || [] }), latest, recent, findings, actions, runs,
       pending_approvals: findings.filter((f) => f.status === 'open' && (f.risk === 'medium' || f.risk === 'high' || !f.repair)).length });
+  }));
+
+  // Trends: real measurements only. Each series says where it came from; an empty series stays empty.
+  admin.get('/trends', wrap(async (_req, res) => {
+    const q = (sql, p = []) => pool.query(sql, p).then((r) => r.rows);
+    const [dbms, runs, perf, found] = await Promise.all([
+      q(`SELECT created_at AS t, (details->>'ms')::numeric AS v FROM agent_reports WHERE agent = 'db-health' AND details ? 'ms' ORDER BY created_at DESC LIMIT 120`),
+      q(`SELECT started_at AS t, EXTRACT(EPOCH FROM (finished_at - started_at)) * 1000 AS v, ok FROM agent_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 120`),
+      q(`SELECT created_at AS t, title, details FROM agent_reports WHERE agent = 'perf-bench' ORDER BY created_at DESC LIMIT 20`),
+      q(`SELECT date_trunc('day', created_at) AS t, count(*)::int AS v FROM agent_findings WHERE created_at > now() - interval '30 days' GROUP BY 1 ORDER BY 1`),
+    ]);
+    const asc = (rows) => rows.slice().reverse().map((r) => ({ t: r.t, v: Number(r.v), ...(r.ok === undefined ? {} : { ok: r.ok }) }));
+    res.json({
+      db_roundtrip_ms: { source: 'db-health reports written by the engine tick', points: asc(dbms) },
+      engine_run_ms: { source: 'agent_runs (start to finish of each engine pass)', points: asc(runs) },
+      findings_per_day: { source: 'agent_findings.created_at', points: found.map((r) => ({ t: r.t, v: r.v })) },
+      benchmarks: perf.map((r) => ({ at: r.t, title: r.title, ...r.details })),
+    });
   }));
 
   // Engine controls: on/off, per-agent switches, how often a pass may run, which automatic repairs are permitted. Every change is audited.

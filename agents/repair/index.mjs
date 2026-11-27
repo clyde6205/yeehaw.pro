@@ -86,17 +86,55 @@ export async function verifyRepair({ repoDir, base, finding, commit, testCmd, re
   } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} rmSync(work, { recursive: true, force: true }); }
 }
 
-/** Owner-requested rollback: revert the prepared commit on its own repair/* branch. Never touches protected branches. */
-export async function rollbackRepair({ repoDir, base, finding, branch, commit, report }) {
+/** Owner-requested rollback: revert the prepared commit on its own repair/* branch, run the tests on the result, and report.
+ *  Never touches protected branches. If the revert does not apply cleanly nothing is changed and 'rollback failed' is recorded. */
+export async function rollbackRepair({ repoDir, base, finding, branch, commit, report, testCmd = null, runId = 'rollback-' + randomUUID().slice(0, 8) }) {
   guardBranch(branch, base);
   const work = mkdtempSync(join(tmpdir(), 'yh-rb-')), wt = join(work, 'wt');
   try {
     git(repoDir, 'worktree', 'add', '-q', wt, branch);
-    git(wt, '-c', 'user.name=YeeHaw Repair Agent', '-c', 'user.email=repair@yeehaw.pro', 'revert', '--no-edit', commit);
+    try { git(wt, '-c', 'user.name=YeeHaw Repair Agent', '-c', 'user.email=repair@yeehaw.pro', 'revert', '--no-edit', commit); }
+    catch (e) { try { git(wt, 'revert', '--abort'); } catch {} await report({ finding_id: finding.id, actor: 'repair', action: 'rollback failed', result: 'the revert does not apply cleanly; branch left unchanged', evidence: { branch, reverted: commit, run_id: runId } }); return { ok: false, stage: 'revert' }; }
     const rev = git(wt, 'rev-parse', 'HEAD');
-    await report({ finding_id: finding.id, actor: 'repair', action: 'rollback done', result: `reverted ${commit.slice(0, 7)} on ${branch}`, evidence: { commit: rev, reverted: commit, branch } });
-    return { ok: true, commit: rev };
+    const tests = testCmd ? runTests(wt, testCmd) : null;
+    await report({ finding_id: finding.id, actor: 'repair', action: 'rollback done', result: `reverted ${commit.slice(0, 7)} on ${branch}`, evidence: { commit: rev, reverted: commit, branch, run_id: runId, ...(tests ? { tests } : {}) } });
+    return { ok: true, commit: rev, tests };
   } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} rmSync(work, { recursive: true, force: true }); }
+}
+
+/** Independent QA of a rollback: a fresh checkout of the rollback commit must (1) have exactly the file tree the branch had BEFORE the fix
+ *  and (2) pass the tests. Different run id from the rollback itself. Only this verdict makes a rollback count as verified. */
+export async function verifyRollback({ repoDir, finding, fixCommit, rollbackCommit, testCmd, report, runId = 'qa-rb-' + randomUUID().slice(0, 8) }) {
+  const work = mkdtempSync(join(tmpdir(), 'yh-qarb-')), wt = join(work, 'wt'); const reasons = [];
+  try {
+    git(repoDir, 'worktree', 'add', '-q', '--detach', wt, rollbackCommit);
+    const preTree = git(repoDir, 'rev-parse', `${fixCommit}^^{tree}`), nowTree = git(wt, 'rev-parse', 'HEAD^{tree}');
+    const treeMatches = preTree === nowTree;
+    if (!treeMatches) reasons.push('the file tree after rollback differs from the tree before the fix');
+    const tests = runTests(wt, testCmd);
+    if (tests.exit !== 0) reasons.push(`tests fail on a fresh checkout of the rollback (exit ${tests.exit})`);
+    await report({ finding_id: finding.id, actor: 'qa', action: 'rollback verified', verification: reasons.length ? 'failed' : 'passed',
+      result: reasons.length ? 'FAILED: ' + reasons.join('; ') : 'passed: fresh checkout equals the pre-fix tree and tests are green', evidence: { commit: rollbackCommit, run_id: runId, tests, tree_matches_pre_fix: treeMatches, reasons } });
+    return { ok: !reasons.length, treeMatches, tests, reasons };
+  } finally { try { git(repoDir, 'worktree', 'remove', '--force', wt); } catch {} rmSync(work, { recursive: true, force: true }); }
+}
+
+/** Executes every rollback the owner requested in the console: GET pending -> rollbackRepair -> verifyRollback. Safe to call repeatedly. */
+export async function processRollbacks({ base, token, repoDir, baseBranch, testCmd, fetchFn = fetch }) {
+  const b = base.replace(/\/$/, '');
+  const r = await fetchFn(b + '/v1/agent/pending-rollbacks', { headers: { authorization: 'Bearer ' + token } });
+  if (r.status !== 200) throw new Error('cannot read pending rollbacks (HTTP ' + r.status + ')');
+  const { requests } = await r.json(); const done = [];
+  const report = consoleReporter(b, token, fetchFn);
+  for (const q of requests) {
+    if (!q.branch || !/^[0-9a-f]{7,40}$/.test(q.commit || '')) { done.push({ finding: q.finding_id, skipped: 'request has no branch/commit' }); continue; }
+    const finding = { id: q.finding_id };
+    const rb = await rollbackRepair({ repoDir, base: baseBranch, finding, branch: q.branch, commit: q.commit, report, testCmd });
+    if (!rb.ok) { done.push({ finding: q.finding_id, ok: false, stage: rb.stage }); continue; }
+    const v = await verifyRollback({ repoDir, finding, fixCommit: q.commit, rollbackCommit: rb.commit, testCmd, report });
+    done.push({ finding: q.finding_id, ok: v.ok, rollbackCommit: rb.commit, reasons: v.reasons });
+  }
+  return done;
 }
 
 /** Default reporter: the console's agent API. */

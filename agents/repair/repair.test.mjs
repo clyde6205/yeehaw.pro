@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runRepair, verifyRepair, rollbackRepair, guardBranch } from './index.mjs';
+import { runRepair, verifyRepair, rollbackRepair, verifyRollback, processRollbacks, guardBranch } from './index.mjs';
 
 const g = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8' }).trim();
 function repo() {
@@ -67,4 +67,49 @@ test('prepared fix carries the actual diff for the console to show', async () =>
   const d = repo(), r = rec();
   await runRepair({ repoDir: d, base: 'main', finding: { id: 5, fingerprint: 'diff' }, testCmd: CMD, report: r, fixer: (wt) => writeFileSync(join(wt, 'add.js'), 'module.exports = (a, b) => a + b;\n') });
   assert.match(r.log[0].evidence.patch, /-module\.exports = \(a, b\) => a - b;/); assert.match(r.log[0].evidence.patch, /\+module\.exports = \(a, b\) => a \+ b;/);
+});
+
+test('rollback is executed and independently verified: tree equals the pre-fix tree, tests green, separate run id; main untouched', async () => {
+  const d = repo(), mainBefore = g(d, 'rev-parse', 'main');
+  const r = rec();
+  const out = await runRepair({ repoDir: d, base: 'main', finding: { id: 21, fingerprint: 'rb' }, testCmd: CMD, report: r, fixer: (wt) => writeFileSync(join(wt, 'add.js'), 'module.exports = (a, b) => a + b;\n') });
+  // the pre-fix code is buggy (a - b), so the post-rollback tests fail: that is correct behaviour for this fixture and must be reported honestly
+  const rb = rec();
+  const x = await rollbackRepair({ repoDir: d, base: 'main', finding: { id: 21 }, branch: out.branch, commit: out.commit, report: rb, testCmd: CMD });
+  assert.equal(x.ok, true); assert.equal(rb.log[0].action, 'rollback done'); assert.ok(rb.log[0].evidence.run_id.startsWith('rollback-')); assert.notEqual(rb.log[0].evidence.tests.exit, 0);
+  assert.equal(g(d, 'show', `${out.branch}:add.js`).includes('a - b'), true, 'content is back to the pre-fix state');
+  const q = rec();
+  const v = await verifyRollback({ repoDir: d, finding: { id: 21 }, fixCommit: out.commit, rollbackCommit: x.commit, testCmd: 'node -e "process.exit(0)"', report: q });
+  assert.equal(v.ok, true); assert.equal(v.treeMatches, true);
+  assert.equal(q.log[0].actor, 'qa'); assert.equal(q.log[0].action, 'rollback verified'); assert.equal(q.log[0].verification, 'passed');
+  assert.notEqual(q.log[0].evidence.run_id, rb.log[0].evidence.run_id); assert.equal(q.log[0].evidence.commit, x.commit);
+  assert.equal(g(d, 'rev-parse', 'main'), mainBefore);
+  // QA refuses a rollback whose tree differs from the pre-fix tree (someone committed extra changes on the branch)
+  const wt = mkdtempSync(join(tmpdir(), 'yh-x-')); g(d, 'worktree', 'add', '-q', '--detach', wt, x.commit); writeFileSync(join(wt, 'extra.txt'), 'x'); g(wt, 'add', '-A'); g(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'extra');
+  const bad = rec(); const v2 = await verifyRollback({ repoDir: d, finding: { id: 21 }, fixCommit: out.commit, rollbackCommit: g(wt, 'rev-parse', 'HEAD'), testCmd: 'node -e "process.exit(0)"', report: bad });
+  assert.equal(v2.ok, false); assert.equal(bad.log[0].verification, 'failed'); assert.match(bad.log[0].result, /tree/);
+  g(d, 'worktree', 'remove', '--force', wt);
+});
+
+test('a revert that conflicts is recorded as rollback failed and changes nothing', async () => {
+  const d = repo(); const r = rec();
+  const out = await runRepair({ repoDir: d, base: 'main', finding: { id: 22, fingerprint: 'cf' }, testCmd: CMD, report: r, fixer: (wt) => writeFileSync(join(wt, 'add.js'), 'module.exports = (a, b) => a + b;\n') });
+  const wt = mkdtempSync(join(tmpdir(), 'yh-c-')); g(d, 'worktree', 'add', '-q', wt, out.branch);
+  writeFileSync(join(wt, 'add.js'), 'module.exports = (a, b) => b + a; // later edit\n'); g(wt, 'add', '-A'); g(wt, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'later'); g(d, 'worktree', 'remove', '--force', wt);
+  const head = g(d, 'rev-parse', out.branch), rb = rec();
+  const x = await rollbackRepair({ repoDir: d, base: 'main', finding: { id: 22 }, branch: out.branch, commit: out.commit, report: rb, testCmd: CMD });
+  assert.equal(x.ok, false); assert.equal(rb.log[0].action, 'rollback failed'); assert.equal(g(d, 'rev-parse', out.branch), head);
+});
+
+test('processRollbacks reads the console queue, executes and verifies, and skips malformed requests', async () => {
+  const d = repo(); const r = rec();
+  const out = await runRepair({ repoDir: d, base: 'main', finding: { id: 23, fingerprint: 'pr' }, testCmd: CMD, report: r, fixer: (wt) => writeFileSync(join(wt, 'add.js'), 'module.exports = (a, b) => a + b;\n') });
+  const posted = [];
+  const f = async (url, o = {}) => {
+    if (url.endsWith('/pending-rollbacks')) return { status: 200, json: async () => ({ requests: [{ finding_id: 23, branch: out.branch, commit: out.commit }, { finding_id: 24 }] }) };
+    posted.push(JSON.parse(o.body)); return { status: 201, json: async () => ({ ok: true }) };
+  };
+  const res = await processRollbacks({ base: 'https://api.example', token: 't', repoDir: d, baseBranch: 'main', testCmd: 'node -e "process.exit(0)"', fetchFn: f });
+  assert.equal(res[0].ok, true); assert.ok(res[1].skipped);
+  assert.deepEqual(posted.map((p) => p.action), ['rollback done', 'rollback verified']); assert.equal(posted[1].verification, 'passed');
 });

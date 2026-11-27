@@ -725,6 +725,16 @@ test('agent API: findings and actions need the agent token; verification only by
     assert.deepEqual(pend.requests, [{ finding_id: c.id, branch: 'repair/1', commit: 'abc1234' }]);
     await ag('/v1/agent/action', { finding_id: c.id, actor: 'repair', action: 'rollback done', evidence: { commit: 'fed1234' } });
     assert.deepEqual((await (await ag('/v1/agent/pending-rollbacks', null, agentToken, 'GET')).json()).requests, []);
+    // a rollback counts as verified only by QA, for the exact rollback commit, from another run, with tests and a matching tree
+    const rbq = (over) => ag('/v1/agent/action', { finding_id: c.id, actor: 'qa', action: 'rollback verified', verification: 'passed', evidence: { commit: 'fed1234', run_id: 'qa-rb-1', tests: { exit: 0 }, tree_matches_pre_fix: true, ...over } });
+    assert.equal((await rbq({ commit: 'ccc9999' })).status, 409, 'wrong commit');
+    assert.equal((await rbq({ tests: undefined })).status, 409, 'no tests');
+    assert.equal((await rbq({ tree_matches_pre_fix: undefined })).status, 409, 'no tree comparison');
+    assert.equal((await rbq({ tree_matches_pre_fix: false })).status, 409, 'a passed verdict cannot carry a tree mismatch');
+    assert.equal((await ag('/v1/agent/action', { finding_id: c.id, actor: 'repair', action: 'rollback verified', verification: 'passed', evidence: {} })).status, 403, 'repair cannot verify itself');
+    assert.equal((await rbq({})).status, 201);
+    assert.ok((await pool.query(`SELECT 1 FROM agent_actions WHERE finding_id=$1 AND action='rollback verified' AND verification='passed'`, [c.id])).rowCount === 1);
+    await ag('/v1/agent/action', { finding_id: c3.id, actor: 'repair', action: 'rollback failed', evidence: {} });
     // costs: honest empty state, then real report
     assert.equal((await (await admin('/costs')).json()).costs.length, 0);
     await ag('/v1/agent/report', { agent: 'infra-cost', status: 'ok', title: 'costs', details: { costs: [{ provider: 'neon', metric: 'compute_hours', value: 1.5, unit: 'h' }] } });

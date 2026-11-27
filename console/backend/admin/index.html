@@ -286,8 +286,23 @@ views.system = async function (el) {
       h('div', { class: 'card' }, h('h2', {}, 'Audit log (every change you make)'), table([['When', function (r) { return ago(r.at); }], ['Action', function (r) { return r.action; }], ['Detail', function (r) { return JSON.stringify(r.detail).slice(0, 90); }]], a.entries))));
 };
 
+/* inline SVG line chart from real points; no data -> an honest empty message (nothing is drawn or invented) */
+function chart(points, unit, color) {
+  var box = document.createElement('div');
+  if (!points || points.length < 2) { box.className = 'small mute'; box.textContent = points && points.length === 1 ? 'One sample so far (' + points[0].v.toFixed(1) + ' ' + unit + '); a trend needs at least two.' : 'No samples recorded yet.'; return box; }
+  var W = 560, H = 120, P = 28, vs = points.map(function (p) { return p.v; }), mx = Math.max.apply(null, vs), mn = Math.min.apply(null, vs), rg = (mx - mn) || 1;
+  var xs = function (i) { return P + i * (W - P - 6) / (points.length - 1); }, ys = function (v) { return H - 18 - (v - mn) * (H - 34) / rg; };
+  var path = points.map(function (p, i) { return (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(p.v).toFixed(1); }).join(' ');
+  var med = vs.slice().sort(function (a, b) { return a - b; })[Math.floor(vs.length / 2)];
+  box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:640px;height:auto" role="img" aria-label="trend"><path d="' + path + '" fill="none" stroke="' + (color || '#6ab0ff') + '" stroke-width="2"/>'
+    + '<text x="2" y="12" fill="#999" font-size="10">' + mx.toFixed(0) + ' ' + unit + '</text><text x="2" y="' + (H - 6) + '" fill="#999" font-size="10">' + mn.toFixed(0) + '</text></svg>'
+    + '<div class="small mute">' + points.length + ' samples · latest ' + vs[vs.length - 1].toFixed(1) + ' ' + unit + ' · median ' + med.toFixed(1) + ' ' + unit + ' · ' + new Date(points[0].t).toLocaleString() + ' → ' + new Date(points[points.length - 1].t).toLocaleString() + '</div>';
+  return box;
+}
+
 views.agents = async function (el) {
   var d = await api('/agents');
+  var trends = await api('/trends').catch(function () { return { db_roundtrip_ms: { points: [] }, engine_run_ms: { points: [] }, findings_per_day: { points: [] }, benchmarks: [] }; });
   var costs = await api('/costs').catch(function () { return { costs: [], measured_at: null, note: 'costs unavailable' }; });
   var prepared = {}; d.actions.forEach(function (a) { if (a.action.indexOf('fix prepared') === 0) prepared[a.finding_id] = a.evidence || {}; });
   var testsOf = function (a) { var t = a.evidence && a.evidence.tests; if (!t) return ''; var one = function (x) { return x && x.exit !== undefined ? (x.exit === 0 ? 'pass' : 'FAIL') + (x.passed != null ? ' ' + x.passed + '/' + ((x.passed || 0) + (x.failed || 0)) : '') : ''; }; return t.before !== undefined || t.after !== undefined ? 'before ' + one(t.before) + ' → after ' + one(t.after) : one(t); };
@@ -310,6 +325,15 @@ views.agents = async function (el) {
         await api('/engine', { method: 'PUT', body: { enabled: $('#eng-on').checked, interval_minutes: Number($('#eng-int').value), disabled_agents: dis, auto_repairs: rep } });
         toast('Engine settings saved'); show('agents');
       }), ' ', act('Run one pass now', async function () { var r = await api('/engine/run', { method: 'POST', body: {} }); toast(r.lease === 'acquired' ? 'Pass finished: ' + short(r.summary, 120) : 'Not run: ' + (r.reason || r.lease)); show('agents'); }, 'alt'))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'The eight agents'),
+      h('p', { class: 'small mute' }, 'Status comes from real executions only: "never-run" means nothing has run yet. Tool agents (security scan, Android analysis, benchmarks) report through the agent API; engine agents run inside each pass.'),
+      table([['Agent', function (a) { return h('span', {}, h('b', {}, a.name), h('div', { class: 'small mute' }, a.does)); }], ['Status', function (a) { return badge(a.status); }], ['Last success', function (a) { return a.last_success_at ? ago(a.last_success_at) : '—'; }], ['Latest tool result', function (a) { return a.tool_last ? [badge(a.tool_last.status), ' ', short(a.tool_last.title, 70)] : '—'; }], ['Open', function (a) { return String(a.open_findings); }], ['Verified', function (a) { return String(a.verified_findings); }], ['Failed', function (a) { return String(a.failed_findings); }], ['Error', function (a) { return a.last_error || ''; }]], d.roster || [])),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Performance and health trends'),
+      h('p', { class: 'small mute' }, 'Only measured values. Source is named under each chart; empty means nothing has been measured yet.'),
+      h('h3', {}, 'Database round trip (ms)'), h('div', { class: 'small mute' }, trends.db_roundtrip_ms.source || ''), chart(trends.db_roundtrip_ms.points, 'ms'),
+      h('h3', {}, 'Engine pass duration (ms)'), h('div', { class: 'small mute' }, trends.engine_run_ms.source || ''), chart(trends.engine_run_ms.points, 'ms', '#7be37b'),
+      h('h3', {}, 'New findings per day'), h('div', { class: 'small mute' }, trends.findings_per_day.source || ''), chart(trends.findings_per_day.points, '', '#ffd166'),
+      h('h3', {}, 'Benchmarks (before → after)'), trends.benchmarks.length ? table([['When', function (b) { return ago(b.at); }], ['What', function (b) { return b.title; }], ['Before', function (b) { return short(b.before, 80); }], ['After', function (b) { return short(b.after, 80); }], ['Evidence', function (b) { return b.evidence_class || ''; }]], trends.benchmarks) : h('div', { class: 'small mute' }, 'No benchmark results recorded yet.')),
     h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Agent fleet'),
       h('p', { class: 'small mute' }, d.enabled ? 'Reporting is on. Everything here is read from the database; nothing is simulated. Refreshes every 15 s.' : 'Reporting is OFF: set AGENT_TOKEN on the API (see docs/AGENTS.md). No agent results can arrive until then.'),
       h('p', {}, 'Scheduler heartbeat: ', beat ? [badge(beat.status), ' ', ago(beat.created_at)] : 'none received yet', ' · Last orchestrator run: ', lastRun ? [badge(lastRun.ok ? 'ok' : 'fail'), ' ', ago(lastRun.finished_at || lastRun.started_at)] : 'none yet', ' · Open findings: ', String(active.length), ' · Waiting for your approval: ', h('b', {}, String(d.pending_approvals)))),

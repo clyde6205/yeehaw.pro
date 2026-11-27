@@ -3,19 +3,31 @@
 // They only READ. Any repair is named by a key in REPAIRS and is executed (and then verified) by the orchestrator.
 //   finding = { fingerprint, agent, severity, title, evidence, root_cause, proposal, risk, repair? }
 
+const { reliability } = require('./dbreliability');
 const MIN = 60_000;
 const NEON_FREE_BYTES = 512 * 1024 * 1024; // Neon free plan storage; warn at 70%
 
 /** 1. Monitoring and availability, including a dead-man switch on the monitoring itself. */
-async function availability({ pool }) {
+async function availability({ pool, fetchFn }) {
   const out = [];
   const { rows } = await pool.query(`SELECT agent, status, title, created_at FROM agent_reports
       WHERE agent IN ('site-health','scheduler') AND created_at > now() - interval '30 minutes' ORDER BY created_at DESC`);
   const site = rows.filter((r) => r.agent === 'site-health');
-  const beat = rows.filter((r) => r.agent === 'scheduler' || r.agent === 'site-health');
+  let beat = rows.filter((r) => r.agent === 'scheduler' || r.agent === 'site-health');
+  // The always-on watcher (Durable Object) only reports on CHANGE, so its silence in the database means nothing. Ask it directly:
+  // its status endpoint says when it last probed. Used only when WATCH_STATUS_URL is configured.
+  let watcher = null;
+  if (!beat.length && process.env.WATCH_STATUS_URL) {
+    try { const r = await (fetchFn || fetch)(process.env.WATCH_STATUS_URL, { signal: AbortSignal.timeout(4000) }); const j = await r.json();
+      watcher = { running: !!j.running, lastRunAt: j.lastRunAt, status: j.status, queued: j.queued, deliveryError: j.deliveryError };
+      if (j.running && j.lastRunAt && Date.now() - new Date(j.lastRunAt).getTime() < 5 * MIN) beat = [{ agent: 'watch' }];
+      if (j.status === 'fail' && !site.length) out.push({ fingerprint: 'availability:watch-failing', agent: 'availability', severity: 'high', title: 'The always-on watcher reports failing probes', evidence: watcher, root_cause: 'Live probes are failing right now (see the incident findings for the classified cause).', proposal: 'Open the incident finding.', risk: 'none' });
+      if (j.deliveryError) out.push({ fingerprint: 'availability:watch-delivery', agent: 'availability', severity: 'medium', title: 'The watcher cannot deliver reports to the console: ' + j.deliveryError, evidence: watcher, root_cause: 'AGENT_TOKEN mismatch or the API rejecting reports.', proposal: 'Check AGENT_TOKEN on both sides; run the Worker /selftest.', risk: 'none' });
+    } catch (e) { watcher = { error: e.message }; }
+  }
   if (!beat.length) out.push({ fingerprint: 'availability:scheduler-silent', agent: 'availability', severity: 'high',
     title: 'No heartbeat from the always-on scheduler in 30 minutes',
-    evidence: {}, root_cause: 'The Cloudflare Worker cron is not running or cannot reach the API (not deployed, token wrong, or API down).',
+    evidence: { watcher }, root_cause: 'The Cloudflare Worker cron is not running or cannot reach the API (not deployed, token wrong, or API down).',
     proposal: 'Check the Worker deployment and its cron trigger; confirm AGENT_TOKEN matches on both sides.', risk: 'none' });
   if (site.length && site[0].status === 'fail') out.push({ fingerprint: 'availability:site-down', agent: 'availability', severity: 'high',
     title: 'Public endpoint check failing: ' + site[0].title, evidence: { latest: site[0] },
@@ -25,7 +37,7 @@ async function availability({ pool }) {
 
 /** 2. Neon database: size against the plan, dead rows, connection pressure, missing-index hints. */
 async function database({ pool }) {
-  const out = [];
+  const out = [...(await reliability({ pool }))];
   const size = Number((await pool.query('SELECT pg_database_size(current_database()) AS b')).rows[0].b);
   if (size > 0.7 * NEON_FREE_BYTES) out.push({ fingerprint: 'db:size', agent: 'db-optimizer', severity: size > 0.9 * NEON_FREE_BYTES ? 'high' : 'medium',
     title: `Database is ${(size / 1048576).toFixed(0)} MB of the 512 MB free allowance`, evidence: { bytes: size },
