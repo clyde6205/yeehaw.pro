@@ -15,6 +15,15 @@ on:
       - ".github/workflows/android-emulator-smoke.yml"
       - ".github/scripts/**"
   workflow_dispatch:
+    inputs:
+      test_class:
+        description: "Optional: run only this instrumented test class (e.g. app.yehaw.browser.LocalizationTest) to isolate a failure"
+        required: false
+        default: ""
+      api_levels:
+        description: "Optional JSON list of API levels to run, e.g. [36]"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -129,7 +138,7 @@ jobs:
           adb logcat -c; adb logcat -G 16M || true
           # Dependency downloads can be rate limited (HTTP 429) on shared runners: retry only that failure, never a test failure.
           for attempt in 1 2 3; do
-            gradle --no-daemon :app:connectedDebugAndroidTest --info > /tmp/gradle-android-test.log 2>&1; rc=$?
+            gradle --no-daemon :app:connectedDebugAndroidTest ${{ github.event.inputs.test_class && format('-Pandroid.testInstrumentationRunnerArguments.class={0}', github.event.inputs.test_class) || '' }} --info > /tmp/gradle-android-test.log 2>&1; rc=$?
             if [ $rc -eq 0 ] || ! grep -qE "Received status code 429|Could not resolve|Could not GET" /tmp/gradle-android-test.log || grep -q "Task :app:connectedDebugAndroidTest" /tmp/gradle-android-test.log; then break; fi
             echo "::warning::dependency download failed (attempt $attempt); retrying after backoff"; sleep $((attempt * 45))
           done
