@@ -27,7 +27,7 @@ a.btn{display:inline-block;margin-top:18px;padding:16px 28px;border-radius:16px;
 <script>
 (function(){
   // Keep this on the product site until a signed, owner-approved store or APK URL exists.
-  var INSTALL_URL = "https://yeehaw.pro/";
+  var INSTALL_URL = "https://yeehaw.pro/download/";
   var query = new URLSearchParams(location.search);
   var referral = (query.get("r") || "").toUpperCase();
   var channel = (query.get("c") || "").toLowerCase();
@@ -38,7 +38,7 @@ a.btn{display:inline-block;margin-top:18px;padding:16px 28px;border-radius:16px;
     destination.searchParams.set("referrer", "utm_source=yeehaw_share&utm_medium=" + (channel || "link") + "&utm_campaign=" + referral);
   }
   document.getElementById("go").href = destination.toString();
-  document.getElementById("note").textContent = "The signed app download is being prepared. No unsigned installer is offered here.";
+  document.getElementById("note").textContent = "Early-access test build. The Google Play release is not published yet.";
 })();
 </script>
 </body>

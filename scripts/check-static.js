@@ -7,7 +7,12 @@ const serviceWorker = await readFile(new URL("../sw.js", import.meta.url), "utf8
 const getPage = await readFile(new URL("../public/get/index.html", import.meta.url), "utf8");
 
 assert.match(html, /YeeHaw™ — Lightweight Android Browser/, "Product page must identify the YeeHaw Android browser");
-assert.match(html, /Public APK download is being prepared/i, "Do not imply an APK is available before a signed release exists");
+assert.match(html, /Early-access test build/i, "Home page must label the APK as an early-access test build");
+assert.doesNotMatch(html, /Google Play\s+(?:is\s+)?(?:now\s+)?available|production[- ]signed/i, "Do not claim a Play or production-signed release before one exists");
+const dl = await readFile(new URL("../site-extra/download/index.html", import.meta.url), "utf8");
+assert.match(dl, /debug key/i, "Download page must disclose the debug signature");
+assert.match(dl, /[0-9a-f]{64}/, "Download page must show the SHA-256");
+assert.match(dl, /releases\/download\/android-v[\w.-]+\/yeehaw-browser-[\w.-]+\.apk/, "Download link must point at a published release asset");
 assert.match(manifest.name, /Lightweight Android Browser/, "PWA metadata must identify the browser product");
 assert.doesNotMatch(html, /github\.com/i, "No internal repository or CI links on the public page");
 assert.match(html, /href="\/privacy\/"/, "Privacy link required");

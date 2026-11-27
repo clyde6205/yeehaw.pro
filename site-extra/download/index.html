@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Download YeeHaw Browser for Android</title>
+<meta name="description" content="Early-access test build of YeeHaw Browser for Android 6.0+. Version, size, SHA-256 and release notes.">
+<style>
+:root{--bg:#0b1220;--card:#121c2e;--line:#ffffff22;--fg:#eef3fb;--muted:#9fb0c8;--lime:#b7f35a}
+@media(prefers-color-scheme:light){:root{--bg:#f6f8fb;--card:#fff;--line:#0000001f;--fg:#0f1a2b;--muted:#4b5b73;--lime:#2f7d0b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:36px 16px 64px}a{color:inherit}
+h1{font-size:2rem;margin:.2em 0}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;margin:20px 0}
+.btn{display:flex;justify-content:center;align-items:center;min-height:56px;border-radius:14px;background:var(--lime);color:#101b0b;font-weight:800;text-decoration:none;font-size:1.1rem}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:18px 0 0}dt{color:var(--muted)}dd{margin:0;word-break:break-all}code{font-size:.85rem}
+.warn{border-left:4px solid var(--lime);padding-left:14px;color:var(--muted)}ol{padding-left:20px}
+</style></head><body><main>
+<a href="/">← YeeHaw.pro</a>
+<h1>YeeHaw Browser for Android</h1>
+<p class="warn"><strong>Early-access test build.</strong> This APK is signed with a debug key, not the production Play Store key. It is for testing; the Google Play version is not published yet.</p>
+<div class="card">
+<a class="btn" id="dl" href="https://github.com/clyde6205/yeehaw.pro/releases/download/android-v0.6.0-7daa3cf-test/yeehaw-browser-0.6.0-7daa3cf-test.apk" rel="noopener">Download Android App (APK, 3.9 MB)</a>
+<dl>
+<dt>Version</dt><dd>0.6.0 (build 20), source commit 7daa3cf</dd>
+<dt>Size</dt><dd>4,041,270 bytes</dd>
+<dt>Requires</dt><dd>Android 6.0 or newer</dd>
+<dt>Package</dt><dd>app.yehaw.browser.debug</dd>
+<dt>SHA-256</dt><dd><code>7112c947a5a787a28e9f8c20a67f357c917e7dc1763f4e422df43cd6fb9d563d</code></dd>
+<dt>Release notes</dt><dd><a href="https://github.com/clyde6205/yeehaw.pro/releases/tag/android-v0.6.0-7daa3cf-test" rel="noopener">GitHub release page</a></dd>
+</dl></div>
+<div class="card"><h2>Install</h2><ol>
+<li>Open this page on your phone and tap Download.</li>
+<li>Open the file. If asked, allow “Install unknown apps” for your browser or file manager.</li>
+<li>Optional: check the file against the SHA-256 above (for example <code>sha256sum</code> in Termux, or a checksum app).</li></ol>
+<p>Install check in CI: installs and launches on an Android 6 emulator limited to 1 GB RAM / 1 CPU core and on Android 12. Not yet measured on a physical phone.</p></div>
+</main></body></html>
