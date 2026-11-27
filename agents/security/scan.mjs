@@ -74,6 +74,7 @@ const PLACEHOLDER = /(\.\.\.|yhpass|localhost|127\.0\.0\.1|example|user:pass|pas
 export function scanSecrets(files) {
   const hits = [];
   for (const { path, content } of files) {
+    if (/\.test\.[mc]?[jt]s$/.test(path)) continue; // test files hold deliberate fake secrets for the scanner's own tests
     if (/\.(png|jpg|jpeg|webp|ico|jar|keystore|jks|zip|apk|aab|woff2?)$/i.test(path) || /package-lock\.json$/.test(path)) continue;
     const lines = String(content).split('\n');
     lines.forEach((line, i) => { for (const [kind, re] of SECRET_PATTERNS) { const m = line.match(re); if (m && !PLACEHOLDER.test(/key|database/.test(kind) ? line : m[0])) hits.push({ path, line: i + 1, kind }); } });
@@ -96,11 +97,17 @@ export function parseAudit(j) {
 }
 
 // ---- Android attack surface from a manifest (shared with the Android agent)
-export function scanAndroidManifest(xml) {
+export function scanAndroidManifest(xml, networkConfig = '') {
   const out = [];
   const has = (re) => re.test(xml);
-  if (has(/usesCleartextTraffic\s*=\s*"true"/)) out.push(F('android:cleartext', 'medium', 'App allows cleartext (http) traffic globally', { attribute: 'android:usesCleartextTraffic="true"' },
-    'A browser must open http pages, so cleartext cannot simply be disabled; but app-owned API calls should be https only.', 'Keep cleartext for WebView page loads only; use a network security config that forbids cleartext to api.yeehaw.pro.', 'low'));
+  if (has(/usesCleartextTraffic\s*=\s*"true"/)) {
+    // Mitigated only when a network security config exists AND forbids cleartext to the project's own domain.
+    const pinned = has(/android:networkSecurityConfig\s*=/) && /<domain-config[^>]*cleartextTrafficPermitted\s*=\s*"false"[\s\S]*?yeehaw\.pro/.test(networkConfig);
+    out.push(pinned
+      ? F('android:cleartext-residual', 'low', 'Cleartext (http) allowed for user-chosen sites (accepted: a browser must open http pages); app endpoints on yeehaw.pro are pinned to https', { attribute: 'android:usesCleartextTraffic="true"', mitigation: 'network_security_config.xml domain-config yeehaw.pro cleartext=false' }, 'Only pages the user chooses to open can use http; app-owned calls cannot be downgraded.', 'None needed; keep the domain-config. HTTPS-first upgrade for user navigation is a separate product decision.', 'low')
+      : F('android:cleartext', 'medium', 'App allows cleartext (http) traffic globally', { attribute: 'android:usesCleartextTraffic="true"' },
+        'A browser must open http pages, so cleartext cannot simply be disabled; but app-owned API calls should be https only.', 'Keep cleartext for WebView page loads only; use a network security config that forbids cleartext to api.yeehaw.pro.', 'low'));
+  }
   if (has(/android:allowBackup\s*=\s*"true"/)) out.push(F('android:backup', 'medium', 'allowBackup is enabled', {}, 'Browser data can be extracted with adb backup.', 'Set android:allowBackup="false".', 'low'));
   if (has(/android:debuggable\s*=\s*"true"/)) out.push(F('android:debuggable', 'high', 'Manifest sets debuggable=true', {}, 'Debuggable release builds expose app internals.', 'Remove the attribute; build types control it.', 'low'));
   const exported = [...xml.matchAll(/<(activity|service|receiver|provider)\b[^>]*>/g)].filter((m) => /android:exported\s*=\s*"true"/.test(m[0]) && !/intent-filter/.test(m[0]));

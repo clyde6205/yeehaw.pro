@@ -10,7 +10,7 @@ const walk = (d, out = []) => { for (const n of readdirSync(d)) { const p = join
 const F = (fp, severity, title, evidence, root_cause, proposal, risk = 'low') => ({ fingerprint: 'android:' + fp, agent: 'android-compat', severity, title, evidence, root_cause, proposal, risk });
 
 /** Pure: facts + findings from source texts. `files` = [{path, content}]. */
-export function analyzeProject({ manifest, gradle, files }) {
+export function analyzeProject({ manifest, gradle, files, networkConfig }) {
   const facts = {}, findings = [];
   const num = (re, s) => { const m = s.match(re); return m ? Number(m[1]) : null; };
   facts.minSdk = num(/minSdk\s*=\s*(\d+)/, gradle); facts.targetSdk = num(/targetSdk\s*=\s*(\d+)/, gradle);
@@ -52,13 +52,13 @@ export function analyzeProject({ manifest, gradle, files }) {
         'Gate the loop on the foreground flag: when backgrounded, wait (e.g. 30 s) and skip the main-thread post.', 'medium'));
     }
   }
-  findings.push(...scanAndroidManifest(manifest));
+  findings.push(...scanAndroidManifest(manifest, networkConfig || ''));
   return { facts, findings };
 }
 
 export function analyzeRepo(root) {
   const read = (p) => readFileSync(join(root, p), 'utf8');
   const files = walk(join(root, 'app/src/main/java')).map((p) => ({ path: p.replace(root + '/', ''), content: readFileSync(p, 'utf8') }));
-  return analyzeProject({ manifest: read('app/src/main/AndroidManifest.xml'), gradle: read('app/build.gradle.kts'), files });
+  return analyzeProject({ networkConfig: (() => { try { return read('app/src/main/res/xml/network_security_config.xml'); } catch { return ''; } })(), manifest: read('app/src/main/AndroidManifest.xml'), gradle: read('app/build.gradle.kts'), files });
 }
 export const LIMITATION = 'Static analysis and a representative web-layer profile only. No physical Android device or emulator was available; on-device cold start, memory, frame rate and battery are NOT verified.';

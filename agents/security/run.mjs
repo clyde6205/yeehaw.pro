@@ -12,7 +12,7 @@ if (repo) {
   const s = scanSecrets(files); out.secrets = { files_scanned: files.length, hits: s.hits.length }; findings.push(...s.findings);
   try { const a = parseAudit(JSON.parse(execFileSync('npm', ['audit', '--omit=dev', '--json'], { cwd: repo + '/console/backend', encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }))); out.dependencies = a.counts; findings.push(...a.findings); }
   catch (e) { try { const a = parseAudit(JSON.parse(e.stdout)); out.dependencies = a.counts; findings.push(...a.findings); } catch { out.dependencies = 'npm audit could not run'; } }
-  findings.push(...scanAndroidManifest(readFileSync(repo + '/app/src/main/AndroidManifest.xml', 'utf8')));
+  findings.push(...scanAndroidManifest(readFileSync(repo + '/app/src/main/AndroidManifest.xml', 'utf8'), (() => { try { return readFileSync(repo + '/app/src/main/res/xml/network_security_config.xml', 'utf8'); } catch { return ''; } })()));
 }
 if (arg('api', null)) { const r = await scanApi(String(arg('api')), { burst: Number(arg('burst', 0)) }); out.api = { passed: r.passed, total: r.total, failed: r.checks.filter((c) => !c.ok) }; findings.push(...r.findings); }
 out.findings = findings.map((f) => ({ fingerprint: f.fingerprint, severity: f.severity, title: f.title }));

@@ -15,8 +15,8 @@ const reports = [];
 if (only.includes('security')) {
   const files = execFileSync('git', ['-C', repo, 'ls-files'], { encoding: 'utf8' }).split('\n').filter(Boolean)
     .map((p) => { try { return { path: p, content: readFileSync(repo + '/' + p, 'utf8') }; } catch { return null; } }).filter(Boolean);
-  const s = scanSecrets(files.filter((f) => !/\.test\.[mc]?js$/.test(f.path))); // test files hold deliberate fake secrets for the scanner's own tests
-  const man = scanAndroidManifest(readFileSync(repo + '/app/src/main/AndroidManifest.xml', 'utf8'));
+  const s = scanSecrets(files); // test files hold deliberate fake secrets for the scanner's own tests
+  const man = scanAndroidManifest(readFileSync(repo + '/app/src/main/AndroidManifest.xml', 'utf8'), (() => { try { return readFileSync(repo + '/app/src/main/res/xml/network_security_config.xml', 'utf8'); } catch { return ''; } })());
   const live = base ? await scanApi(base, { burst: 0 }) : null;
   const crit = [...s.findings, ...man, ...(live ? live.findings : [])];
   reports.push({ agent: 'security-scan', status: crit.length ? 'warn' : 'ok', ref: 'security-' + sha,

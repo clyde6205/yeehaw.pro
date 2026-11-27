@@ -12,7 +12,7 @@ test('real project facts are read correctly', () => {
 test('real project: the always-waking watchdog and cleartext traffic are the honest findings', () => {
   const fp = analyzeRepo(root).findings.map((f) => f.fingerprint);
   assert.ok(fp.includes('android:background-polling:Guardian.kt'), fp.join());
-  assert.ok(fp.includes('security:android:cleartext'));
+  assert.ok(fp.includes('security:android:cleartext-residual'));
 });
 test('rules fire on a deliberately bad project and stay quiet on a good one', () => {
   const bad = analyzeProject({ manifest: '<application android:largeHeap="true"><service android:name=".S"/></application>', gradle: 'implementation("a:b:1")\n'.repeat(8), files: [{ path: 'X.kt', content: 'WorkManager.getInstance()' }] });

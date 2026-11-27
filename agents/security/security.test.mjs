@@ -56,8 +56,10 @@ test('parseAudit turns npm audit output into severity-ranked findings', () => {
   assert.equal(parseAudit({ metadata: { vulnerabilities: {} } }).findings.length, 0);
 });
 test('scanAndroidManifest flags the real manifest honestly (cleartext) and a bad one thoroughly', () => {
-  const real = scanAndroidManifest(readFileSync(new URL('../../app/src/main/AndroidManifest.xml', import.meta.url), 'utf8'));
-  assert.deepEqual(real.map((f) => f.fingerprint), ['security:android:cleartext']);
+  const manifest = readFileSync(new URL('../../app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
+  assert.deepEqual(scanAndroidManifest(manifest).map((f) => f.fingerprint), ['security:android:cleartext'], 'without the network config the global cleartext is a medium finding');
+  const real = scanAndroidManifest(manifest, readFileSync(new URL('../../app/src/main/res/xml/network_security_config.xml', import.meta.url), 'utf8'));
+  assert.deepEqual(real.map((f) => [f.fingerprint, f.severity]), [['security:android:cleartext-residual', 'low']]);
   const bad = scanAndroidManifest('<application android:allowBackup="true" android:debuggable="true"><service android:name=".S" android:exported="true"/></application>').map((f) => f.fingerprint);
   assert.deepEqual(bad.sort(), ['security:android:backup', 'security:android:debuggable', 'security:android:exported']);
 });

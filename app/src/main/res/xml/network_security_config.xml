@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A browser must be able to open http:// pages the user chooses, so cleartext stays allowed for arbitrary hosts.
+     The app's OWN endpoints (config, telemetry, support, the website) may never be downgraded to http. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">yeehaw.pro</domain>
+    </domain-config>
+</network-security-config>
