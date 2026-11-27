@@ -86,3 +86,10 @@ Not covered: physical phone, real camera scan, TalkBack, native-speaker review o
 - Rollback: recreate proxied A 185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153 for yeehaw.pro and proxied CNAME www -> clyde6205.github.io after removing the custom domains (only works if Pages is enabled in the repo settings).
 - Result from an outside sandbox: https://yeehaw.pro/, /privacy/, /support/, /terms/ and https://www.yeehaw.pro/ all 200; api.yeehaw.pro/healthz 200.
 - The old Worker `yeehaw-pro` (static assets, no domains) is untouched.
+
+## Site 403 challenge fixed (2026-11-27, ~22:00 Manila)
+- Symptom: plain `curl` and other non-browser clients from datacenter IPs got HTTP 403 with `cf-mitigated: challenge` on every yeehaw.pro page; browser user-agents got 200.
+- Cause: zone Bot Fight Mode was on (`bot_management.fight_mode: true`); no custom WAF rules existed. Bot Fight Mode cannot be bypassed by a custom rule on the free plan.
+- Change: `PUT /zones/8e75b2cdc75ffb495f1389091fa2bf53/bot_management {"fight_mode": false}`. Security level (medium), Browser Integrity Check and DDoS protection unchanged.
+- Verified from a Vercel sandbox after the change: /, www, /privacy/, /support/, /terms/, /get/ all 200 with default curl user-agent; WhatsApp-style and Android browser user-agents 200; /app/build.gradle.kts 404 (source not exposed).
+- Rollback: same PUT with `{"fight_mode": true}`.
