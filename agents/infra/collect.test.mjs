@@ -23,3 +23,8 @@ test('one provider failing (HTTP 403) is isolated and reported; an unexpected cr
   const r = await collectAll({ env: { VERCEL_TOKEN: 't', CLOUDFLARE_API_TOKEN: 't', NEON_API_KEY: 't' }, fetchFn: fake({ fail: 'neon.tech', cron: true }), now: NOW, cfg: DEFAULT_CFG });
   assert.deepEqual(r.failed.map((f) => f.provider), ['neon']); assert.ok(r.findings.some((f) => f.fingerprint.startsWith('infra:unexpected-cron')));
 });
+test('network-level failures (fetch rejects) are isolated per provider and never abort the collection', async () => {
+  const f = async (url) => { if (url.includes('vercel.com')) throw new Error('ECONNRESET'); return fake()(url); };
+  const r = await collectAll({ env: { VERCEL_TOKEN: 't', CLOUDFLARE_API_TOKEN: 't', NEON_API_KEY: 't' }, fetchFn: f, now: NOW, cfg: DEFAULT_CFG });
+  assert.deepEqual(r.failed.map((x) => x.provider), ['vercel']); assert.deepEqual(r.ran.sort(), ['cloudflare', 'neon']); assert.ok(r.costs.length > 0);
+});
