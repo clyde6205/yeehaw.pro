@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 2 # fewer simultaneous Maven downloads (HTTP 429 from the shared runner network)
       matrix:
         api-level: [23, 29, 35, 36]
         profile: [standard]
@@ -38,6 +38,12 @@ jobs:
             profile: lowend-1gb-1core
             ram: 1024
             cores: 1
+          # Same slow phone on an EDGE-speed, high-latency emulated link (the emulator shapes real network traffic).
+          - api-level: 23
+            profile: lowend-1gb-1core-edge
+            ram: 1024
+            cores: 1
+            netargs: "-netspeed edge -netdelay umts"
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,7 +100,7 @@ jobs:
         timeout-minutes: 12
         run: |
           emulator -accel-check || true
-          nohup emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on > /tmp/emulator.log 2>&1 &
+          nohup emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on ${{ matrix.netargs }} > /tmp/emulator.log 2>&1 &
           booted=0
           for i in $(seq 1 90); do
             if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then booted=1; break; fi
@@ -120,8 +126,15 @@ jobs:
           adb shell settings put global transition_animation_scale 0 || true
           adb shell settings put global animator_duration_scale 0 || true
           adb shell cmd statusbar collapse || true
-          gradle --no-daemon :app:connectedDebugAndroidTest --info 2>&1 | tail -150
-          exit ${PIPESTATUS[0]}
+          adb logcat -c; adb logcat -G 16M || true
+          # Dependency downloads can be rate limited (HTTP 429) on shared runners: retry only that failure, never a test failure.
+          for attempt in 1 2 3; do
+            gradle --no-daemon :app:connectedDebugAndroidTest --info > /tmp/gradle-android-test.log 2>&1; rc=$?
+            if [ $rc -eq 0 ] || ! grep -qE "Received status code 429|Could not resolve|Could not GET" /tmp/gradle-android-test.log || grep -q "Task :app:connectedDebugAndroidTest" /tmp/gradle-android-test.log; then break; fi
+            echo "::warning::dependency download failed (attempt $attempt); retrying after backoff"; sleep $((attempt * 45))
+          done
+          tail -150 /tmp/gradle-android-test.log
+          exit $rc
       - name: Name every failed test (the Gradle log above is truncated)
         if: failure() && steps.emu.outputs.started == 'true'
         run: |
@@ -143,6 +156,13 @@ jobs:
           done
           sleep 8
           adb shell dumpsys meminfo $PKG | grep -E "TOTAL|Java Heap|Native Heap" | head -6
+          echo "=== CPU (idle after load, dumpsys cpuinfo window) and frame stats while swiping the start page"
+          adb shell dumpsys cpuinfo | grep -E "$PKG|TOTAL" | head -3
+          adb shell dumpsys gfxinfo $PKG reset >/dev/null
+          for i in 1 2 3 4 5 6 7 8 9 10; do adb shell input swipe 540 1500 540 500 250; adb shell input swipe 540 500 540 1500 250; done
+          adb shell dumpsys gfxinfo $PKG | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|95th percentile|99th percentile|Number Missed Vsync|Number Slow" | head -10
+          echo "=== CPU while busy swiping (top, one sample)"; adb shell top -n 1 -m 12 2>/dev/null | grep -E "$PKG|CPU|%cpu" | head -4
+          echo "=== YHPERF lines from the instrumented browser regression test"; adb logcat -d -s YHPERF | grep -oE "[a-z_0-9]+=[-a-zA-Z0-9.]+" | sort | uniq
       - name: Crash and ANR scan of the whole run (own processes fail the job; other processes are reported)
         if: always() && steps.emu.outputs.started == 'true'
         timeout-minutes: 3
