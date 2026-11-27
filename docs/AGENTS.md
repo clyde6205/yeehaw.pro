@@ -60,3 +60,9 @@ Status as of this commit: tested locally against Postgres (backend suite 37 test
 3. In the Cloudflare dashboard open Workers > yeehaw-agents > Triggers and confirm the cron `*/5 * * * *`.
 4. Within ten minutes the console Agents tab should show a `scheduler` report newer than five minutes; the Worker log (`npx wrangler tail`) prints `[agents] ...` lines only when something is wrong.
 Until step 4 is seen, treat the always-on scheduler as not running.
+
+
+## Classification (2026-11-27, corrected)
+- Cron: removed from `yeehaw-agents`. It was only ever a scheduler, never the engine.
+- `agents/watch` (Durable Object, 30 s alarm): MONITORING + DIAGNOSIS only. Classifies website/API/database outage and "API serving HTML = wrong deployment", queues reports until the console accepts them. It does not repair anything.
+- `console/backend/agents/*` orchestrator + specialists: the engine core. Implemented: findings, lease, dedupe, allowlisted low-risk auto-repair, re-detection verification, audit log, approve/reject/dismiss. Partial: one correlation rule. Missing: code-repair agent (branch/PR), infrastructure agent, independent QA verification, performance before/after evidence, engine on/off and frequency controls, cost view, rollback control.

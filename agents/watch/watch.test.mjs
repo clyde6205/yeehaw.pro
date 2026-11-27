@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runOnce, decide } from './index.js';
+import { runOnce, decide, probe } from './index.js';
 const mem = () => { const m = new Map(); return { get: async (k) => m.get(k), put: async (k, v) => { m.set(k, v); } }; };
 const env = { CONSOLE_URL: 'https://api.example', AGENT_TOKEN: 'x'.repeat(40) };
 const res = (status, body = {}, ct = 'application/json') => ({ ok: status < 400, status, headers: { get: () => ct }, json: async () => body });
@@ -56,4 +56,45 @@ test('delivery failure is kept and retried; bad token is refused without echoing
 });
 test('decide: unchanged ok state produces no report', () => {
   assert.equal(decide({ status: 'ok' }, [{ ok: true }], 5).report, null);
+});
+
+// ---- diagnosis + queue ----
+import { classify } from './index.js';
+const R = (name, kind, ok, extra = {}) => ({ name, kind, ok, status: ok ? 200 : 500, html: false, note: ok ? undefined : `${name}: bad`, ...extra });
+
+test('classify: API answering HTML = wrong deployment (the 2026-11-27 incident)', () => {
+  const i = classify([R('site', 'page', true), R('api /livez', 'api-live', false, { status: 200, html: true, note: 'api /livez: HTTP 200 returned an HTML page where the API must answer JSON' })]);
+  assert.equal(i.kind, 'wrong-deployment'); assert.equal(i.scope, 'api'); assert.match(i.next, /Root Directory/);
+});
+test('classify: site outage is distinguished from API outage', () => {
+  assert.equal(classify([R('site', 'page', false), R('api', 'api-live', true)]).kind, 'website-outage');
+  assert.equal(classify([R('site', 'page', true), R('api', 'api-live', false)]).kind, 'api-outage');
+  assert.equal(classify([R('site', 'page', false), R('api', 'api-live', false)]).kind, 'platform-outage');
+  assert.equal(classify([R('site', 'page', true), R('api', 'api-live', true), R('db', 'api-db', false)]).kind, 'database-outage');
+  assert.equal(classify([R('site', 'page', true), R('api', 'api-live', true)]), null);
+});
+test('probe: HTML 200 from the API is NOT healthy', async () => {
+  const f = async () => new Response('<html>site</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  const r = await probe(f, 'api /livez', 'https://api.x/livez', 'api-live');
+  assert.equal(r.ok, false); assert.equal(r.html, true);
+});
+test('queue: reports are held while the console refuses them, then delivered in order after recovery', async () => {
+  const store = new Map(); const storage = { get: async (k) => store.get(k), put: async (k, v) => store.set(k, v) };
+  const env = { CONSOLE_URL: 'https://api.x', AGENT_TOKEN: 'tok123' };
+  const posts = []; let reportingUp = false; let apiUp = false;
+  const f = async (url, o = {}) => {
+    if (url.endsWith('/v1/agent/report')) { posts.push(JSON.parse(o.body)); return new Response('{}', { status: reportingUp ? 201 : 503 }); }
+    if (url.startsWith('https://yeehaw.pro')) return new Response('ok', { status: 200 });
+    if (!apiUp) return new Response('<html/>', { status: 200, headers: { 'content-type': 'text/html' } });
+    return Response.json({ ok: true });
+  };
+  let t = 1_000_000;
+  let o = await runOnce(env, storage, f, t);           // fail detected, delivery refused (503)
+  assert.equal(o.next.queued, 1); assert.ok(o.next.deliveryError);
+  apiUp = true; t += 30_000;
+  o = await runOnce(env, storage, f, t);               // recovered, still refused -> 2 queued
+  assert.equal(o.next.queued, 2);
+  reportingUp = true; posts.length = 0; t += 30_000;
+  o = await runOnce(env, storage, f, t + 20 * 60_000); // no new state change, but queue flushes
+  assert.equal(o.next.queued, 0); assert.equal(o.next.deliveryError, undefined);
 });
