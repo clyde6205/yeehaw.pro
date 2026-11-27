@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">Turbo mode — OFF (full images)</string>
     <string name="menu_turbo_on">Turbo mode — ON (blocks network images)</string>
     <string name="menu_use_mobile_site">Use mobile website</string>
-    <string name="msg_contact_support_at_yeehaw_pro">Contact support at yeehaw.pro.</string>
+    <string name="msg_contact_support_at_yeehaw_pro">Contact support at ceo@yeehaw.pro.</string>
     <string name="msg_engine_details">Engine: Chromium-based Android System WebView\nProvider: %1$s\nVersion: %2$s\n\nKeep Android System WebView or Chrome updated.</string>
     <string name="msg_engine_unavailable">Android System WebView provider details unavailable.</string>
     <string name="msg_link_wants_external_app">This link wants to open an external application (%1$s). Continue only if you trust the page.</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">Scan a QR code with the camera</string>
     <string name="tools_adaptive_saver">Adaptive Data Saver — %1$s</string>
     <string name="tools_clipboard">Clipboard Convenience — %1$s</string>
+    <string name="tools_contact_support">Contact support: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">YeeHaw family apps</string>
     <string name="tools_memory_saver">Memory Saver — %1$s</string>
     <string name="tools_offline_reading">Offline Reading</string>

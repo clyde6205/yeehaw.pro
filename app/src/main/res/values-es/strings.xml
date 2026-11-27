@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">Modo Turbo — DESACTIVADO (imágenes completas)</string>
     <string name="menu_turbo_on">Modo Turbo — ACTIVADO (bloquea imágenes de red)</string>
     <string name="menu_use_mobile_site">Usar sitio web móvil</string>
-    <string name="msg_contact_support_at_yeehaw_pro">Contacta con soporte en yeehaw.pro.</string>
+    <string name="msg_contact_support_at_yeehaw_pro">Contacta con soporte en ceo@yeehaw.pro.</string>
     <string name="msg_engine_details">Motor: Android System WebView basado en Chromium\nProveedor: %1$s\nVersión: %2$s\n\nMantén Android System WebView o Chrome actualizado.</string>
     <string name="msg_engine_unavailable">Los detalles del proveedor de Android System WebView no están disponibles.</string>
     <string name="msg_link_wants_external_app">Este enlace quiere abrir una aplicación externa (%1$s). Continúa solo si confías en la página.</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">Escanea un código QR con la cámara</string>
     <string name="tools_adaptive_saver">Ahorro de datos adaptativo — %1$s</string>
     <string name="tools_clipboard">Comodidad del portapapeles — %1$s</string>
+    <string name="tools_contact_support">Contactar soporte: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">Apps de la familia YeeHaw</string>
     <string name="tools_memory_saver">Ahorro de memoria — %1$s</string>
     <string name="tools_offline_reading">Lectura sin conexión</string>

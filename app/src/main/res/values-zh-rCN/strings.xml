@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">Turbo 模式 — 关（完整图片）</string>
     <string name="menu_turbo_on">Turbo 模式 — 开（拦截网络图片）</string>
     <string name="menu_use_mobile_site">使用手机版网站</string>
-    <string name="msg_contact_support_at_yeehaw_pro">请通过 yeehaw.pro 联系支持。</string>
+    <string name="msg_contact_support_at_yeehaw_pro">请通过 ceo@yeehaw.pro 联系支持。</string>
     <string name="msg_engine_details">引擎：基于 Chromium 的 Android System WebView\n提供方：%1$s\n版本：%2$s\n\n请保持 Android System WebView 或 Chrome 为最新版本。</string>
     <string name="msg_engine_unavailable">无法获取 Android System WebView 提供方的详细信息。</string>
     <string name="msg_link_wants_external_app">此链接想要打开外部应用（%1$s）。仅在您信任该页面时才继续。</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">用相机扫描二维码</string>
     <string name="tools_adaptive_saver">自适应流量节省 — %1$s</string>
     <string name="tools_clipboard">剪贴板便利功能 — %1$s</string>
+    <string name="tools_contact_support">联系支持：ceo@yeehaw.pro</string>
     <string name="tools_family_apps">YeeHaw 家族应用</string>
     <string name="tools_memory_saver">内存节省 — %1$s</string>
     <string name="tools_offline_reading">离线阅读</string>

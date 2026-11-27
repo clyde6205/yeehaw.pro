@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">Режим Turbo — ВЫКЛ (все изображения)</string>
     <string name="menu_turbo_on">Режим Turbo — ВКЛ (блокирует изображения из сети)</string>
     <string name="menu_use_mobile_site">Мобильная версия сайта</string>
-    <string name="msg_contact_support_at_yeehaw_pro">Свяжитесь со службой поддержки на yeehaw.pro.</string>
+    <string name="msg_contact_support_at_yeehaw_pro">Свяжитесь со службой поддержки на ceo@yeehaw.pro.</string>
     <string name="msg_engine_details">Движок: Android System WebView на основе Chromium\nПоставщик: %1$s\nВерсия: %2$s\n\nДержите Android System WebView или Chrome обновлёнными.</string>
     <string name="msg_engine_unavailable">Сведения о поставщике Android System WebView недоступны.</string>
     <string name="msg_link_wants_external_app">Эта ссылка хочет открыть внешнее приложение (%1$s). Продолжайте, только если доверяете странице.</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">Сканируйте QR-код камерой</string>
     <string name="tools_adaptive_saver">Адаптивная экономия трафика — %1$s</string>
     <string name="tools_clipboard">Удобство буфера обмена — %1$s</string>
+    <string name="tools_contact_support">Связаться с поддержкой: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">Приложения семейства YeeHaw</string>
     <string name="tools_memory_saver">Экономия памяти — %1$s</string>
     <string name="tools_offline_reading">Чтение офлайн</string>

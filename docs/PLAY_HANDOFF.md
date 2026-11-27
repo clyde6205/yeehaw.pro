@@ -55,14 +55,14 @@ Do not add percentage data-savings, speed or "uses less RAM" claims: none are me
 
 Release notes (first release): First release. Browser with tabs, offline pages and data-saver options, plus six built-in Quick Tools.
 
-Category suggestion: Communication or Tools (owner's choice). Contact email: OWNER (none exists in the repo; Play requires one).
+Category suggestion: Communication or Tools (owner's choice). Contact email: ceo@yeehaw.pro (shown on the Support, Privacy and Terms pages and in the app under Apps > Contact support). Play Console also needs this address entered in the store listing, and a mailbox that actually receives mail at it: OWNER to confirm.
 
 ## 4. Assets still missing (OWNER or design)
 
 - 512x512 icon (launcher icon exists in the app; a store icon export is needed).
 - 1024x500 feature graphic.
 - At least 2 phone screenshots (CI does not produce store-quality screenshots; take them on a real phone or the emulator).
-- Support email address and confirmation that the support page shows it.
+- Confirm the mailbox ceo@yeehaw.pro receives mail (the repo only holds the address, not the mail setup).
 
 ## 5. Data safety form: answers derived from the actual data flows
 
@@ -115,7 +115,7 @@ Reasonable path: upload to Internal testing now, run on real phones, fix finding
 
 ## 10. Owner checklist, in order
 
-1. Play Console: create app, enroll in Play App Signing, set support email.
+1. Play Console: create app, enroll in Play App Signing, enter ceo@yeehaw.pro as the contact email.
 2. Create upload keystore (section 2) and build the real AAB.
 3. Upload AAB to Internal testing; install on 2 or more real phones, one with 2 GB RAM or less.
 4. Complete Data safety (section 5), content rating, target audience, privacy policy URL `https://yehaw.pro/privacy`, store listing and assets (sections 3 and 4).

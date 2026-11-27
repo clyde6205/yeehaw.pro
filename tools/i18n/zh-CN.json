@@ -111,7 +111,7 @@
  "toast_google_play_did_not_confirm_this": "Google Play 未确认此次购买。",
  "toast_purchase_received_pro_will_activate": "已收到购买。YeeHaw 连接到其服务器后，Pro 将自动启用。",
  "title_yeehaw_is_paused_for_this_device": "YeeHaw 在此设备上已暂停",
- "msg_contact_support_at_yeehaw_pro": "请通过 yeehaw.pro 联系支持。",
+ "msg_contact_support_at_yeehaw_pro": "请通过 ceo@yeehaw.pro 联系支持。",
  "title_update_required": "需要更新",
  "title_update_available": "有可用更新",
  "btn_update": "更新",
@@ -363,5 +363,6 @@
  "qr_warn_not_encrypted": "警告：此链接未加密（http）。",
  "qr_warn_lookalike": "警告：地址使用了不常见的字符，可能在冒充其他网站。",
  "qr_warn_numbers": "警告：地址只有数字，不是网站名称。",
- "qr_warn_login_part": "警告：地址把真实网站藏在用户名部分之后。"
+ "qr_warn_login_part": "警告：地址把真实网站藏在用户名部分之后。",
+ "tools_contact_support": "联系支持：ceo@yeehaw.pro"
 }

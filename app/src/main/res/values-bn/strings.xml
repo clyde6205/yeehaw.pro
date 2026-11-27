@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">টার্বো মোড — বন্ধ (সম্পূর্ণ ছবি)</string>
     <string name="menu_turbo_on">টার্বো মোড — চালু (নেটওয়ার্ক ছবি ব্লক করে)</string>
     <string name="menu_use_mobile_site">মোবাইল ওয়েবসাইট ব্যবহার করুন</string>
-    <string name="msg_contact_support_at_yeehaw_pro">yeehaw.pro-তে সহায়তার সঙ্গে যোগাযোগ করুন।</string>
+    <string name="msg_contact_support_at_yeehaw_pro">ceo@yeehaw.pro-তে সহায়তার সঙ্গে যোগাযোগ করুন।</string>
     <string name="msg_engine_details">ইঞ্জিন: Chromium-ভিত্তিক Android System WebView\nপ্রদানকারী: %1$s\nসংস্করণ: %2$s\n\nAndroid System WebView বা Chrome আপডেট রাখুন।</string>
     <string name="msg_engine_unavailable">Android System WebView প্রদানকারীর বিবরণ পাওয়া যাচ্ছে না।</string>
     <string name="msg_link_wants_external_app">এই লিংক একটি বাইরের অ্যাপ্লিকেশন (%1$s) খুলতে চায়। পেজটিকে বিশ্বাস করলে তবেই চালিয়ে যান।</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">ক্যামেরা দিয়ে QR কোড স্ক্যান করুন</string>
     <string name="tools_adaptive_saver">অভিযোজিত ডেটা সেভার — %1$s</string>
     <string name="tools_clipboard">ক্লিপবোর্ড সুবিধা — %1$s</string>
+    <string name="tools_contact_support">সহায়তায় যোগাযোগ করুন: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">YeeHaw পরিবারের অ্যাপ</string>
     <string name="tools_memory_saver">মেমরি সেভার — %1$s</string>
     <string name="tools_offline_reading">অফলাইন পাঠ</string>

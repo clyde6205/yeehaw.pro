@@ -2025,7 +2025,8 @@ class MainActivity : Activity() {
             getString(R.string.tools_offline_reading),
             getString(R.string.tools_stop_sharing),
             getString(R.string.tools_family_apps)
-        ) + (if (app.yehaw.browser.tools.QuickTools.ENABLED) arrayOf(getString(R.string.tools_quick_tools)) else emptyArray())
+        ) + (if (app.yehaw.browser.tools.QuickTools.ENABLED) arrayOf(getString(R.string.tools_quick_tools)) else emptyArray()) +
+            arrayOf(getString(R.string.tools_contact_support))
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.title_yeehaw_tools))
             .setItems(labels) { _, which ->
@@ -2062,11 +2063,21 @@ class MainActivity : Activity() {
                         .show()
                     7 -> confirmForgetMe()
                     8 -> showSisterApps()
+                    labels.size - 1 -> contactSupport()
                     else -> app.yehaw.browser.tools.QuickTools.open(this, currentWebView()?.url)
                 }
             }
             .setNegativeButton(getString(R.string.btn_close), null)
             .show()
+    }
+
+    /** Opens the person's mail app addressed to support; if there is no mail app, copies the address so it is never a dead end. */
+    private fun contactSupport() {
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$SUPPORT_EMAIL")).putExtra(Intent.EXTRA_SUBJECT, "YeeHaw Browser support")
+        try { startActivity(intent) } catch (e: Exception) {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.setPrimaryClip(android.content.ClipData.newPlainText("support", SUPPORT_EMAIL))
+            Toast.makeText(this, getString(R.string.tools_contact_support), Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun showStorageProtection() {
@@ -2174,6 +2185,7 @@ class MainActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        const val SUPPORT_EMAIL = "ceo@yeehaw.pro"
         private const val LOAD_STALL_MS = 25_000L
         private const val LOAD_RECHECK_MS = 10_000L // after real progress was seen, re-check sooner
         private const val STATE_TAB_URLS = "yehaw.saved_tab_urls"

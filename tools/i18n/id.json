@@ -111,7 +111,7 @@
  "toast_google_play_did_not_confirm_this": "Google Play tidak mengonfirmasi pembelian ini.",
  "toast_purchase_received_pro_will_activate": "Pembelian diterima. Pro akan aktif saat YeeHaw dapat terhubung ke servernya.",
  "title_yeehaw_is_paused_for_this_device": "YeeHaw dijeda untuk perangkat ini",
- "msg_contact_support_at_yeehaw_pro": "Hubungi dukungan di yeehaw.pro.",
+ "msg_contact_support_at_yeehaw_pro": "Hubungi dukungan di ceo@yeehaw.pro.",
  "title_update_required": "Pembaruan wajib",
  "title_update_available": "Pembaruan tersedia",
  "btn_update": "Perbarui",
@@ -363,5 +363,6 @@
  "qr_warn_not_encrypted": "Peringatan: tautan ini tidak terenkripsi (http).",
  "qr_warn_lookalike": "Peringatan: alamat ini memakai karakter tidak biasa yang dapat meniru situs lain.",
  "qr_warn_numbers": "Peringatan: alamatnya hanya angka, bukan nama situs.",
- "qr_warn_login_part": "Peringatan: alamat ini menyembunyikan situs aslinya di balik bagian nama pengguna."
+ "qr_warn_login_part": "Peringatan: alamat ini menyembunyikan situs aslinya di balik bagian nama pengguna.",
+ "tools_contact_support": "Hubungi dukungan: ceo@yeehaw.pro"
 }

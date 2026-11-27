@@ -111,7 +111,7 @@
  "toast_google_play_did_not_confirm_this": "Google Play نے اس خریداری کی تصدیق نہیں کی۔",
  "toast_purchase_received_pro_will_activate": "خریداری موصول ہو گئی۔ جب YeeHaw اپنے سرور تک پہنچ سکے گا تو Pro فعال ہو جائے گا۔",
  "title_yeehaw_is_paused_for_this_device": "اس ڈیوائس کے لیے YeeHaw روک دیا گیا ہے",
- "msg_contact_support_at_yeehaw_pro": "yeehaw.pro پر سپورٹ سے رابطہ کریں۔",
+ "msg_contact_support_at_yeehaw_pro": "ceo@yeehaw.pro پر سپورٹ سے رابطہ کریں۔",
  "title_update_required": "اپ ڈیٹ ضروری ہے",
  "title_update_available": "اپ ڈیٹ دستیاب ہے",
  "btn_update": "اپ ڈیٹ کریں",
@@ -363,5 +363,6 @@
  "qr_warn_not_encrypted": "انتباہ: یہ لنک مرموز نہیں ہے (http)۔",
  "qr_warn_lookalike": "انتباہ: پتے میں غیر معمولی حروف ہیں جو کسی دوسری سائٹ کی نقل ہو سکتے ہیں۔",
  "qr_warn_numbers": "انتباہ: پتہ صرف اعداد پر مشتمل ہے، سائٹ کا نام نہیں۔",
- "qr_warn_login_part": "انتباہ: پتہ اصل سائٹ کو صارف نام والے حصے کے پیچھے چھپاتا ہے۔"
+ "qr_warn_login_part": "انتباہ: پتہ اصل سائٹ کو صارف نام والے حصے کے پیچھے چھپاتا ہے۔",
+ "tools_contact_support": "سپورٹ سے رابطہ کریں: ceo@yeehaw.pro"
 }

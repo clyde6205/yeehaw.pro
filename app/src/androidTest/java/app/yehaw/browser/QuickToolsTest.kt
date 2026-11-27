@@ -202,6 +202,12 @@ class QuickToolsTest {
         }
     }
 
+    @Test fun supportEmailIsShownInTheAppMenuText() {
+        assertEquals("ceo@yeehaw.pro", MainActivity.SUPPORT_EMAIL)
+        assertTrue(ctx.getString(R.string.tools_contact_support).contains("ceo@yeehaw.pro"))
+        assertTrue(ctx.getString(R.string.msg_contact_support_at_yeehaw_pro).contains("ceo@yeehaw.pro"))
+    }
+
     @Test fun pdfSearchIsHonestAboutSupport() {
         val uri = makePdf(2)
         launch(PdfReaderActivity::class.java, Intent(ctx, PdfReaderActivity::class.java).setData(uri)).use { sc ->

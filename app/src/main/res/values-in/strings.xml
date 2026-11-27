@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">Mode Turbo — NONAKTIF (gambar penuh)</string>
     <string name="menu_turbo_on">Mode Turbo — AKTIF (memblokir gambar jaringan)</string>
     <string name="menu_use_mobile_site">Gunakan situs web seluler</string>
-    <string name="msg_contact_support_at_yeehaw_pro">Hubungi dukungan di yeehaw.pro.</string>
+    <string name="msg_contact_support_at_yeehaw_pro">Hubungi dukungan di ceo@yeehaw.pro.</string>
     <string name="msg_engine_details">Mesin: Android System WebView berbasis Chromium\nPenyedia: %1$s\nVersi: %2$s\n\nJaga agar Android System WebView atau Chrome tetap diperbarui.</string>
     <string name="msg_engine_unavailable">Detail penyedia Android System WebView tidak tersedia.</string>
     <string name="msg_link_wants_external_app">Tautan ini ingin membuka aplikasi eksternal (%1$s). Lanjutkan hanya jika Anda memercayai halaman ini.</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">Pindai kode QR dengan kamera</string>
     <string name="tools_adaptive_saver">Penghemat Data Adaptif — %1$s</string>
     <string name="tools_clipboard">Kemudahan Papan Klip — %1$s</string>
+    <string name="tools_contact_support">Hubungi dukungan: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">Aplikasi keluarga YeeHaw</string>
     <string name="tools_memory_saver">Penghemat Memori — %1$s</string>
     <string name="tools_offline_reading">Bacaan Offline</string>

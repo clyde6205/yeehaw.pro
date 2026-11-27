@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">وضع Turbo — متوقف (صور كاملة)</string>
     <string name="menu_turbo_on">وضع Turbo — مفعّل (يحظر صور الشبكة)</string>
     <string name="menu_use_mobile_site">استخدام نسخة الجوال من الموقع</string>
-    <string name="msg_contact_support_at_yeehaw_pro">تواصل مع الدعم عبر yeehaw.pro.</string>
+    <string name="msg_contact_support_at_yeehaw_pro">تواصل مع الدعم عبر ceo@yeehaw.pro.</string>
     <string name="msg_engine_details">المحرك: Android System WebView المبني على Chromium\nالمزوّد: %1$s\nالإصدار: %2$s\n\nأبقِ Android System WebView أو Chrome محدّثًا.</string>
     <string name="msg_engine_unavailable">تفاصيل مزوّد Android System WebView غير متاحة.</string>
     <string name="msg_link_wants_external_app">يريد هذا الرابط فتح تطبيق خارجي (%1$s). تابع فقط إذا كنت تثق بالصفحة.</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">امسح رمز QR بالكاميرا</string>
     <string name="tools_adaptive_saver">موفّر البيانات التكيّفي — %1$s</string>
     <string name="tools_clipboard">تسهيل الحافظة — %1$s</string>
+    <string name="tools_contact_support">تواصل مع الدعم: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">تطبيقات عائلة YeeHaw</string>
     <string name="tools_memory_saver">موفّر الذاكرة — %1$s</string>
     <string name="tools_offline_reading">القراءة دون اتصال</string>

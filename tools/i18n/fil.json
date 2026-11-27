@@ -111,7 +111,7 @@
  "toast_google_play_did_not_confirm_this": "Hindi nakumpirma ng Google Play ang pagbiling ito.",
  "toast_purchase_received_pro_will_activate": "Natanggap ang pagbili. Mag-a-activate ang Pro kapag naabot ng YeeHaw ang server nito.",
  "title_yeehaw_is_paused_for_this_device": "Naka-pause ang YeeHaw para sa device na ito",
- "msg_contact_support_at_yeehaw_pro": "Makipag-ugnayan sa suporta sa yeehaw.pro.",
+ "msg_contact_support_at_yeehaw_pro": "Makipag-ugnayan sa suporta sa ceo@yeehaw.pro.",
  "title_update_required": "Kailangan ng update",
  "title_update_available": "May available na update",
  "btn_update": "I-update",
@@ -363,5 +363,6 @@
  "qr_warn_not_encrypted": "Babala: hindi naka-encrypt ang link na ito (http).",
  "qr_warn_lookalike": "Babala: gumagamit ang address ng mga di-karaniwang karakter na maaaring gumaya sa ibang site.",
  "qr_warn_numbers": "Babala: numero lang ang address, hindi pangalan ng site.",
- "qr_warn_login_part": "Babala: itinatago ng address ang tunay na site sa likod ng bahaging username."
+ "qr_warn_login_part": "Babala: itinatago ng address ang tunay na site sa likod ng bahaging username.",
+ "tools_contact_support": "Makipag-ugnayan sa suporta: ceo@yeehaw.pro"
 }

@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">Turbo mode — NAKA-OFF (buong mga larawan)</string>
     <string name="menu_turbo_on">Turbo mode — NAKA-ON (bina-block ang mga larawan sa network)</string>
     <string name="menu_use_mobile_site">Gamitin ang mobile na website</string>
-    <string name="msg_contact_support_at_yeehaw_pro">Makipag-ugnayan sa suporta sa yeehaw.pro.</string>
+    <string name="msg_contact_support_at_yeehaw_pro">Makipag-ugnayan sa suporta sa ceo@yeehaw.pro.</string>
     <string name="msg_engine_details">Makina: Android System WebView na nakabatay sa Chromium\nProvider: %1$s\nBersyon: %2$s\n\nPanatilihing updated ang Android System WebView o Chrome.</string>
     <string name="msg_engine_unavailable">Hindi available ang mga detalye ng provider ng Android System WebView.</string>
     <string name="msg_link_wants_external_app">Gustong magbukas ng link na ito ng panlabas na application (%1$s). Magpatuloy lang kung pinagkakatiwalaan mo ang page.</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">I-scan ang QR code gamit ang camera</string>
     <string name="tools_adaptive_saver">Madaptibong Tipid sa Data — %1$s</string>
     <string name="tools_clipboard">Kaginhawaan ng Clipboard — %1$s</string>
+    <string name="tools_contact_support">Makipag-ugnayan sa suporta: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">Mga app ng pamilya ng YeeHaw</string>
     <string name="tools_memory_saver">Tipid sa Memory — %1$s</string>
     <string name="tools_offline_reading">Offline na Pagbabasa</string>

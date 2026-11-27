@@ -101,7 +101,7 @@
     <string name="menu_turbo_off">ٹربو موڈ — بند (مکمل تصاویر)</string>
     <string name="menu_turbo_on">ٹربو موڈ — آن (نیٹ ورک تصاویر بلاک کرتا ہے)</string>
     <string name="menu_use_mobile_site">موبائل ویب سائٹ استعمال کریں</string>
-    <string name="msg_contact_support_at_yeehaw_pro">yeehaw.pro پر سپورٹ سے رابطہ کریں۔</string>
+    <string name="msg_contact_support_at_yeehaw_pro">ceo@yeehaw.pro پر سپورٹ سے رابطہ کریں۔</string>
     <string name="msg_engine_details">انجن: Chromium پر مبنی Android System WebView\nفراہم کنندہ: %1$s\nورژن: %2$s\n\nAndroid System WebView یا Chrome کو اپ ڈیٹ رکھیں۔</string>
     <string name="msg_engine_unavailable">Android System WebView فراہم کنندہ کی تفصیلات دستیاب نہیں ہیں۔</string>
     <string name="msg_link_wants_external_app">یہ لنک ایک بیرونی ایپلیکیشن (%1$s) کھولنا چاہتا ہے۔ صرف اسی صورت میں جاری رکھیں جب آپ کو اس صفحے پر بھروسا ہو۔</string>
@@ -344,6 +344,7 @@
     <string name="tool_qr_scanner_desc">کیمرے سے QR کوڈ اسکین کریں</string>
     <string name="tools_adaptive_saver">اڈاپٹیو ڈیٹا سیور — %1$s</string>
     <string name="tools_clipboard">کلپ بورڈ سہولت — %1$s</string>
+    <string name="tools_contact_support">سپورٹ سے رابطہ کریں: ceo@yeehaw.pro</string>
     <string name="tools_family_apps">YeeHaw خاندان کی ایپس</string>
     <string name="tools_memory_saver">میموری سیور — %1$s</string>
     <string name="tools_offline_reading">آف لائن مطالعہ</string>
