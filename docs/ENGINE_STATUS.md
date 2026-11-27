@@ -95,3 +95,12 @@ Branch head and production differed only by docs/tests/orchestrator changes befo
 | 11 | Wrong Vercel configuration | yes | none | YES (real incident, auto-resolved by run 9) |
 | 12 | Measurable performance improvement | yes (4 -> 1 DB round trips per boot; ms local) | none | report posted to production; improvement itself measured locally only |
 No preview deployments were used.
+
+## Final push evidence (2026-11-28, commit 9dad5d9 build; later commits are agents/docs only)
+**Autonomous pass (production):** the `yeehaw-agents` Worker now POSTs `/v1/agent/tick` itself (hourly while healthy, at once on a state change, 5 min during incidents, retry 10 min). Deployed 16:06:26Z; `agent_runs` id 11 started 16:06:54Z with no manual call.
+**AI repair:** defect in `scanAndroidManifest` (pin regex spanned domain-configs). Model-written proposal (docs/evidence/ai-repair-model-answer.json) -> worktree -> tests 1 failed -> 0 failed -> QA fresh checkout verified. Negative control (wrong proposal) rejected at tests (docs/evidence/ai-repair-rejected-control.json). Model = a Claude instance in this session, not a production API call.
+**Android build (GitHub Actions, real Gradle):** compileDebugKotlin, testDebugUnitTest, assembleDebug, assembleRelease (unsigned, R8), lint: BUILD SUCCESSFUL. Release APK 957,456 bytes (limit 12,582,912).
+**Emulator measurements (x86 emulator on a CI runner; NOT a physical phone), API 23, instrumented QuickTools suite passed:**
+- 1 GB RAM / 1 core profile: cold start TotalTime 612, 815, 721, 598, 723 ms (median 721); PSS total 66,610 KB (Java heap 4,352 KB, native 8,660 KB).
+- 1.5 GB profile: cold start 793, 641, 822, 717, 662 ms (median 717); PSS 67,499 KB.
+**Not measured by any workflow yet:** CPU %, frame jank, data consumption, battery, low-bandwidth and network-interruption behaviour on a device; API 35/36 emulator jobs failed on Maven 429 rate limiting (re-run requested).
