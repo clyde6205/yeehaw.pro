@@ -70,7 +70,7 @@ export async function runAgents(env, fetchFn = fetch, opts = {}) {
       if (errs && errs.length) problems.push(`${errs.length} specialist error(s)`);
       tickOk = problems.length === 0;
       await send('scheduler', tickOk ? 'ok' : (j.db !== 'ok' || j.fleet === 'fail' ? 'fail' : 'warn'),
-        tickOk ? `tick ok: db ${j.db_ms ?? '?'} ms, ${j.open_findings ?? 0} open finding(s)` : `tick problems: ${problems.join(', ')}`, tick);
+        tickOk ? `tick ok: db ${j.db_ms ?? '?'} ms, ${Object.values(j.open_findings || {}).reduce((a, b) => a + Number(b || 0), 0)} open finding(s)` : `tick problems: ${problems.join(', ')}`, tick);
     }
   } catch (e) { tick = { status: e.message }; console.error('[agents] tick failed: ' + e.message); }
 

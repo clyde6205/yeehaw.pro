@@ -43,3 +43,13 @@ Measured: release APK 972,583 bytes (RC without Quick Tools: 805,928), +166,655 
 Fixes found by CI: API 23 native crash in the platform PDF engine (header check); a failed page was announced as "Page loaded" (app fix in onPageFinished).
 
 Not covered: physical phone, real camera scan, TalkBack, native-speaker review of the new strings (machine translations).
+
+
+## Agent engine: what is deployed (observed 2026-11-27)
+
+- API deployment dpl_6AKoNk36F6E8oEzzBq3P1n7GbGSV (production, aliased to api.yeehaw.pro) built from commit b4f2353 on wip/quick-tools, state READY.
+- `AGENT_TOKEN` set as a sensitive Vercel variable (production and preview). First deploy showed `/v1/agent/tick` answering 503 because `api/index.js` did not pass the token; fixed in b4f2353.
+- Neon project yeehaw-console: the agent_* tables did not exist; created with the idempotent statements from `schema.sql` (additive, nothing dropped or altered).
+- Live proof: `POST https://api.yeehaw.pro/v1/agent/tick` from a Vercel sandbox returned 200 `{ok:true, fleet:"ok", db:"ok", db_ms:6, orchestrator:{lease:"acquired", run:"1"...}}`. Neon then held rows: scheduler/db-health/fleet-health reports and agent_runs id 1 (ok). A wrong token was not used against the new build; 401 behaviour is covered by the backend tests only.
+- NOT deployed: the Cloudflare Worker (no Cloudflare deploy credential in this session). So the five-minute Cron Trigger has NOT been demonstrated; only a manual tick was. Owner steps are in AGENTS.md.
+- NOT yet observed: the founder console Agents tab on the live site (tested in a headless browser against a local database only).

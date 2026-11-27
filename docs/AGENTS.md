@@ -52,3 +52,11 @@ Reports land in the console database within seconds of each check. A Claude sess
 The Worker judges the tick response (database status, fleet status, specialist errors), retries transient failures, checks that each report was accepted (HTTP 201) and logs and fails the run if not.
 
 Status as of this commit: tested locally against Postgres (backend suite 37 tests, Worker suite 9 tests) and the console view was exercised in a headless browser. It is NOT deployed until AGENT_TOKEN is set on the API and the Worker is deployed with its own secret; see the deployment log in RC_EVIDENCE.md for what has actually been observed live.
+
+## Deploying the Worker (OWNER, about 3 minutes; needs your Cloudflare login)
+
+1. `cd agents/worker && npx wrangler deploy` (log in when asked).
+2. `npx wrangler secret put AGENT_TOKEN` and paste the same value that is set as AGENT_TOKEN on the Vercel project yeehaw-api.
+3. In the Cloudflare dashboard open Workers > yeehaw-agents > Triggers and confirm the cron `*/5 * * * *`.
+4. Within ten minutes the console Agents tab should show a `scheduler` report newer than five minutes; the Worker log (`npx wrangler tail`) prints `[agents] ...` lines only when something is wrong.
+Until step 4 is seen, treat the always-on scheduler as not running.
