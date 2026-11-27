@@ -1,0 +1,175 @@
+name: Android release (build, install-verify, publish download)
+
+# Builds the APK/AAB from the exact commit, INSTALLS that same file on Android 12 (API 31) and on a 1 GB / 1-core Android 6 emulator,
+# launches it, runs a monkey + crash scan, and only then (publish=true) creates a GitHub Release with version, size, SHA-256 and notes.
+# Signing: if the four ANDROID_KEYSTORE_* repository secrets exist, the release APK and the AAB are signed with the production key and published as a normal release.
+# If they do not exist, the only installable file is the debug-signed build (package app.yehaw.browser.debug), published as a clearly labelled PRE-RELEASE test build;
+# an unsigned release APK cannot be installed on a phone and an unsigned AAB cannot be uploaded to Google Play.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Create the GitHub Release after verification passes"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      signed: ${{ steps.meta.outputs.signed }}
+      apk: ${{ steps.meta.outputs.apk }}
+      package: ${{ steps.meta.outputs.package }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install Android SDK components
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          gradle-version: "8.11.1"
+      - name: Prepare production signing key (only if all four secrets exist)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/yehaw-production.jks"; chmod 600 "$RUNNER_TEMP/yehaw-production.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/yehaw-production.jks" >> "$GITHUB_ENV"; echo "HAS_RELEASE_SIGNING=true" >> "$GITHUB_ENV"
+          else echo "HAS_RELEASE_SIGNING=false" >> "$GITHUB_ENV"; echo "No production signing secrets: only a debug-signed test build can be installable."; fi
+      - name: Build (APKs and bundle), retrying only dependency-download failures
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for attempt in 1 2 3; do
+            gradle --no-daemon :app:assembleDebug :app:assembleRelease :app:bundleRelease > /tmp/build.log 2>&1; rc=$?
+            if [ $rc -eq 0 ] || ! grep -qE "Received status code 429|Could not GET|Could not resolve" /tmp/build.log; then break; fi
+            echo "::warning::dependency download failed (attempt $attempt)"; sleep $((attempt*45))
+          done
+          tail -25 /tmp/build.log; exit $rc
+      - name: Collect, checksum and describe the files
+        id: meta
+        run: |
+          VN=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -1); VC=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts | head -1)
+          SHA=$(git rev-parse HEAD); S7=${SHA:0:7}; mkdir -p dist
+          if [ "$HAS_RELEASE_SIGNING" = true ]; then
+            SIGNED=true; SRC=$(ls app/build/outputs/apk/release/*.apk | head -1); PKG=app.yehaw.browser; KIND=release
+            AAB=$(ls app/build/outputs/bundle/release/*.aab | head -1); cp "$AAB" "dist/yeehaw-browser-$VN-$S7.aab"
+            TAG="android-v$VN-$S7"
+          else
+            SIGNED=false; SRC=app/build/outputs/apk/debug/app-debug.apk; PKG=app.yehaw.browser.debug; KIND=test
+            TAG="android-v$VN-$S7-test"
+          fi
+          APK="yeehaw-browser-$VN-$S7-$KIND.apk"; cp "$SRC" "dist/$APK"
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          SIZE=$(stat -c %s "dist/$APK"); H=$(sha256sum "dist/$APK" | cut -d' ' -f1)
+          {
+            echo "# YeeHaw Browser $VN (versionCode $VC) — commit $S7"
+            if [ "$SIGNED" = true ]; then echo "Signed with the production key. Android 6.0+ (API 23)."; else echo "**Early-access TEST build.** Signed with a debug key, package \`$PKG\`; it installs next to (not over) a future Play version, and cannot be updated in place by one. Android 6.0+ (API 23)."; fi
+            echo; echo "- File: \`$APK\`"; echo "- Size: $SIZE bytes ($(( (SIZE+512)/1024 )) KiB)"; echo "- SHA-256: \`$H\`"; echo
+            echo "## Install"; echo "1. Download the APK on the phone. 2. Open it; allow 'Install unknown apps' for your browser/file manager when asked. 3. Compare the SHA-256 above with: \`sha256sum $APK\` (or a checksum app)."; echo
+            echo "## What changed since the previous release tag"; git log --no-merges --pretty='- %s' -n 15 | cut -c1-160
+          } > dist/RELEASE_NOTES.md
+          printf '{"version":"%s","versionCode":%s,"commit":"%s","signed":%s,"package":"%s","apk":"%s","sizeBytes":%s,"sha256":"%s"}\n' "$VN" "$VC" "$SHA" "$SIGNED" "$PKG" "$APK" "$SIZE" "$H" > dist/release.json
+          { echo "version=$VN"; echo "signed=$SIGNED"; echo "apk=$APK"; echo "package=$PKG"; echo "tag=$TAG"; } >> "$GITHUB_OUTPUT"
+          cat dist/release.json; ls -l dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 30
+
+  verify:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { api: 31, profile: android12-standard, ram: 2048, cores: 2 }
+          - { api: 23, profile: lowend-1gb-1core, ram: 1024, cores: 1 }
+    env:
+      ANDROID_AVD_HOME: /home/runner/.android/avd
+    steps:
+      - uses: actions/download-artifact@v4 # tag-pinned: the commit SHA could not be looked up from this session
+        with:
+          name: release-dist
+          path: dist
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules; sudo udevadm trigger --name-match=kvm
+      - name: Create and boot the emulator
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          AVDMANAGER="$(command -v avdmanager || find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platform-tools" "emulator" >/dev/null
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"; echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"; export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$PATH"
+          IMG="system-images;android-${{ matrix.api }};default;x86_64"
+          "$SDKMANAGER" --install "$IMG" >/dev/null
+          mkdir -p "$ANDROID_AVD_HOME"; echo no | "$AVDMANAGER" create avd --force -n test -k "$IMG" -d pixel_2
+          CFG="$ANDROID_AVD_HOME/test.avd/config.ini"; sed -i '/^hw.ramSize/d;/^vm.heapSize/d;/^hw.cpu.ncore/d' "$CFG"
+          printf 'hw.ramSize=${{ matrix.ram }}\nvm.heapSize=128\nhw.cpu.ncore=${{ matrix.cores }}\n' >> "$CFG"
+          nohup emulator -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -accel on > /tmp/emulator.log 2>&1 &
+          for i in $(seq 1 90); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break; sleep 5; done
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ] || { echo "::error::emulator did not boot"; tail -30 /tmp/emulator.log; exit 1; }
+          echo "Android release $(adb shell getprop ro.build.version.release) (API $(adb shell getprop ro.build.version.sdk)), $(adb shell cat /proc/meminfo | head -1)"
+      - name: Install the exact published file, launch it, measure, exercise it, scan for crashes
+        run: |
+          export PATH="${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools:$PATH"
+          APK=$(jq -r .apk dist/release.json); PKG=$(jq -r .package dist/release.json)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          adb install -r "dist/$APK" | tee /tmp/install.txt; grep -q Success /tmp/install.txt
+          adb shell input keyevent 82 || true
+          echo "=== cold start (am start -W) x5 - emulator, not a phone"
+          for i in 1 2 3 4 5; do adb shell am force-stop $PKG; sleep 2; adb shell am start -W -n $PKG/app.yehaw.browser.MainActivity | grep -E "TotalTime" | tr '\n' ' '; done; echo
+          sleep 8; adb shell dumpsys meminfo $PKG | grep -E "TOTAL:|TOTAL PSS|Java Heap|Native Heap" | head -4
+          adb shell pidof $PKG > /dev/null || { echo "::error::app is not running after launch"; exit 1; }
+          echo "=== monkey: 400 random touch/key events"; adb shell monkey -p $PKG --throttle 100 -s 7 400 2>&1 | tail -4
+          adb logcat -d > /tmp/logcat.txt
+          if grep -E "Process: app\.yehaw\.browser|ANR in app\.yehaw" /tmp/logcat.txt; then echo "::error::crash or ANR in the installed app"; grep -B2 -A12 "FATAL EXCEPTION" /tmp/logcat.txt | head -40; exit 1; fi
+          grep -qE "Fatal signal" /tmp/logcat.txt && echo "::warning::native crash signal in the log (see tail)" && grep -E "Fatal signal" /tmp/logcat.txt | head -3
+          echo "install, launch x5, monkey 400 events: no crash/ANR in app.yehaw.browser"
+
+  publish:
+    needs: [build, verify]
+    if: ${{ github.event.inputs.publish == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4 # tag-pinned: the commit SHA could not be looked up from this session
+        with:
+          name: release-dist
+          path: dist
+      - name: Create the GitHub Release (pre-release unless production-signed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.build.outputs.tag }}"; SIGNED="${{ needs.build.outputs.signed }}"
+          FLAG=""; [ "$SIGNED" = true ] || FLAG="--prerelease"
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "YeeHaw Browser ${{ needs.build.outputs.version }} ($TAG)" --notes-file dist/RELEASE_NOTES.md $FLAG
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
