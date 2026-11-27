@@ -6,6 +6,10 @@ name: Android release (build, install-verify, publish download)
 # If they do not exist, the only installable file is the debug-signed build (package app.yehaw.browser.debug), published as a clearly labelled PRE-RELEASE test build;
 # an unsigned release APK cannot be installed on a phone and an unsigned AAB cannot be uploaded to Google Play.
 on:
+  # Committing .github/release-request.json to wip/quick-tools requests a build + verification + publish (workflow_dispatch needs the file on the default branch, which is protected).
+  push:
+    branches: ["wip/quick-tools"]
+    paths: [".github/release-request.json"]
   workflow_dispatch:
     inputs:
       publish:
@@ -156,7 +160,7 @@ jobs:
 
   publish:
     needs: [build, verify]
-    if: ${{ github.event.inputs.publish == 'true' }}
+    if: ${{ github.event_name == 'push' || github.event.inputs.publish == 'true' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
