@@ -288,11 +288,28 @@ views.system = async function (el) {
 
 views.agents = async function (el) {
   var d = await api('/agents');
-  var badge = function (st) { return h('b', { style: 'color:' + ({ ok: '#7be37b', fixed: '#7be37b', warn: '#ffd166', fail: '#ff6b6b' }[st] || '#ccc') }, st.toUpperCase()); };
+  var colors = { ok: '#7be37b', fixed: '#7be37b', verified: '#7be37b', resolved: '#7be37b', warn: '#ffd166', open: '#ffd166', approved: '#ffd166', applied: '#ffd166', fail: '#ff6b6b', failed: '#ff6b6b', high: '#ff6b6b', medium: '#ffd166', low: '#ccc' };
+  var badge = function (st) { st = String(st || ''); return h('b', { style: 'color:' + (colors[st] || '#ccc') }, st.toUpperCase()); };
+  var short = function (v, n) { var t = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v)); return t.length > n ? t.slice(0, n) + '…' : t; };
+  var decide = function (id, verb) { return act(verb[0].toUpperCase() + verb.slice(1), async function () { await api('/findings/' + id + '/' + verb, { method: 'POST', body: {} }); toast('Recorded: ' + verb); show('agents'); }, verb === 'approve' ? '' : 'alt'); };
+  var active = d.findings.filter(function (f) { return ['open', 'approved', 'applied', 'failed'].indexOf(f.status) >= 0; });
+  var lastRun = d.runs[0];
+  var beat = d.latest.filter(function (r) { return r.agent === 'scheduler'; })[0];
   el.append(
-    h('div', { class: 'card' }, h('h2', {}, 'Maintenance agents'), h('p', { class: 'small mute' }, d.enabled ? 'Reporting is on. Each agent shows its latest result below; nothing here is simulated.' : 'Reporting is OFF: set AGENT_TOKEN on the API (see docs/AGENTS.md). No agent results can arrive until then.'),
+    h('div', { class: 'card' }, h('h2', {}, 'Agent fleet'),
+      h('p', { class: 'small mute' }, d.enabled ? 'Reporting is on. Everything here is read from the database; nothing is simulated. Refreshes every 15 s.' : 'Reporting is OFF: set AGENT_TOKEN on the API (see docs/AGENTS.md). No agent results can arrive until then.'),
+      h('p', {}, 'Scheduler heartbeat: ', beat ? [badge(beat.status), ' ', ago(beat.created_at)] : 'none received yet', ' · Last orchestrator run: ', lastRun ? [badge(lastRun.ok ? 'ok' : 'fail'), ' ', ago(lastRun.finished_at || lastRun.started_at)] : 'none yet', ' · Open findings: ', String(active.length), ' · Waiting for your approval: ', h('b', {}, String(d.pending_approvals)))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Detected problems and proposed corrections'),
+      table([['Sev', function (f) { return badge(f.severity); }], ['Agent', function (f) { return f.agent; }], ['Problem', function (f) { return f.title; }], ['Status', function (f) { return badge(f.status); }], ['Root cause', function (f) { return short(f.root_cause, 140); }], ['Proposed correction', function (f) { return short(f.proposal, 160) + (f.repair ? ' [auto: ' + f.repair + ', risk ' + f.risk + ']' : ' [manual code change, risk ' + f.risk + ']'); }], ['Seen', function (f) { return ago(f.updated_at || f.created_at); }],
+        ['Decision', function (f) { return (f.status === 'open' || f.status === 'failed') ? h('span', {}, f.repair ? decide(f.id, 'approve') : null, ' ', decide(f.id, 'reject'), ' ', decide(f.id, 'dismiss')) : ''; }]], d.findings)),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Repairs, tests and verification (audit trail)'),
+      table([['When', function (a) { return ago(a.created_at); }], ['Finding', function (a) { return a.finding_id == null ? '' : '#' + a.finding_id; }], ['Actor', function (a) { return a.actor; }], ['Action', function (a) { return a.action; }], ['Result', function (a) { return short(a.result, 160); }], ['Verification', function (a) { return short(a.verification, 160); }]], d.actions)),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Orchestrator runs'),
+      table([['Started', function (r) { return ago(r.started_at); }], ['Result', function (r) { return badge(r.ok ? 'ok' : 'fail'); }], ['Summary', function (r) { return short(r.summary, 200); }]], d.runs)),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Latest result per agent'),
       table([['Agent', function (r) { return r.agent; }], ['Latest', function (r) { return badge(r.status); }], ['What it found', function (r) { return r.title; }], ['Ref', function (r) { return r.ref || ''; }], ['When', function (r) { return ago(r.created_at); }]], d.latest)),
     h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Recent reports'), table([['When', function (r) { return ago(r.created_at); }], ['Agent', function (r) { return r.agent; }], ['Status', function (r) { return badge(r.status); }], ['Title', function (r) { return r.title; }]], d.recent)));
+  S.timers.push(setInterval(function () { if (S.tab === 'agents' && !document.hidden) show('agents', true); }, 15000));
 };
 
 /* ---------------- shell */

@@ -38,3 +38,17 @@ Why not Neon or Vercel for the scheduler: Neon is the database and has no schedu
 
 ## What "real time to Claude" can and cannot mean
 Reports land in the console database within seconds of each check. A Claude session cannot sit connected forever and be pushed to: it can (a) watch while a session is open, (b) run as a scheduled task that wakes up periodically, reads the latest reports and CI, and opens draft pull requests per `agents/FIXER_PROMPT.md`. The scheduled task needs a way to read the console (a read-only credential) that has not been created; until then it can only see CI and public pages.
+
+## Orchestration engine (in the API, repo code until deployed)
+
+`POST /v1/agent/tick` (AGENT_TOKEN) is what the always-on Worker calls every 5 minutes. It takes a 20 s lease (a second tick during that window returns 202 and does nothing), measures the database with a ping, a read and a write (not just SELECT 1), writes `db-health` and `fleet-health` reports, then runs the orchestrator:
+
+1. Specialists (availability dead-man switch, database size/indexes, Android compatibility from fleet telemetry, security, performance, QA) return findings with a fingerprint, severity, risk and proposal.
+2. Findings are deduplicated by fingerprint. A finding that stops being reported is auto-resolved.
+3. Only repairs on the allowlist (`prune_agent_reports`, `analyze:<table>`) may run, and only for low/none risk. Anything else, or any medium/high risk finding, waits in the console for Approve / Reject / Dismiss. Approving a finding with no automatic repair is refused (409): that one needs a code change on the integration branch.
+4. After a repair the same specialist runs again; the finding becomes `verified` only if the problem is gone, otherwise `failed`.
+5. Every step is written to `agent_actions`; owner decisions also go to `admin_audit`.
+
+The Worker judges the tick response (database status, fleet status, specialist errors), retries transient failures, checks that each report was accepted (HTTP 201) and logs and fails the run if not.
+
+Status as of this commit: tested locally against Postgres (backend suite 37 tests, Worker suite 9 tests) and the console view was exercised in a headless browser. It is NOT deployed until AGENT_TOKEN is set on the API and the Worker is deployed with its own secret; see the deployment log in RC_EVIDENCE.md for what has actually been observed live.

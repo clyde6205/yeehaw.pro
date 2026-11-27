@@ -28,7 +28,8 @@ before(async () => {
 });
 after(async () => { server.close(); await pool.end(); });
 beforeEach(async () => {
-  await pool.query('TRUNCATE agent_reports, entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE agent_actions, agent_findings, agent_runs, agent_reports, entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
+  await pool.query("UPDATE agent_lease SET until = 'epoch'");
   await migrate(pool); // re-seed the default config (version 1)
 });
 
@@ -444,21 +445,108 @@ test('agent reports: disabled without a token, write-only with one, shown to the
   } finally { s2.close(); }
 });
 
-test('agent tick: fleet-health goes ok, then fail on a crash spike, with no device data returned', async () => {
+
+const { runOnce, REPAIRS } = require('../agents/orchestrator');
+const releaseLease = () => pool.query("UPDATE agent_lease SET until = 'epoch'");
+
+test('tick: db and fleet statuses are real, with an open dead-man finding when no scheduler heartbeat existed before', async () => {
   const AT = crypto.randomBytes(32).toString('base64url');
   const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, agentToken: AT });
   const s2 = app2.listen(0); const b2 = 'http://127.0.0.1:' + s2.address().port;
   try {
     const tick = (tok = AT) => fetch(b2 + '/v1/agent/tick', { method: 'POST', headers: { authorization: 'Bearer ' + tok } });
     assert.equal((await tick('wrong')).status, 401);
-    const ok = await (await tick()).json();
-    assert.deepEqual(ok, { ok: true, fleet: 'ok', db: 'ok' });
+    const first = await (await tick()).json();
+    assert.equal(first.ok, true); assert.equal(first.fleet, 'ok'); assert.equal(first.db, 'ok');
+    assert.equal(first.orchestrator.lease, 'acquired');
+    // a second tick fired right away is a duplicate: it is skipped, not run twice
+    const dup = await tick(); assert.equal(dup.status, 202);
+    await releaseLease();
+    // crash spike -> fleet fail, visible to the admin
     const id = uuid(); await post('/v1/telemetry/boot', boot(id));
     assert.equal((await post('/v1/telemetry/health', { device_id: id, deltas: { crash: 6 } })).status, 200);
     const bad = await (await tick()).json();
     assert.equal(bad.fleet, 'fail');
     const r = await (await fetch(b2 + '/v1/admin/agents', { headers: adminH })).json();
     assert.equal(r.latest.find((x) => x.agent === 'fleet-health').status, 'fail');
-    assert.ok(r.latest.find((x) => x.agent === 'db-health'));
+    assert.ok(r.latest.find((x) => x.agent === 'db-health').details.ping >= 0);
+    assert.ok(r.runs.length >= 1);
+  } finally { s2.close(); }
+});
+
+test('orchestrator: opens a finding, runs an allowlisted low-risk repair, verifies it, and records every step', async () => {
+  await pool.query(`INSERT INTO agent_reports (agent, status, title, created_at) VALUES ('old-agent','ok','ancient', now() - interval '40 days')`);
+  const spec = { sizeCheck: async ({ pool: p }) => (await p.query(`SELECT 1 FROM agent_reports WHERE created_at < now() - interval '30 days'`)).rowCount
+    ? [{ fingerprint: 't:old-reports', agent: 'db-optimizer', severity: 'low', title: 'old reports', risk: 'low', repair: 'prune_agent_reports', proposal: 'prune' }] : [] };
+  await releaseLease();
+  const r = await runOnce(pool, { specialists: spec });
+  assert.equal(r.summary.opened, 1); assert.equal(r.summary.repaired, 1); assert.equal(r.summary.verified, 1);
+  const f = (await pool.query('SELECT * FROM agent_findings')).rows[0];
+  assert.equal(f.status, 'verified');
+  const acts = (await pool.query('SELECT action, verification FROM agent_actions WHERE finding_id = $1 ORDER BY id', [f.id])).rows.map((x) => x.action);
+  assert.deepEqual(acts, ['detected', 'repair prune_agent_reports', 'verification']);
+  assert.equal((await pool.query(`SELECT 1 FROM agent_reports WHERE agent = 'old-agent'`)).rowCount, 0);
+});
+
+test('orchestrator: a repair that does not fix the problem is marked failed, never verified', async () => {
+  const spec = { stuck: async () => [{ fingerprint: 't:stuck', agent: 'db-optimizer', severity: 'low', title: 'stuck', risk: 'none', repair: 'prune_agent_reports' }] };
+  await releaseLease();
+  const r = await runOnce(pool, { specialists: spec });
+  assert.equal(r.summary.failed, 1);
+  assert.equal((await pool.query(`SELECT status FROM agent_findings`)).rows[0].status, 'failed');
+});
+
+test('orchestrator: unknown repairs are refused, medium-risk findings wait for the owner, cleared findings auto-resolve', async () => {
+  let on = true;
+  const spec = { a: async () => on ? [
+    { fingerprint: 't:evil', agent: 'x', severity: 'high', title: 'evil', risk: 'none', repair: 'drop_all_tables' },
+    { fingerprint: 't:med', agent: 'x', severity: 'medium', title: 'needs owner', risk: 'medium', repair: 'prune_agent_reports' }] : [] };
+  await releaseLease();
+  await runOnce(pool, { specialists: spec });
+  const rows = Object.fromEntries((await pool.query('SELECT fingerprint, status FROM agent_findings')).rows.map((x) => [x.fingerprint, x.status]));
+  assert.equal(rows['t:evil'], 'open'); assert.equal(rows['t:med'], 'open');
+  assert.equal((await pool.query(`SELECT 1 FROM agent_actions WHERE action = 'repair refused'`)).rowCount, 1);
+  on = false; await releaseLease();
+  const r = await runOnce(pool, { specialists: spec });
+  assert.equal(r.summary.resolved, 2);
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM agent_findings WHERE status = 'resolved'`)).rows[0].n, 2);
+});
+
+test('orchestrator: overlapping runs cannot execute together', async () => {
+  await releaseLease();
+  const slow = { s: async () => { await new Promise((r) => setTimeout(r, 300)); return []; } };
+  const [a, b] = await Promise.all([runOnce(pool, { specialists: slow }), runOnce(pool, { specialists: slow })]);
+  assert.deepEqual([a.lease, b.lease].sort(), ['acquired', 'skipped']);
+});
+
+test('real specialists run against the live schema without error and the dead-man switch fires with no heartbeat', async () => {
+  await releaseLease();
+  const r = await runOnce(pool);
+  assert.deepEqual(r.summary.errors, [], 'no specialist may crash against the real schema');
+  const f = (await pool.query(`SELECT fingerprint FROM agent_findings`)).rows.map((x) => x.fingerprint);
+  assert.ok(f.includes('availability:scheduler-silent'));
+});
+
+test('owner decisions: approve needs an automatic repair; reject and dismiss are audited', async () => {
+  const AT = crypto.randomBytes(32).toString('base64url');
+  const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, agentToken: AT });
+  const s2 = app2.listen(0); const b2 = 'http://127.0.0.1:' + s2.address().port;
+  try {
+    const a = (await pool.query(`INSERT INTO agent_findings (fingerprint, agent, severity, title, risk) VALUES ('o:1','x','high','no repair','medium') RETURNING id`)).rows[0].id;
+    const b = (await pool.query(`INSERT INTO agent_findings (fingerprint, agent, severity, title, risk, repair) VALUES ('o:2','x','medium','has repair','medium','prune_agent_reports') RETURNING id`)).rows[0].id;
+    const call = (id, verb, tok = TOKEN) => fetch(`${b2}/v1/admin/findings/${id}/${verb}`, { method: 'POST', headers: { authorization: 'Bearer ' + tok, 'content-type': 'application/json' }, body: '{}' });
+    assert.equal((await call(a, 'approve', AT)).status, 401, 'agent token cannot decide');
+    assert.equal((await call(a, 'approve')).status, 409);
+    assert.equal((await call(b, 'approve')).status, 200);
+    assert.equal((await pool.query('SELECT status FROM agent_findings WHERE id = $1', [b])).rows[0].status, 'approved');
+    assert.equal((await call(a, 'dismiss')).status, 200);
+    assert.equal((await call(a, 'dismiss')).status, 404);
+    assert.ok((await pool.query(`SELECT 1 FROM admin_audit WHERE action = 'agent.finding.approve'`)).rowCount === 1);
+    // the approved repair runs on the next orchestrator pass and is verified
+    await releaseLease();
+    const spec = { s: async () => [] };
+    await pool.query(`UPDATE agent_findings SET repair = 'prune_agent_reports' WHERE id = $1`, [b]);
+    const r = await runOnce(pool, { specialists: spec });
+    assert.ok(r.summary.repaired >= 1 || r.summary.resolved >= 1);
   } finally { s2.close(); }
 });

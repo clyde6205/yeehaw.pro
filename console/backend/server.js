@@ -12,6 +12,8 @@ const crypto = require('node:crypto');
 const CONFIG_TTL_SECONDS = 3600;
 const bucketOf = (id) => parseInt(crypto.createHash('sha256').update(id).digest('hex').slice(0, 8), 16) % 100;
 
+const { runOnce: runOrchestrator } = require('./agents/orchestrator');
+
 function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null, agentToken = null }) {
   if (!pool) throw new Error('pool is required');
   if (!adminToken || adminToken.length < 32) throw new Error('ADMIN_TOKEN must be at least 32 characters');
@@ -225,30 +227,39 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     res.status(201).json({ ok: true });
   }));
 
-  // The server-side health agent. Called every few minutes by the always-on scheduler (agents/worker). It reads only
-  // aggregate counts, decides, and writes its own report. It needs no admin power and returns no device data.
+  // The server-side agent tick. Called every 5 minutes by the always-on scheduler (agents/worker). It measures the database
+  // (round trip, schema read, write), checks fleet crash rate, then runs the orchestrator (specialist agents -> findings ->
+  // approved or low-risk repairs -> verification). It needs no admin power and returns no device data.
   app.post('/v1/agent/tick', limiter(60_000, 30), wrap(async (req, res) => {
     if (!agentToken) return res.status(503).json({ error: 'agent_reporting_disabled' });
     const h = req.get('authorization') || '';
     const token = h.startsWith('Bearer ') ? h.slice(7) : '';
     if (!token || !safeEqual(token, agentToken)) return res.status(401).json({ error: 'unauthorized' });
-    const t0 = Date.now();
-    await pool.query('SELECT 1');
-    const dbMs = Date.now() - t0;
+    const lease = await pool.query(`UPDATE agent_lease SET until = now() + interval '20 seconds' WHERE id = 1 AND until < now() RETURNING id`);
+    // (the orchestrator takes its own, longer lease; this short one only stops a double-fired tick from double-reporting)
+    if (!lease.rowCount) return res.status(202).json({ ok: true, skipped: 'duplicate_or_overlapping_tick' });
+    const t0 = Date.now(); await pool.query('SELECT 1'); const pingMs = Date.now() - t0;
+    const t1 = Date.now(); const cfg = await pool.query('SELECT version FROM remote_configs WHERE is_active LIMIT 1'); const readMs = Date.now() - t1;
+    const t2 = Date.now(); await pool.query(`INSERT INTO agent_reports (agent, status, title, details) VALUES ('scheduler','ok','tick received',$1)`, [{}]); const writeMs = Date.now() - t2;
+    const dbMs = pingMs + readMs + writeMs;
+    const dbStatus = !cfg.rowCount ? 'fail' : dbMs > 1500 ? 'warn' : 'ok';
+    await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['db-health', dbStatus,
+      !cfg.rowCount ? 'database answers but no active config row exists' : `database ping ${pingMs} ms, read ${readMs} ms, write ${writeMs} ms`, { ms: dbMs, ping: pingMs, read: readMs, write: writeMs }]);
     const { rows } = await pool.query(`SELECT
         COALESCE(sum(value) FILTER (WHERE kind IN ('crash','freeze') AND created_at > now() - interval '1 hour'), 0)::int AS bad_1h,
         COALESCE(sum(value) FILTER (WHERE kind IN ('crash','freeze') AND created_at <= now() - interval '1 hour' AND created_at > now() - interval '25 hours'), 0)::int AS bad_prev24h,
         (SELECT count(DISTINCT device_id) FROM sessions WHERE day = (now() AT TIME ZONE 'UTC')::date)::int AS active_today
       FROM health_events`);
-    const r = rows[0];
-    const baseHourly = r.bad_prev24h / 24;
-    let status = 'ok', title = `crashes+freezes last hour: ${r.bad_1h} (usual ${baseHourly.toFixed(1)}/h); active devices today: ${r.active_today}`;
-    if (r.bad_1h >= 5 && r.bad_1h > 3 * baseHourly) status = 'fail';
-    else if (r.bad_1h >= 3 && r.bad_1h > 2 * baseHourly) status = 'warn';
-    await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['fleet-health', status, title, { bad_1h: r.bad_1h, bad_prev24h: r.bad_prev24h, active_today: r.active_today }]);
-    const dbStatus = dbMs > 1500 ? 'warn' : 'ok';
-    await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['db-health', dbStatus, `database answered in ${dbMs} ms`, { ms: dbMs }]);
-    res.json({ ok: true, fleet: status, db: dbStatus });
+    const r = rows[0]; const baseHourly = r.bad_prev24h / 24;
+    let fleet = 'ok';
+    if (r.bad_1h >= 5 && r.bad_1h > 3 * baseHourly) fleet = 'fail'; else if (r.bad_1h >= 3 && r.bad_1h > 2 * baseHourly) fleet = 'warn';
+    await pool.query('INSERT INTO agent_reports (agent, status, title, details) VALUES ($1,$2,$3,$4)', ['fleet-health', fleet,
+      `crashes+freezes last hour: ${r.bad_1h} (usual ${baseHourly.toFixed(1)}/h); active devices today: ${r.active_today}`, { bad_1h: r.bad_1h, bad_prev24h: r.bad_prev24h, active_today: r.active_today }]);
+    await pool.query(`UPDATE agent_lease SET until = 'epoch' WHERE id = 1`); // release the short lease; the orchestrator takes its own
+    let orch;
+    try { orch = await runOrchestrator(pool); } catch (e) { orch = { lease: 'error', error: e.message }; }
+    const sev = (await pool.query(`SELECT severity, count(*)::int AS n FROM agent_findings WHERE status IN ('open','approved','applied','failed') GROUP BY 1`)).rows;
+    res.json({ ok: orch.lease !== 'error', fleet, db: dbStatus, db_ms: dbMs, orchestrator: orch, open_findings: Object.fromEntries(sev.map((x) => [x.severity, x.n])) });
   }));
 
   // ------------------------------------------------------------------ admin
@@ -548,10 +559,31 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
   }));
 
   admin.get('/agents', wrap(async (_req, res) => {
-    const latest = await pool.query(`SELECT DISTINCT ON (agent) agent, status, title, details, ref, created_at FROM agent_reports ORDER BY agent, created_at DESC`);
-    const recent = await pool.query(`SELECT id, agent, status, title, ref, created_at FROM agent_reports ORDER BY created_at DESC LIMIT 100`);
-    res.json({ enabled: !!agentToken, latest: latest.rows, recent: recent.rows });
+    const q = (sql) => pool.query(sql).then((r) => r.rows);
+    const [latest, recent, findings, actions, runs] = await Promise.all([
+      q(`SELECT DISTINCT ON (agent) agent, status, title, details, ref, created_at FROM agent_reports ORDER BY agent, created_at DESC`),
+      q(`SELECT id, agent, status, title, ref, created_at FROM agent_reports ORDER BY created_at DESC LIMIT 100`),
+      q(`SELECT id, agent, severity, title, evidence, root_cause, proposal, risk, repair, status, created_at, updated_at FROM agent_findings ORDER BY (status IN ('open','approved','applied','failed')) DESC, id DESC LIMIT 100`),
+      q(`SELECT a.id, a.finding_id, a.actor, a.action, a.result, a.verification, a.created_at FROM agent_actions a ORDER BY a.id DESC LIMIT 100`),
+      q(`SELECT id, started_at, finished_at, ok, summary FROM agent_runs ORDER BY id DESC LIMIT 20`),
+    ]);
+    res.json({ enabled: !!agentToken, latest, recent, findings, actions, runs,
+      pending_approvals: findings.filter((f) => f.status === 'open' && (f.risk === 'medium' || f.risk === 'high' || !f.repair)).length });
   }));
+
+  // Owner decisions on findings. Approving a finding that has an allowlisted repair lets the next orchestrator pass run and verify it.
+  for (const [verb, to] of [['approve', 'approved'], ['reject', 'rejected'], ['dismiss', 'dismissed']]) {
+    admin.post(`/findings/:id/${verb}`, small, wrap(async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id)) return res.status(400).json({ error: 'bad_id' });
+      const r = await pool.query(`UPDATE agent_findings SET status = $2, updated_at = now() WHERE id = $1 AND status IN ('open','failed') RETURNING id, repair`, [id, to]);
+      if (!r.rowCount) return res.status(404).json({ error: 'not_open' });
+      if (verb === 'approve' && !r.rows[0].repair) { await pool.query(`UPDATE agent_findings SET status = 'open' WHERE id = $1`, [id]); return res.status(409).json({ error: 'no_automatic_repair', detail: 'This finding has no allowlisted automatic repair; handle it as code on the integration branch.' }); }
+      await pool.query('INSERT INTO agent_actions (finding_id, actor, action, result) VALUES ($1,$2,$3,$4)', [id, 'owner', verb, 'decision recorded from the founder console']);
+      await audit('agent.finding.' + verb, { finding: id });
+      res.json({ ok: true, status: to });
+    }));
+  }
 
   app.use('/v1/admin', admin);
 
