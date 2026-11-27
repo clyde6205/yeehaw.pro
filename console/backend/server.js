@@ -603,6 +603,9 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'payload_too_large' });
     if (err.status === 409) return res.status(409).json({ error: 'conflict', message: err.message });
+    // Any other client error raised by a library or by the serverless runtime (bad path encoding, runtime body parsing) is the caller's fault, not a 500.
+    const st = err.status || err.statusCode;
+    if (Number.isInteger(st) && st >= 400 && st < 500) return res.status(st).json({ error: st === 400 ? 'invalid_request' : 'bad_request' });
     console.error('[error]', err);
     res.status(500).json({ error: 'server_error' });
   });

@@ -550,3 +550,9 @@ test('owner decisions: approve needs an automatic repair; reject and dismiss are
     assert.ok(r.summary.repaired >= 1 || r.summary.resolved >= 1);
   } finally { s2.close(); }
 });
+
+test('client errors raised by libraries are 4xx JSON, never 500', async () => {
+  const r = await fetch(base + '/v1/admin/devices/%E0%A4%A', { headers: adminH });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, 'invalid_request');
+});
