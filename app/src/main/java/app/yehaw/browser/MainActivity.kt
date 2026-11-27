@@ -720,6 +720,7 @@ class MainActivity : Activity() {
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 val tab = tabs.firstOrNull { it.webView === view } ?: return
+                android.util.Log.i("YeeHawNav", "started failed=${tab.failed} sameUrl=${url == tab.currentUrl} sinceFail=${android.os.SystemClock.elapsedRealtime() - tab.failedAtMs}")
                 // Some WebView versions start a second navigation for the browser's own error page right after onReceivedError.
                 // That must not erase the failure, or the retry panel never appears and the page is announced as loaded.
                 if (tab.failed && url == tab.currentUrl && android.os.SystemClock.elapsedRealtime() - tab.failedAtMs < 2000L) return
@@ -763,6 +764,7 @@ class MainActivity : Activity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 if (view != null) ConsoleBootstrap.onPageFinished(view, url)
                 val tab = tabs.firstOrNull { it.webView === view }
+                android.util.Log.i("YeeHawNav", "finished failed=${tab?.failed}")
                 if (view != null && tab != null && !tab.failed) {
                     cancelStallWatch(view)
                     val started = loadStartedAt.remove(view)
@@ -853,6 +855,7 @@ class MainActivity : Activity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
+                android.util.Log.i("YeeHawNav", "error mainFrame=${request?.isForMainFrame} code=${error?.errorCode}")
                 if (request?.isForMainFrame == true && view != null) {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
                     tab.failed = true

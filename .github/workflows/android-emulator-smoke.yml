@@ -148,6 +148,7 @@ jobs:
         timeout-minutes: 3
         run: |
           adb logcat -d > /tmp/yehaw-emulator-logcat.txt || true
+          echo "--- navigation events and WebView errors (tail):"; grep -aE "YeeHawNav|ERR_NAME|net::ERR|ERR_INTERNET" /tmp/yehaw-emulator-logcat.txt | cut -c1-220 | tail -120 || true
           # A crash counts against the app only when the crashing process is one of ours (app.yehaw.browser*).
           if grep -E "Process: app\.yehaw\.browser|ANR in app\.yehaw" /tmp/yehaw-emulator-logcat.txt; then
             echo "::error::crash or ANR in a YeeHaw process"; grep -B2 -A15 "FATAL EXCEPTION" /tmp/yehaw-emulator-logcat.txt | head -80; exit 1
