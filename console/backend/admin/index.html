@@ -13,6 +13,7 @@ header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:
 .brand{font-weight:900;color:var(--lime);letter-spacing:-.04em;font-size:1.1rem}.brand span{color:var(--ink)}
 nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}nav button{background:none;border:0;color:var(--mute);padding:8px 12px;border-radius:9px;font-weight:600;cursor:pointer}
 nav button.on{background:#17263b;color:var(--lime)}
+@media(max-width:700px){header{gap:6px 10px;padding:8px 10px}.brand{flex:1}nav{order:3;flex:0 0 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav::-webkit-scrollbar{display:none}nav button{white-space:nowrap;padding:10px 12px}}
 main{padding:16px;max-width:1280px;margin:0 auto}
 .grid{display:grid;gap:12px}.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
@@ -276,6 +277,9 @@ views.subs = async function (el) {
   el.append(h('div', { class: 'grid g4' }, kpi('Active Pro', N(d.active), 'verified by Google Play'), kpi('Inactive / expired', N(d.inactive))),
     h('div', { class: 'grid g2', style: 'margin-top:12px' }, h('div', { class: 'card' }, h('h2', {}, 'By state'), table([['State', function (r) { return r.state; }], ['Active', function (r) { return r.active ? 'yes' : 'no'; }], ['Devices', function (r) { return N(r.n); }]], d.by_state)),
       h('div', { class: 'card' }, h('h2', {}, 'Recent verifications'), table([['Device', function (r) { return r.id; }], ['Product', function (r) { return r.product_id; }], ['State', function (r) { return r.state; }], ['Expires', function (r) { return r.expires_at ? new Date(r.expires_at).toLocaleDateString() : ''; }], ['Checked', function (r) { return ago(r.verified_at); }]], d.recent))),
+    h('div', { class: 'card', style: 'margin-top:12px' }, h('h2', {}, 'Verification attempts, last 30 days'),
+      d.verification_attempts_30d === null ? h('p', { class: 'small mute' }, 'Unavailable: the attempts table has not been migrated yet.') :
+      table([['Outcome', function (r) { return r.outcome; }], ['Count', function (r) { return N(r.n); }]], d.verification_attempts_30d || [])),
     h('p', { class: 'small mute' }, d.note));
 };
 
