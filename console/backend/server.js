@@ -16,6 +16,8 @@ const { runOnce: runOrchestrator, getSettings: getEngineSettings, REPAIRS: ENGIN
 const ENGINE_AGENTS = Object.keys(require('./agents/specialists'));
 const { buildRoster } = require('./agents/roster');
 
+const ALLOWED_PRODUCTS = (process.env.PLAY_PRODUCT_IDS || 'yeehaw_pro').split(',').map((x) => x.trim()).filter(Boolean);
+
 function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustProxy = 1, playVerify = null, agentToken = null }) {
   if (!pool) throw new Error('pool is required');
   if (!adminToken || adminToken.length < 32) throw new Error('ADMIN_TOKEN must be at least 32 characters');
@@ -174,10 +176,20 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
     if (!/^[a-z0-9_.]{3,64}$/.test(product)) throw new V.ValidationError('product_id: invalid', 'product_id');
     const tokenIn = String(b.purchase_token || '');
     if (tokenIn.length < 20 || tokenIn.length > 2048) throw new V.ValidationError('purchase_token: invalid', 'purchase_token');
-    if (!playVerify) return res.status(503).json({ error: 'verification_not_configured' });
+    const attempt = (outcome) => pool.query('INSERT INTO verify_attempts (device_id, outcome) VALUES ($1,$2)', [id, outcome]).catch(() => {});
+    if (!ALLOWED_PRODUCTS.includes(product)) { await attempt('product_not_allowed'); return res.status(400).json({ error: 'product_not_allowed' }); }
+    if (!playVerify) { await attempt('not_configured'); return res.status(503).json({ error: 'verification_not_configured' }); }
     let result;
-    try { result = await playVerify(tokenIn); } catch (e) { return res.status(502).json({ error: 'play_unavailable' }); }
+    try { result = await playVerify(tokenIn); } catch (e) { await attempt('play_unavailable'); return res.status(502).json({ error: 'play_unavailable' }); }
     const hash = crypto.createHash('sha256').update(tokenIn).digest('hex');
+    // Never trust the client's product id: Google's answer must be for the same product.
+    if (result.productId && result.productId !== product) { result = { active: false, expiresAt: null, state: 'product_mismatch' }; }
+    // Ownership: if Play reports the account the purchase was made for, it must be this device.
+    if (result.externalAccountId && result.externalAccountId !== crypto.createHash('sha256').update(id).digest('hex')) { result = { active: false, expiresAt: null, state: 'owner_mismatch' }; }
+    // Replay: a token already bound to a different device is refused; nothing is granted.
+    const other = await pool.query('SELECT 1 FROM entitlements WHERE token_hash = $1 AND device_id <> $2', [hash, id]);
+    if (other.rowCount) { await attempt('token_reused'); return res.status(409).json({ error: 'token_already_bound' }); }
+    await attempt(result.active ? 'verified' : (result.state || 'inactive').toLowerCase().replace('subscription_state_', ''));
     await pool.query(
       `INSERT INTO entitlements (device_id, product_id, token_hash, state, active, expires_at, verified_at)
        VALUES ($1,$2,$3,$4,$5,$6, now())
@@ -643,6 +655,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       active: counts.filter((r) => r.active).reduce((t, r) => t + r.n, 0),
       inactive: counts.filter((r) => !r.active).reduce((t, r) => t + r.n, 0),
       by_state: counts, recent: list,
+      verification_attempts_30d: await rows(`SELECT outcome, count(*)::int AS n FROM verify_attempts WHERE at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC`),
       note: 'Counts come from server-side Google Play verification. Revenue is not shown: purchase amounts are not stored; use Play Console financial reports.',
     });
   }));

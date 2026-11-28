@@ -28,7 +28,7 @@ before(async () => {
 });
 after(async () => { server.close(); await pool.end(); });
 beforeEach(async () => {
-  await pool.query('TRUNCATE agent_actions, agent_findings, agent_runs, agent_reports, entitlements, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE agent_actions, agent_findings, agent_runs, agent_reports, entitlements, verify_attempts, share_events, health_events, ad_events, sessions, devices, admin_audit, remote_configs RESTART IDENTITY CASCADE');
   await pool.query("UPDATE agent_lease SET until = 'epoch'");
   await pool.query("DELETE FROM engine_settings"); await pool.query("INSERT INTO engine_settings (id) VALUES (1)");
   await migrate(pool); // re-seed the default config (version 1)
@@ -663,12 +663,16 @@ test('end to end over real HTTP: watcher detects "API serving the static site", 
       if (apiBroken && (u.endsWith('/livez') || u.endsWith('/healthz'))) return new Response('<html>static site</html>', { status: 200, headers: { 'content-type': 'text/html' } });
       return fetch(u, o); // real HTTP to the real Express app, incl. POST /v1/agent/report
     };
+    await pool.query(`DELETE FROM agent_actions WHERE finding_id IN (SELECT id FROM agent_findings WHERE fingerprint = 'incident:wrong-deployment')`);
+    await pool.query(`DELETE FROM agent_findings WHERE fingerprint = 'incident:wrong-deployment'`); // isolate from findings left by earlier tests
     let t = Date.now();
     const w = await watchOnce(env, storage, f, t);
     assert.equal(w.next.incident, 'wrong-deployment'); assert.equal(w.next.queued, 0, 'report delivered');
+    await pool.query(`UPDATE agent_lease SET until = 'epoch'`); // isolate from any engine lease left by earlier runs
     const run = await runOnce(pool, { specialists: { diagnostic } });
-    assert.equal(run.summary.opened, 1);
+    assert.ok(run, 'orchestrator ran'); // the watcher's own tick may already have opened the finding; what matters is that it exists exactly once
     const d = await (await admin('/agents')).json();
+    assert.equal(d.findings.filter((x) => x.fingerprint === 'incident:wrong-deployment').length, 1);
     const fnd = d.findings.find((x) => x.fingerprint === 'incident:wrong-deployment');
     assert.equal(fnd.agent, 'infrastructure'); assert.equal(fnd.severity, 'critical'); assert.match(fnd.root_cause, /static site/); assert.match(fnd.proposal, /Root Directory/);
     assert.equal(fnd.repair, null, 'a production deployment fix is never automatic');
@@ -740,4 +744,55 @@ test('agent API: findings and actions need the agent token; verification only by
     await ag('/v1/agent/report', { agent: 'infra-cost', status: 'ok', title: 'costs', details: { costs: [{ provider: 'neon', metric: 'compute_hours', value: 1.5, unit: 'h' }] } });
     assert.equal((await (await admin('/costs')).json()).costs[0].provider, 'neon');
   } finally { srv.close(); }
+});
+
+// ------------------------------------------------------------------ Google Play verification: the real client logic against Google-shaped answers, and the server's anti-fraud rules
+test('play verifier maps Google subscription states: canceled-but-paid stays entitled, expired / pending / on hold do not', async () => {
+  const { makePlayVerifier } = require('../lib/play');
+  const { generateKeyPairSync } = require('node:crypto');
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  const future = new Date(Date.now() + 86400000).toISOString(), past = new Date(Date.now() - 86400000).toISOString();
+  const answer = (state, expiryTime, extra = {}) => async (u) => u.includes('oauth2')
+    ? new Response(JSON.stringify({ access_token: 't', expires_in: 3600 }), { status: 200 })
+    : new Response(JSON.stringify({ subscriptionState: state, lineItems: [{ productId: 'yeehaw_pro', expiryTime }], ...extra }), { status: 200 });
+  const v = (state, exp, extra) => makePlayVerifier({ serviceAccountJson: { client_email: 'x@y', private_key: privateKey }, packageName: 'app.yehaw.browser', fetchImpl: answer(state, exp, extra) });
+  assert.equal((await v('SUBSCRIPTION_STATE_ACTIVE', future)('t'.repeat(30))).active, true);
+  assert.equal((await v('SUBSCRIPTION_STATE_IN_GRACE_PERIOD', future)('t'.repeat(30))).active, true);
+  assert.equal((await v('SUBSCRIPTION_STATE_CANCELED', future)('t'.repeat(30))).active, true, 'user cancelled but the paid period has not ended');
+  assert.equal((await v('SUBSCRIPTION_STATE_CANCELED', past)('t'.repeat(30))).active, false);
+  assert.equal((await v('SUBSCRIPTION_STATE_ACTIVE', past)('t'.repeat(30))).active, false, 'an expiry in the past is never entitled');
+  for (const s of ['SUBSCRIPTION_STATE_EXPIRED', 'SUBSCRIPTION_STATE_PENDING', 'SUBSCRIPTION_STATE_ON_HOLD', 'SUBSCRIPTION_STATE_PAUSED']) assert.equal((await v(s, future)('t'.repeat(30))).active, false, s);
+  const r = await v('SUBSCRIPTION_STATE_ACTIVE', future, { externalAccountIdentifiers: { obfuscatedExternalAccountId: 'abc' } })('t'.repeat(30));
+  assert.equal(r.productId, 'yeehaw_pro'); assert.equal(r.externalAccountId, 'abc');
+});
+
+test('pro verify: wrong product, someone else\'s account, and a token already used by another device are all refused; every attempt is recorded', async () => {
+  const dev1 = uuid(), dev2 = uuid(), tok = 'z'.repeat(40);
+  const good = { active: true, expiresAt: '2030-01-01T00:00:00Z', state: 'SUBSCRIPTION_STATE_ACTIVE', productId: 'yeehaw_pro' };
+  let answer = good;
+  const app2 = createApp({ pool, adminToken: TOKEN, signingKeyPem: pem, rateLimits: false, playVerify: async () => answer });
+  const s2 = app2.listen(0); const b2 = 'http://127.0.0.1:' + s2.address().port;
+  const send = (device, token = tok, product = 'yeehaw_pro') => fetch(b2 + '/v1/pro/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ device_id: device, product_id: product, purchase_token: token }) });
+  try {
+    let r = await send(dev1, tok, 'some_other_product'); assert.equal(r.status, 400);
+    answer = { ...good, productId: 'a_cheaper_product' };
+    r = await send(dev1, 'p'.repeat(40)); assert.equal(JSON.parse(await r.text()).pro, false, 'Google says a different product');
+    answer = { ...good, externalAccountId: 'not-this-device' };
+    r = await send(dev1, 'q'.repeat(40)); assert.equal(JSON.parse(await r.text()).pro, false, 'purchase belongs to another account');
+    answer = good;
+    r = await send(dev1); assert.equal(JSON.parse(await r.text()).pro, true);
+    r = await send(dev1); assert.equal(JSON.parse(await r.text()).pro, true, 'repeating the same request is harmless');
+    r = await send(dev2); assert.equal(r.status, 409, 'the same token cannot entitle a second device');
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM entitlements WHERE device_id = $1', [dev2])).rows[0].n, 0);
+    const out = (await pool.query('SELECT outcome, count(*)::int AS n FROM verify_attempts GROUP BY 1')).rows.map((x) => x.outcome);
+    for (const o of ['product_not_allowed', 'verified', 'token_reused']) assert.ok(out.includes(o), o);
+    const j = await (await admin('/subscriptions')).json();
+    assert.ok(Array.isArray(j.verification_attempts_30d) && j.verification_attempts_30d.length >= 3);
+  } finally { s2.close(); }
+});
+
+test('audit trail is append-only at the database level', async () => {
+  await pool.query(`INSERT INTO admin_audit (actor, action, detail) VALUES ('test','append-only-check','{}')`);
+  await assert.rejects(pool.query(`UPDATE admin_audit SET action = 'edited' WHERE action = 'append-only-check'`), /append-only/);
+  await assert.rejects(pool.query(`DELETE FROM admin_audit WHERE action = 'append-only-check'`), /append-only/);
 });

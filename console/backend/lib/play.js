@@ -37,8 +37,12 @@ function makePlayVerifier({ serviceAccountJson, packageName, fetchImpl = fetch }
     const j = await r.json();
     const state = j.subscriptionState || '';
     const line = (j.lineItems && j.lineItems[0]) || {};
-    const active = state === 'SUBSCRIPTION_STATE_ACTIVE' || state === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD';
-    return { active, expiresAt: line.expiryTime || null, state };
+    const expiresAt = line.expiryTime || null;
+    const notExpired = expiresAt ? Date.parse(expiresAt) > Date.now() : false;
+    // Entitled: paid and running, in the grace period, or CANCELED by the user but still inside the period they paid for.
+    const active = (state === 'SUBSCRIPTION_STATE_ACTIVE' || state === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD' || state === 'SUBSCRIPTION_STATE_CANCELED') && notExpired;
+    const ext = j.externalAccountIdentifiers || {};
+    return { active, expiresAt, state, productId: line.productId || null, externalAccountId: ext.obfuscatedExternalAccountId || null };
   };
 }
 

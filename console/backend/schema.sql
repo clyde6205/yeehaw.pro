@@ -182,3 +182,20 @@ CREATE TABLE IF NOT EXISTS engine_settings (
 INSERT INTO engine_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
 
 ALTER TABLE agent_actions ADD COLUMN IF NOT EXISTS evidence jsonb;
+
+-- Every purchase verification attempt and its outcome (verified, pending, invalid, product_mismatch, token_reused, ...).
+CREATE TABLE IF NOT EXISTS verify_attempts (
+  id         bigserial PRIMARY KEY,
+  at         timestamptz NOT NULL DEFAULT now(),
+  device_id  uuid,
+  outcome    text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS verify_attempts_at ON verify_attempts (at);
+-- A purchase token entitles exactly one device (blocks replay of someone else's token).
+CREATE UNIQUE INDEX IF NOT EXISTS entitlements_token_hash_uq ON entitlements (token_hash);
+
+-- The audit trail is append-only: rows cannot be edited or deleted through SQL UPDATE/DELETE, by the app or an ordinary admin session.
+CREATE OR REPLACE FUNCTION admin_audit_append_only() RETURNS trigger AS $$
+BEGIN RAISE EXCEPTION 'admin_audit is append-only'; END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS admin_audit_no_change ON admin_audit;
+CREATE TRIGGER admin_audit_no_change BEFORE UPDATE OR DELETE ON admin_audit FOR EACH ROW EXECUTE FUNCTION admin_audit_append_only();
