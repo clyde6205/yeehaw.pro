@@ -8,7 +8,7 @@ for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) new vm.Script(m[
 const block = html.match(/\/\*GREET:BEGIN\*\/([\s\S]*?)\/\*GREET:END\*\//)[1];
 const Y = vm.runInNewContext(block + ';YHGreet', { Intl, Object, String, RegExp });
 const langs = Y.langs();
-assert.ok(langs.length >= 37, 'expected 37 vetted languages, got ' + langs.length);
+assert.ok(langs.length >= 80, 'expected every start-page language, got ' + langs.length);
 
 // Every vetted language, every part of the day, with and without a name.
 for (const lang of langs) {
@@ -24,6 +24,16 @@ for (const lang of langs) {
     }
   }
 }
+// Every language the start page translates (its UI table) must have a greeting.
+const ui = [...html.matchAll(/^([a-z][a-z-]*)\|/gm)].map((m) => m[1]);
+assert.ok(ui.length >= 79, 'start-page language table not found');
+for (const c of ui) assert.ok(Y.has(c), `start-page language ${c} has no greeting`);
+// Fallback when the WebView cannot name months/weekdays: numbers only, still one name, still the right clock.
+for (const lang of langs) {
+  const g = Y.build(lang, 'John', new Date(2026, 11, 1, 8, 20), null, true);
+  assert.ok(g.text.includes('08:20') && g.text.includes('2026-12-01'), `${lang} numeric fallback: ${g.text}`);
+  assert.equal(g.text.split('John').length - 1, 1);
+}
 // Real-time: the clock and date come from the supplied moment (the device clock in the app).
 const en = Y.build('en', 'John', new Date(2026, 11, 1, 8, 20));
 assert.match(en.text, /^Good morning, John\. I'm YeeHaw\. It's 8:20.?AM, Tuesday, December 1\. Let's surf\.$/);
@@ -34,8 +44,8 @@ assert.match(Y.build('en', '', new Date(2026, 11, 2, 4, 59)).text, /^Hello\./);
 assert.match(Y.build('en', '', new Date(2026, 11, 2, 5, 0)).text, /^Good morning\./);
 assert.match(Y.build('id', '', new Date(2026, 11, 2, 16, 0)).text, /^Selamat sore\./);
 // Languages without vetted phrases: nothing is shown (never a wrong greeting).
-assert.equal(Y.build('zu', 'John', new Date()), null);
-assert.equal(Y.has('km'), false);
+assert.equal(Y.build('xx', 'John', new Date()), null);
+assert.equal(Y.has('xx'), false);
 // First name only, never anything else.
 const cases = { 'John Smith': 'John', '  ana  ': 'ana', 'Dr. José María': 'José', 'Mr John': 'John', 'Mary-Jane Watson': 'Mary-Jane', "O'Neil": "O'Neil", '李明 先生': '李明', 'ジョン': 'ジョン', 'محمد علي': 'محمد',
   '<b>x</b>': '', '<script>alert(1)</script>': '', 'a"b': '', '1234': '', 'J.R.': '', 'mr': '', '': '', '   ': '', ['x'.repeat(30)]: '' };
