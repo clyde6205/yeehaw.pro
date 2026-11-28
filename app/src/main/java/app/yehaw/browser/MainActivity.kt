@@ -775,6 +775,13 @@ class MainActivity : Activity() {
                 }
                 val tab = tabs.firstOrNull { it.webView === view }
                 android.util.Log.i("YeeHawNav", "finished failed=${tab?.failed}")
+                // Some WebViews show their own error page without ever calling onReceivedError for the main frame
+                // (seen as "Page loaded" on an unreachable site). That error page has this internal URL: treat it as the failure it is.
+                if (view != null && tab != null && !tab.failed && url?.startsWith("chrome-error://") == true &&
+                    android.os.SystemClock.elapsedRealtime() - tab.failedAtMs > 5000L) { // not right after a failure onReceivedError already handled
+                    android.util.Log.i("YeeHawNav", "error page without onReceivedError; treating as failed load")
+                    handleMainFrameFailure(view, tab, true, null)
+                }
                 if (view != null && tab != null && !tab.failed) {
                     cancelStallWatch(view)
                     val started = loadStartedAt.remove(view)
@@ -868,22 +875,7 @@ class MainActivity : Activity() {
                 android.util.Log.i("YeeHawNav", "error mainFrame=${request?.isForMainFrame} code=${error?.errorCode}")
                 if (request?.isForMainFrame == true && view != null) {
                     val tab = tabs.firstOrNull { it.webView === view } ?: return
-                    tab.failed = true
-                    tab.failedAtMs = android.os.SystemClock.elapsedRealtime()
-                    tab.failedWasGet = request.method.equals("GET", ignoreCase = true)
-                    if (tab.failedWasGet) request.url?.toString()?.takeIf { isWebUrl(it) }?.let { tab.currentUrl = it }
-                    cancelStallWatch(view)
-                    loadStartedAt.remove(view)
-                    signalMonitor.recordLoad(0, false)
-                    if (view === currentWebView()) showTab(activeTabIndex)
-                    if (tab.failedWasGet) {
-                        statusText.text = getString(R.string.status_page_could_not_be_loaded_retrying)
-                        retryScheduler.schedule(view) { retryTab(tab) }
-                    } else {
-                        // A form or other non-GET request failed. Re-sending it could repeat an order or payment,
-                        // so it is never retried automatically; the user decides.
-                        statusText.text = getString(R.string.status_that_request_failed_it_was_not)
-                    }
+                    handleMainFrameFailure(view, tab, request.method.equals("GET", ignoreCase = true), request.url?.toString())
                 }
             }
         }
@@ -891,6 +883,26 @@ class MainActivity : Activity() {
         webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             downloadFile(url, userAgent, contentDisposition, mimeType)
         })
+    }
+
+    /** One place for "the page itself could not be loaded", reached from onReceivedError and from the error-page fallback in onPageFinished. */
+    private fun handleMainFrameFailure(view: WebView, tab: BrowserTab, wasGet: Boolean, failedUrl: String?) {
+        tab.failed = true
+        tab.failedAtMs = android.os.SystemClock.elapsedRealtime()
+        tab.failedWasGet = wasGet
+        if (tab.failedWasGet) failedUrl?.takeIf { isWebUrl(it) }?.let { tab.currentUrl = it }
+        cancelStallWatch(view)
+        loadStartedAt.remove(view)
+        signalMonitor.recordLoad(0, false)
+        if (view === currentWebView()) showTab(activeTabIndex)
+        if (tab.failedWasGet) {
+            statusText.text = getString(R.string.status_page_could_not_be_loaded_retrying)
+            retryScheduler.schedule(view) { retryTab(tab) }
+        } else {
+            // A form or other non-GET request failed. Re-sending it could repeat an order or payment,
+            // so it is never retried automatically; the user decides.
+            statusText.text = getString(R.string.status_that_request_failed_it_was_not)
+        }
     }
 
     /** Every start page tile is wired to a real browser function. No placeholders. */
