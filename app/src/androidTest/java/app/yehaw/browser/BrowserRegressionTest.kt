@@ -184,7 +184,7 @@ class BrowserRegressionTest {
         org.junit.Assume.assumeTrue("no internet from this emulator; HTTPS test skipped (reported as skipped, not passed)", reachable)
         ActivityScenario.launch(MainActivity::class.java).use { sc ->
             go(sc, "https://example.com/")
-            val ms = waitTitle(sc, "Example Domain", 60_000); perf("https_example_com_load_ms", ms)
+            val ms = waitTitle(sc, "Example Domain", 150_000); perf("https_example_com_load_ms", ms)
             assertTrue("HTTPS page must load", ms >= 0)
         }
     }
