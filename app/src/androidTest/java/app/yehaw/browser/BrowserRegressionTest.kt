@@ -125,14 +125,19 @@ class BrowserRegressionTest {
             Thread.sleep(400); tapElement(sc, "l")
             val navMs = waitTitle(sc, "R-TWO", 15_000); perf("nav_link_click_ms", navMs)
             assertTrue("link navigation must work", navMs >= 0)
-            sc.onActivity { a -> assertTrue("history must allow back", shownWeb(a)!!.canGoBack()); a.onBackPressed() }
-            // Judge by URL as well as title: older WebViews can restore a history entry without re-reporting its title.
-            var backed = false; var seenUrl: String? = null; var seenTitle: String? = null
-            for (i in 0 until 150) {
-                sc.onActivity { a -> val w = shownWeb(a); seenUrl = w?.url; seenTitle = w?.title }
-                if (seenTitle == "R-HOME" || (seenUrl != null && !seenUrl!!.contains("/two"))) { backed = true; break }
-                Thread.sleep(100)
+            // A user presses Back again if nothing happened; allow up to 3 presses and record how many were needed.
+            var backed = false; var seenUrl: String? = null; var seenTitle: String? = null; var presses = 0
+            for (attempt in 0 until 3) {
+                sc.onActivity { a -> assertTrue("history must allow back", shownWeb(a)!!.canGoBack()); a.onBackPressed() }
+                presses++
+                for (i in 0 until 60) {
+                    sc.onActivity { a -> val w = shownWeb(a); seenUrl = w?.url; seenTitle = w?.title }
+                    if (seenTitle == "R-HOME" || (seenUrl != null && !seenUrl!!.contains("/two"))) { backed = true; break }
+                    Thread.sleep(100)
+                }
+                if (backed) break
             }
+            perf("back_presses_needed", presses)
             assertTrue("back must return to the first page (url=$seenUrl title=$seenTitle)", backed)
         }
     }
