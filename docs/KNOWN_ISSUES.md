@@ -30,3 +30,6 @@ Category key: APP = application defect, BUILD, INFRA, PROVIDER config, OWNER (ne
 - Back after a link tap occasionally did not navigate on the API 23 standard emulator (1 failure in 3 runs; URL stayed on page 2 while canGoBack was true). The test now presses Back up to 3 times and logs `back_presses_needed`. If that number is ever above 1 it is a real browser/WebView timing bug to fix, not a test detail.
 - #21 (unreachable-site retry panel on API 29) failed again in 1 of 4 recent runs (DNS behaviour of the runner). Still unresolved; passes on API 23, 35 and 36 google_apis.
 - API 36 `default` userdebug image: system WebView native crash, not seen on `google_apis`.
+
+## #23 Founder console: tab row does not scroll sideways on the founder's Android phone (open, low priority)
+Verified working in headless Chromium at 360 and 412 px (nav overflow-x:auto, scrollWidth 935 > clientWidth), live build 1fdb7b1 confirmed serving. Founder reports no sideways scroll on the device (browser not identified). Console remains fully usable (all nine sections reachable via the visible tabs and wrapped layout). Decision 2026-11-29: not a launch blocker; fix after launch if still reproducible, starting with the browser/WebView name and a screen recording.
