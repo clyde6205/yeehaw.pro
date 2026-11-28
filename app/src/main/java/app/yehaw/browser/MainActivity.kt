@@ -44,6 +44,7 @@ import app.yehaw.browser.console.ShareManager
 import app.yehaw.browser.console.TelemetryManager
 import app.yehaw.browser.core.ClipboardWatcher
 import app.yehaw.browser.core.DataSaverPolicy
+import app.yehaw.browser.core.TrackerPolicy
 import app.yehaw.browser.core.Guardian
 import app.yehaw.browser.core.MarkupScreen
 import app.yehaw.browser.core.QuickPasteStore
@@ -689,6 +690,12 @@ class MainActivity : Activity() {
                 if (RemoteConfigManager.shouldBlock(request?.url)) {
                     return RemoteConfigManager.blockedResponse(this@MainActivity, request?.url?.host, request?.isForMainFrame == true)
                 }
+                // Built-in tracker/ad-script blocking (third party only, never the page's own hosts, never the main frame).
+                val pageHost = tabs.firstOrNull { it.webView === view }?.currentUrl?.let { runCatching { android.net.Uri.parse(it).host }.getOrNull() }
+                if (TrackerPolicy.shouldBlock(pageHost, uri.host, uri.path, request?.isForMainFrame == true)) {
+                    savings.recordSkipped(uri.path ?: "")
+                    return WebResourceResponse("text/plain", "utf-8", 204, "Blocked tracker", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
+                }
                 if ((turboMode || signalMonitor.level.textFirst || DataSaverPolicy.shouldBlockHeavy(adaptiveSaver, signalMonitor.level, systemSaverOn)) && request?.isForMainFrame != true) {
                     val path = (uri.path ?: "").lowercase()
                     if (SavingsMeter.isHeavyAsset(path)) {
@@ -763,6 +770,9 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 if (view != null) ConsoleBootstrap.onPageFinished(view, url)
+                if (view != null && TrackerPolicy.isFeedSite(runCatching { android.net.Uri.parse(url ?: "").host }.getOrNull())) {
+                    view.evaluateJavascript(TrackerPolicy.FEED_SMOOTHING_JS, null)
+                }
                 val tab = tabs.firstOrNull { it.webView === view }
                 android.util.Log.i("YeeHawNav", "finished failed=${tab?.failed}")
                 if (view != null && tab != null && !tab.failed) {
