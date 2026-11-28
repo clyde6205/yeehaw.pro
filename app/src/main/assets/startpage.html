@@ -31,6 +31,12 @@
   .icon:nth-child(3n){color:#82b7ff}
   .tile:active .icon{background:#213a55}
   .label{font-size:.84rem;color:#a5b4ca;text-align:center}
+  .greet{margin:6px 16px 0;padding:12px 14px;border:1px solid #1f3149;border-radius:14px;background:#0d1523}
+  .greet.off{border:0;background:none;padding:0;margin:0 16px;text-align:end}
+  .gtext{margin:0;color:#f3f7ff;font-size:1rem;line-height:1.45}
+  .grow{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+  .gbtn{min-width:44px;min-height:44px;border:0;border-radius:10px;background:#16233a;color:#a5b4ca;font-size:1.05rem}
+  .gin{flex:1;min-height:44px;border-radius:10px;border:1px solid #2a3f5f;background:#08111f;color:#f3f7ff;padding:0 12px;font-size:1rem}
   .tagline{padding:4px 22px 6px;color:#a5b4ca;font-size:.88rem;text-align:center}
   .tagline b{color:#f3f7ff;display:block;font-size:1.02rem;margin-bottom:5px}
   .version{color:#5a6b84;font-size:.68rem;text-align:center;padding-bottom:6px}
@@ -53,6 +59,7 @@
     </svg>
     <div class="brand">yee<span>Haw™</span> · browser</div>
   </header>
+  <div id="greet" class="greet" hidden></div>
   <form onsubmit="event.preventDefault();var q=document.getElementById('q').value.trim();if(q){location.href='?a=search&q='+encodeURIComponent(q);}return false;">
     <div class="search">
       <input id="q" type="search" placeholder="Search or enter website address" autocomplete="off" autocapitalize="off">
@@ -205,6 +212,108 @@ window.yeehawSpeedDial = function (list) {
   var first = document.querySelector('.tiles'); // the built-in tiles
   if (first && first.parentNode) first.parentNode.insertBefore(wrap, first.nextSibling); else document.body.appendChild(wrap);
 };
+</script>
+<script>
+/*GREET:BEGIN*/
+var YHGreet=(function(){
+  // Only languages whose phrases were written and checked by hand appear here. Any other language: no greeting is shown (never a wrong one).
+  // b = [startHour, greeting] sorted by hour; the last entry also covers the hours before the first. i = intro with {t} time and {d} date. p = sentence end.
+  var D=function(m,a,e,n){return [[5,m],[12,a],[18,e],[22,n]];};
+  var G={
+    en:{b:D('Good morning','Good afternoon','Good evening','Hello'),s:', ',p:'.',i:"I'm YeeHaw. It's {t}, {d}. Let's surf.",ph:'Your first name'},
+    es:{b:D('Buenos días','Buenas tardes','Buenas noches','Hola'),s:', ',p:'.',i:'Soy YeeHaw. {t} · {d}. ¡A navegar!',ph:'Tu nombre'},
+    pt:{b:D('Bom dia','Boa tarde','Boa noite','Olá'),s:', ',p:'.',i:'Sou o YeeHaw. {t} · {d}. Vamos navegar!',ph:'Seu primeiro nome'},
+    fr:{b:D('Bonjour','Bonjour','Bonsoir','Bonsoir'),s:', ',p:'.',i:'Je suis YeeHaw. Il est {t}, {d}. On surfe ?',ph:'Votre prénom'},
+    de:{b:D('Guten Morgen','Guten Tag','Guten Abend','Hallo'),s:', ',p:'.',i:"Ich bin YeeHaw. Es ist {t}, {d}. Los geht's!",ph:'Dein Vorname'},
+    it:{b:D('Buongiorno','Buon pomeriggio','Buonasera','Ciao'),s:', ',p:'.',i:'Sono YeeHaw. {t} · {d}. Si naviga!',ph:'Il tuo nome'},
+    nl:{b:D('Goedemorgen','Goedemiddag','Goedenavond','Hallo'),s:', ',p:'.',i:'Ik ben YeeHaw. {t} · {d}. Laten we surfen!',ph:'Je voornaam'},
+    id:{b:[[5,'Selamat pagi'],[11,'Selamat siang'],[15,'Selamat sore'],[18,'Selamat malam']],s:', ',p:'.',i:'Saya YeeHaw. {t} · {d}. Ayo berselancar!',ph:'Nama depan Anda'},
+    ms:{b:[[5,'Selamat pagi'],[12,'Selamat tengah hari'],[14,'Selamat petang'],[19,'Selamat malam']],s:', ',p:'.',i:'Saya YeeHaw. {t} · {d}. Jom melayari!',ph:'Nama pertama anda'},
+    fil:{b:[[5,'Magandang umaga'],[11,'Magandang tanghali'],[13,'Magandang hapon'],[18,'Magandang gabi']],s:', ',p:'.',i:'Ako si YeeHaw. {t} · {d}. Mag-surf na tayo!',ph:'Una mong pangalan'},
+    tr:{b:D('Günaydın','İyi günler','İyi akşamlar','Merhaba'),s:', ',p:'.',i:'Ben YeeHaw. {t} · {d}. Haydi gezinelim!',ph:'Adınız'},
+    ru:{b:D('Доброе утро','Добрый день','Добрый вечер','Здравствуйте'),s:', ',p:'.',i:'Я YeeHaw. {t} · {d}. Поехали!',ph:'Ваше имя'},
+    uk:{b:D('Доброго ранку','Добрий день','Добрий вечір','Вітаю'),s:', ',p:'.',i:'Я YeeHaw. {t} · {d}. Поїхали!',ph:'Ваше ім’я'},
+    pl:{b:D('Dzień dobry','Dzień dobry','Dobry wieczór','Cześć'),s:', ',p:'.',i:'Jestem YeeHaw. {t} · {d}. Surfujemy!',ph:'Twoje imię'},
+    ar:{b:D('صباح الخير','مرحباً','مساء الخير','مرحباً'),s:'، ',p:'.',i:'أنا YeeHaw. {t} · {d}. هيا نتصفح!',ph:'اسمك الأول',rtl:1},
+    ur:{b:D('صبح بخیر','آداب','شام بخیر','آداب'),s:'، ',p:'۔',i:'میں YeeHaw ہوں۔ {t} · {d}۔ چلیں براؤزنگ کریں!',ph:'آپ کا پہلا نام',rtl:1},
+    fa:{b:D('صبح بخیر','سلام','عصر بخیر','سلام'),s:'، ',p:'.',i:'من YeeHaw هستم. {t} · {d}. بیایید وب‌گردی کنیم!',ph:'نام کوچک شما',rtl:1},
+    hi:{b:D('सुप्रभात','नमस्ते','शुभ संध्या','नमस्ते'),s:', ',p:'।',i:'मैं YeeHaw हूँ। {t} · {d}। चलिए सर्फ़ करें!',ph:'आपका पहला नाम'},
+    bn:{b:[[5,'শুভ সকাল'],[12,'শুভ দুপুর'],[16,'শুভ বিকেল'],[18,'শুভ সন্ধ্যা'],[22,'হ্যালো']],s:', ',p:'।',i:'আমি YeeHaw। {t} · {d}। চলুন ব্রাউজ করি!',ph:'আপনার প্রথম নাম'},
+    ja:{b:D('おはようございます','こんにちは','こんばんは','こんばんは'),s:'、',p:'。',i:'YeeHawです。{t}・{d}。さあ、ブラウジングを始めましょう。',ph:'名前（名）',suf:'さん',j:''},
+    ko:{b:D('좋은 아침이에요','안녕하세요','좋은 저녁이에요','안녕하세요'),s:', ',p:'.',i:'YeeHaw예요. {t} · {d}. 같이 서핑해요!',ph:'이름',suf:'님'},
+    zh:{b:D('早上好','下午好','晚上好','你好'),s:'，',p:'。',i:'我是 YeeHaw。{t} · {d}。开始上网吧！',ph:'你的名字',j:''},
+    'zh-tw':{b:D('早安','午安','晚安','你好'),s:'，',p:'。',i:'我是 YeeHaw。{t} · {d}。開始上網吧！',ph:'你的名字',j:''},
+    vi:{b:D('Chào buổi sáng','Chào buổi chiều','Chào buổi tối','Xin chào'),s:', ',p:'.',i:'Mình là YeeHaw. {t} · {d}. Cùng lướt web nào!',ph:'Tên của bạn'},
+    th:{b:D('สวัสดีตอนเช้า','สวัสดีตอนบ่าย','สวัสดีตอนเย็น','สวัสดี'),s:' ',p:'',i:'ฉันคือ YeeHaw {t} · {d} ไปท่องเว็บกันเลย!',ph:'ชื่อของคุณ',pre:'คุณ',j:' '}
+  };
+  var TITLES={mr:1,mrs:1,ms:1,miss:1,mx:1,dr:1,sir:1,prof:1,sr:1,sra:1,srta:1,herr:1,frau:1,mme:1,mlle:1,m:1};
+  var KEEP=null;try{KEEP=new RegExp("[^\\p{L}\\p{M}'’\\-]","gu");}catch(e){KEEP=/[<>&"\/\\0-9_=+*#@!$%^(){}\[\]|~`;:,.?…\s]/g;}
+  /** First name only: first word, honorifics skipped, letters/marks/apostrophe/hyphen only, max 24 characters. Empty string if nothing usable. */
+  function cleanName(raw){
+    var w=String(raw==null?'':raw).replace(/\s+/g,' ').trim().split(' ');
+    for(var i=0;i<w.length;i++){
+      var t=w[i].replace(/[.,]+$/,'');
+      if(TITLES[t.toLowerCase()]&&i<w.length-1)continue;
+      // Anything outside letters/marks/apostrophe/hyphen means this is not a clean first name: use none rather than a wrong one.
+      if(!t||TITLES[t.toLowerCase()]||t.replace(KEEP,'')!==t)return '';
+      var c=t.replace(/^[-'’]+|[-'’]+$/g,'');
+      return c.length>24?'':c;
+    }
+    return '';
+  }
+  function has(lang){return !!G[lang];}
+  function hello(g,hour){var b=g.b,t=b[b.length-1][1];for(var i=0;i<b.length;i++){if(hour>=b[i][0])t=b[i][1];}return t;}
+  /** Returns {text, rtl, ph} for the language and moment, or null when the language has no vetted phrases. now = a Date (device clock). */
+  function build(lang,name,now,fmt){
+    var g=G[lang];if(!g)return null;
+    var loc=lang==='zh-tw'?'zh-TW':lang;
+    var t,d;
+    try{
+      t=(fmt&&fmt.t)||new Intl.DateTimeFormat(loc,{hour:'numeric',minute:'2-digit'}).format(now);
+      d=(fmt&&fmt.d)||new Intl.DateTimeFormat(loc,{weekday:'long',month:'long',day:'numeric'}).format(now);
+    }catch(e){return null;}
+    var n=cleanName(name);
+    var head=hello(g,now.getHours());
+    var line=head+(n?g.s+(g.pre||'')+n+(g.suf||''):'')+g.p;
+    return {text:line+(g.j==null?' ':g.j)+g.i.replace('{t}',t).replace('{d}',d),head:line,rtl:!!g.rtl,ph:g.ph};
+  }
+  return {build:build,cleanName:cleanName,has:has,langs:function(){return Object.keys(G);}};
+})();
+/*GREET:END*/
+
+(function(){
+  var el=document.getElementById('greet');if(!el)return;
+  var lang=(typeof T!=='undefined'&&T&&T[0])||'en';
+  if(!YHGreet.has(lang)){el.hidden=true;return;} // no vetted phrases for this language: show nothing rather than something wrong
+  var KEY='yh.greet',mem={};
+  function load(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){return mem;}}
+  function save(o){mem=o;try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){}}
+  var st=load(),editing=false,timer=0;
+  function mk(tag,cls,txt){var n=document.createElement(tag);if(cls)n.className=cls;if(txt)n.textContent=txt;return n;}
+  function render(){
+    var g=YHGreet.build(lang,st.n||'',new Date());if(!g){el.hidden=true;return;}
+    el.hidden=false;el.textContent='';el.setAttribute('dir',g.rtl?'rtl':'ltr');
+    if(st.off){var b=mk('button','gbtn','☺');b.type='button';b.setAttribute('aria-label',g.ph);b.onclick=function(){st.off=0;save(st);render();};el.appendChild(b);el.className='greet off';return;}
+    el.className='greet';
+    var p=mk('p','gtext',g.text);p.setAttribute('dir','auto');el.appendChild(p);
+    var row=mk('div','grow');
+    if(editing){
+      var i=mk('input','gin');i.type='text';i.maxLength=40;i.placeholder=g.ph;i.setAttribute('aria-label',g.ph);i.setAttribute('autocomplete','off');i.value=st.n||'';
+      var done=function(){var v=YHGreet.cleanName(i.value);if(v||!i.value.trim()){st.n=v;save(st);}editing=false;render();};
+      i.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();done();}};i.onblur=done;row.appendChild(i);el.appendChild(row);setTimeout(function(){i.focus();},0);return;
+    }
+    var ed=mk('button','gbtn','✎');ed.type='button';ed.setAttribute('aria-label',g.ph);ed.onclick=function(){editing=true;render();};row.appendChild(ed);
+    if(window.speechSynthesis&&window.SpeechSynthesisUtterance){
+      var sp=mk('button','gbtn','🔊');sp.type='button';sp.setAttribute('aria-label',g.text);
+      sp.onclick=function(){try{var u=new SpeechSynthesisUtterance(g.text);u.lang=(lang==='zh-tw'?'zh-TW':lang);speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}};row.appendChild(sp);
+    }
+    var hd=mk('button','gbtn','✕');hd.type='button';hd.setAttribute('aria-label','✕');hd.onclick=function(){st.off=1;save(st);render();};row.appendChild(hd);
+    el.appendChild(row);
+  }
+  function schedule(){clearTimeout(timer);timer=setTimeout(function(){if(!editing&&document.visibilityState!=='hidden')render();schedule();},60000-(Date.now()%60000)+50);}
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&!editing)render();});
+  render();schedule();
+})();
 </script>
 </body>
 </html>
