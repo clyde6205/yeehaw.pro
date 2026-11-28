@@ -163,3 +163,17 @@ Top countries and their main languages: India (hi, bn, te, mr, ta, gu, kn, ml, p
 
 ### Greeting now covers EVERY start-page language (80 of 80) — supersedes the 37-language note above
 The 43 languages added last are best-effort drafts by the same machine-assisted process as the rest of the start-page translations (the page already states these need native-speaker review before store launch); the greeting inherits that status. Weakest ones (short generic greetings, not time-of-day aware): Malagasy, Zulu, Tigrinya, Kurdish, Haitian Creole, Sindhi, Pashto, Lao, Khmer, Kinyarwanda, Igbo. Safeguards unchanged: first name only and never guessed; if the phone's WebView has no month/weekday names for a language it shows numbers only (e.g. "08:20 · 2026-12-01") rather than another language's words; Pakistani Punjabi (pa-PK) is hidden because the greeting is Gurmukhi. Tests: every start-page language must have a greeting, 13 hours x name/no name, numeric fallback for all 80 languages, in `npm run check`.
+
+## Android emulator matrix, run 46150236266 (commit 9813245): 7 of 7 jobs PASS — EMULATOR, not a physical phone
+Full instrumented suite incl. the 9 browser regression tests and the greeting/feed/tracker code, on API 23 (standard, 1 GB/1 core, 1 GB/1 core + EDGE link), API 29, API 35, API 36 (default and google_apis images). Ms unless noted; "slow page" = 6 KB page served at about 2 KB/s.
+| Metric | API23 std | API23 1GB/1core | API23 1GB/1core EDGE | API29 | API35 | API36 default | API36 google_apis |
+|---|---|---|---|---|---|---|---|
+| plain-HTTP page load | 279 | 337 | 55 | 175 | 478 | 203 | 186 |
+| link tap -> page 2 | 205 | 307 | 200 | 312 | 226 | 157 | 100 |
+| HTTPS example.com (real internet) | 273 | 314 | 10,647 | 233 | 361 | 373 | 646 |
+| slow page complete | 1,745 | 551 | 600 | 75 | 448 | 89 | 121 |
+| connection cut -> recovered | 1,973 | 1,995 | 56 | 181 | 250 | 244 | 49 |
+| retry panel shown | yes | yes | yes | yes | yes | yes | no (recovered first) |
+| cached resource, 2 visits (server hits) | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
+| Back presses needed | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
+Honest limits: (1) the EDGE link row is the shaped link, intended; (2) the retry-panel test (#21) passed in this run on all versions after the error-page fallback (45370b6), but it is intermittent, so "fixed" needs several clean runs; (3) emulator CPU/frame stats are software-rendered and not meaningful; (4) no physical device, battery, or real mobile network was tested.
