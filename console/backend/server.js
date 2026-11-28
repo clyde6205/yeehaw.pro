@@ -655,7 +655,7 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
       active: counts.filter((r) => r.active).reduce((t, r) => t + r.n, 0),
       inactive: counts.filter((r) => !r.active).reduce((t, r) => t + r.n, 0),
       by_state: counts, recent: list,
-      verification_attempts_30d: await rows(`SELECT outcome, count(*)::int AS n FROM verify_attempts WHERE at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC`),
+      verification_attempts_30d: await rows(`SELECT outcome, count(*)::int AS n FROM verify_attempts WHERE at > now() - interval '30 days' GROUP BY 1 ORDER BY 2 DESC`).catch(() => null), // null = table not migrated yet (unavailable, not zero)
       note: 'Counts come from server-side Google Play verification. Revenue is not shown: purchase amounts are not stored; use Play Console financial reports.',
     });
   }));
