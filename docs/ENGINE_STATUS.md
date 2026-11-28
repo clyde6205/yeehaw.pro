@@ -125,3 +125,18 @@ Class: P = production, L = local (embedded Postgres/unit), E = emulator in GitHu
 Autonomous engine (P): Worker `yeehaw-agents` running since 15:29Z, probes every 30 s; orchestrator runs 11 (16:06Z) and 12 (17:06Z) were started by the Worker itself, no manual call; 0 tick failures.
 Android (CI): debug+release build, lint, unit tests green; release workflow published a test APK and install-verified it on Android 6 (1 GB / 1 core) and Android 12 emulators. Browser regression suite (9 tests) passed on API 29 and API 35 emulators; API 23 failed one back-navigation test (test made URL-aware in a6c352c, re-run pending); API 36 untested after a Maven failure (earlier WebView native crash in LocalizationTest unresolved). Emulator frame stats are software-rendered and not meaningful.
 Not tested: any physical phone, real mobile networks, battery, Google Play pre-launch, production-signed APK/AAB, unattended AI repair in CI, owner view of the production console, GitHub Actions secrets (CONSOLE_URL/AGENT_TOKEN empty), infrastructure collector with real read-only tokens.
+
+## Android emulator results, run 46042886804 (commit 197c139) — EMULATOR numbers (x86 on a CI runner), not a physical phone
+Full instrumented suite incl. the 9 browser regression tests: PASS on API 23 standard (1.5 GB/2 cores), API 23 low-end (1 GB/1 core), API 23 low-end + EDGE link (-netspeed edge -netdelay umts), API 29, API 35. API 36: FAIL (see below).
+| Metric (ms unless noted) | API23 std | API23 1GB/1core | API23 1GB/1core EDGE | API29 | API35 |
+|---|---|---|---|---|---|
+| plain-HTTP page load | 350 | 320 | 229 | 158 | 189 |
+| link tap -> new page | 195 | 336 | 135 | 132 | 194 |
+| HTTPS (example.com, real internet) | 758 | 801 | 10,887 | 407 | 468 |
+| 6 KB page at ~2 KB/s | 908 | 690 | 815 | 110 | 69 |
+| cut mid-page -> recovered after link returns | 1,974 | 2,017 | 1,983 | 85 | 164 |
+| retry panel shown on interruption | yes | yes | yes | yes | yes |
+| cached resource, 2 visits -> server hits | 1 | 1 | 1 | 1 | 1 |
+| swipe scrolled page (scrollY px) | 1,590 | 1,648 | 1,654 | 878 | 926 |
+Cold start (earlier runs, same builds): API 23 1GB/1core 563-896 ms; EDGE profile 654-836 ms; app memory about 69 MB PSS (MemTotal 1.0 GB). Emulator frame stats are software-rendered (all frames "janky") and are not reported as phone performance. Caveat: the EDGE profile's 10.9 s HTTPS load is the shaped link, as intended.
+API 36 (default userdebug image): browser tests fail because the system WebView crashes (SIGTRAP in Chrome_IOThread, all frames inside libwebviewchromium.so, no app frames). Reproduced in every run. Isolation experiment with a google_apis image: run 46128378585. Treated as an emulator-image problem, not proven: no physical Android 16 device tested.
