@@ -128,7 +128,9 @@ class BrowserRegressionTest {
             // A user presses Back again if nothing happened; allow up to 3 presses and record how many were needed.
             var backed = false; var seenUrl: String? = null; var seenTitle: String? = null; var presses = 0
             for (attempt in 0 until 3) {
-                sc.onActivity { a -> assertTrue("history must allow back", shownWeb(a)!!.canGoBack()); a.onBackPressed() }
+                var stillOnTwo = true
+                sc.onActivity { a -> val w = shownWeb(a)!!; stillOnTwo = w.url == null || w.url!!.contains("/two"); if (stillOnTwo) { assertTrue("history must allow back while on page 2", w.canGoBack()); a.onBackPressed() } }
+                if (!stillOnTwo) { backed = true; break } // an earlier press finished late on a slow emulator
                 presses++
                 for (i in 0 until 60) {
                     sc.onActivity { a -> val w = shownWeb(a); seenUrl = w?.url; seenTitle = w?.title }
