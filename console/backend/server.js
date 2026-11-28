@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 const helmet = require('helmet');
@@ -768,7 +769,8 @@ function createApp({ pool, adminToken, signingKeyPem, rateLimits = true, trustPr
   // Founder console (single file). Served from this origin so the API needs no CORS.
   app.get(['/admin', '/admin/'], (_req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+    const build = String(process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7);
+    res.type('html').send(fs.readFileSync(path.join(__dirname, 'admin', 'index.html'), 'utf8').replace('__BUILD__', build));
   });
 
   // Liveness without touching the database, so an external prober can check the API every few seconds without keeping the database awake.

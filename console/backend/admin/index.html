@@ -11,9 +11,9 @@
 a{color:var(--blue)}h1,h2,h3{margin:0}h2{font-size:1.05rem;margin-bottom:10px}h3{font-size:.9rem;color:var(--mute);font-weight:600;margin:14px 0 6px}
 header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;flex-wrap:wrap}
 .brand{font-weight:900;color:var(--lime);letter-spacing:-.04em;font-size:1.1rem}.brand span{color:var(--ink)}
-nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}nav button{background:none;border:0;color:var(--mute);padding:8px 12px;border-radius:9px;font-weight:600;cursor:pointer}
+nav{display:flex;gap:4px;flex-wrap:nowrap;flex:0 0 100%;order:3;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav::-webkit-scrollbar{display:none}nav button{background:none;border:0;color:var(--mute);padding:10px 12px;border-radius:9px;font-weight:600;cursor:pointer;white-space:nowrap}
 nav button.on{background:#17263b;color:var(--lime)}
-@media(max-width:700px){header{gap:6px 10px;padding:8px 10px}.brand{flex:1}nav{order:3;flex:0 0 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav::-webkit-scrollbar{display:none}nav button{white-space:nowrap;padding:10px 12px}}
+header{gap:6px 10px}.brand{flex:1}
 main{padding:16px;max-width:1280px;margin:0 auto}
 .grid{display:grid;gap:12px}.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
@@ -375,7 +375,7 @@ function render() {
     app.append(h('div', { class: 'login' }, h('div', { class: 'brand', style: 'font-size:1.6rem;margin-bottom:12px' }, 'yee', h('span', {}, 'Haw™'), ' console'), h('div', { class: 'card' }, h('div', { class: 'mute small' }, 'Founder access only'), t, h('button', { class: 'b', onclick: go }, 'Sign in'))));
     return;
   }
-  app.append(h('header', {}, h('div', { class: 'brand' }, 'yee', h('span', {}, 'Haw™'), ' console'), h('nav', {}, TABS.map(function (t) { return h('button', { 'data-t': t[0], onclick: function () { show(t[0]); } }, t[1]); })), h('button', { class: 'b alt', onclick: function () { setTok(''); render(); } }, 'Sign out')), h('main', { id: 'main' }));
+  app.append(h('header', {}, h('div', { class: 'brand' }, 'yee', h('span', {}, 'Haw™'), ' console', h('small', { class: 'mute', style: 'font-size:.6rem;font-weight:400;margin-left:6px' }, 'build __BUILD__')), h('nav', {}, TABS.map(function (t) { return h('button', { 'data-t': t[0], onclick: function () { show(t[0]); } }, t[1]); })), h('button', { class: 'b alt', onclick: function () { setTok(''); render(); } }, 'Sign out')), h('main', { id: 'main' }));
   show(S.tab);
 }
 render();
