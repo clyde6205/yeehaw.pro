@@ -8,7 +8,7 @@ for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) new vm.Script(m[
 const block = html.match(/\/\*GREET:BEGIN\*\/([\s\S]*?)\/\*GREET:END\*\//)[1];
 const Y = vm.runInNewContext(block + ';YHGreet', { Intl, Object, String, RegExp });
 const langs = Y.langs();
-assert.ok(langs.length >= 25, 'expected 25 vetted languages, got ' + langs.length);
+assert.ok(langs.length >= 37, 'expected 37 vetted languages, got ' + langs.length);
 
 // Every vetted language, every part of the day, with and without a name.
 for (const lang of langs) {
@@ -35,7 +35,7 @@ assert.match(Y.build('en', '', new Date(2026, 11, 2, 5, 0)).text, /^Good morning
 assert.match(Y.build('id', '', new Date(2026, 11, 2, 16, 0)).text, /^Selamat sore\./);
 // Languages without vetted phrases: nothing is shown (never a wrong greeting).
 assert.equal(Y.build('zu', 'John', new Date()), null);
-assert.equal(Y.has('sw'), false);
+assert.equal(Y.has('km'), false);
 // First name only, never anything else.
 const cases = { 'John Smith': 'John', '  ana  ': 'ana', 'Dr. José María': 'José', 'Mr John': 'John', 'Mary-Jane Watson': 'Mary-Jane', "O'Neil": "O'Neil", '李明 先生': '李明', 'ジョン': 'ジョン', 'محمد علي': 'محمد',
   '<b>x</b>': '', '<script>alert(1)</script>': '', 'a"b': '', '1234': '', 'J.R.': '', 'mr': '', '': '', '   ': '', ['x'.repeat(30)]: '' };

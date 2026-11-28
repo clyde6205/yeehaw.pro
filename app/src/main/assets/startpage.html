@@ -244,6 +244,18 @@ var YHGreet=(function(){
     zh:{b:D('早上好','下午好','晚上好','你好'),s:'，',p:'。',i:'我是 YeeHaw。{t} · {d}。开始上网吧！',ph:'你的名字',j:''},
     'zh-tw':{b:D('早安','午安','晚安','你好'),s:'，',p:'。',i:'我是 YeeHaw。{t} · {d}。開始上網吧！',ph:'你的名字',j:''},
     vi:{b:D('Chào buổi sáng','Chào buổi chiều','Chào buổi tối','Xin chào'),s:', ',p:'.',i:'Mình là YeeHaw. {t} · {d}. Cùng lướt web nào!',ph:'Tên của bạn'},
+    te:{b:D('శుభోదయం','శుభ మధ్యాహ్నం','శుభ సాయంత్రం','నమస్కారం'),s:', ',p:'.',i:'నేను YeeHaw. {t} · {d}. బ్రౌజ్ చేద్దాం!',ph:'మీ మొదటి పేరు'},
+    mr:{b:D('शुभ प्रभात','शुभ दुपार','शुभ संध्याकाळ','नमस्कार'),s:', ',p:'.',i:'मी YeeHaw. {t} · {d}. चला सर्फ करूया!',ph:'तुमचे पहिले नाव'},
+    ta:{b:D('காலை வணக்கம்','மதிய வணக்கம்','மாலை வணக்கம்','வணக்கம்'),s:', ',p:'.',i:'நான் YeeHaw. {t} · {d}. உலாவலாம் வாருங்கள்!',ph:'உங்கள் முதல் பெயர்'},
+    gu:{b:D('સુપ્રભાત','શુભ બપોર','શુભ સંધ્યા','નમસ્તે'),s:', ',p:'.',i:'હું YeeHaw છું. {t} · {d}. ચાલો સર્ફ કરીએ!',ph:'તમારું પ્રથમ નામ'},
+    kn:{b:D('ಶುಭೋದಯ','ಶುಭ ಮಧ್ಯಾಹ್ನ','ಶುಭ ಸಂಜೆ','ನಮಸ್ಕಾರ'),s:', ',p:'.',i:'ನಾನು YeeHaw. {t} · {d}. ಬ್ರೌಸ್ ಮಾಡೋಣ!',ph:'ನಿಮ್ಮ ಮೊದಲ ಹೆಸರು'},
+    ml:{b:D('സുപ്രഭാതം','ശുഭ ഉച്ച','ശുഭ സായാഹ്നം','നമസ്കാരം'),s:', ',p:'.',i:'ഞാൻ YeeHaw. {t} · {d}. നമുക്ക് ബ്രൗസ് ചെയ്യാം!',ph:'നിങ്ങളുടെ ആദ്യ പേര്'},
+    pa:{b:D('ਸ਼ੁਭ ਸਵੇਰ','ਸ਼ੁਭ ਦੁਪਹਿਰ','ਸ਼ੁਭ ਸ਼ਾਮ','ਸਤ ਸ੍ਰੀ ਅਕਾਲ'),s:', ',p:'।',i:'ਮੈਂ YeeHaw ਹਾਂ। {t} · {d}। ਚੱਲੋ ਸਰਫ਼ ਕਰੀਏ!',ph:'ਤੁਹਾਡਾ ਪਹਿਲਾ ਨਾਮ'},
+    sw:{b:D('Habari za asubuhi','Habari za mchana','Habari za jioni','Hujambo'),s:', ',p:'.',i:'Mimi ni YeeHaw. {t} · {d}. Tuvinjari!',ph:'Jina lako la kwanza'},
+    ha:{b:D('Barka da safiya','Barka da rana','Barka da yamma','Sannu'),s:', ',p:'.',i:'Ni ne YeeHaw. {t} · {d}. Mu yi bincike!',ph:'Sunanka na farko'},
+    am:{b:D('እንደምን አደሩ','እንደምን ዋሉ','እንደምን አመሹ','ሰላም'),s:', ',p:'።',i:'እኔ YeeHaw ነኝ። {t} · {d}። እንቃኝ!',ph:'የመጀመሪያ ስምዎ'},
+    my:{b:D('မင်္ဂလာနံနက်ခင်းပါ','မင်္ဂလာနေ့လည်ခင်းပါ','မင်္ဂလာညနေခင်းပါ','မင်္ဂလာပါ'),s:' ',p:'။',i:'ကျွန်ုပ်က YeeHaw ပါ။ {t} · {d}။ ဝဘ်ကြည့်ကြရအောင်!',ph:'သင့်နာမည်'},
+    ne:{b:D('शुभ प्रभात','शुभ दिउँसो','शुभ साँझ','नमस्ते'),s:', ',p:'।',i:'म YeeHaw हुँ। {t} · {d}। सर्फ गरौं!',ph:'तपाईंको पहिलो नाम'},
     th:{b:D('สวัสดีตอนเช้า','สวัสดีตอนบ่าย','สวัสดีตอนเย็น','สวัสดี'),s:' ',p:'',i:'ฉันคือ YeeHaw {t} · {d} ไปท่องเว็บกันเลย!',ph:'ชื่อของคุณ',pre:'คุณ',j:' '}
   };
   var TITLES={mr:1,mrs:1,ms:1,miss:1,mx:1,dr:1,sir:1,prof:1,sr:1,sra:1,srta:1,herr:1,frau:1,mme:1,mlle:1,m:1};
@@ -269,6 +281,7 @@ var YHGreet=(function(){
     var loc=lang==='zh-tw'?'zh-TW':lang;
     var t,d;
     try{
+      if(!(Intl.DateTimeFormat.supportedLocalesOf&&Intl.DateTimeFormat.supportedLocalesOf([loc]).length))return null; // this WebView cannot format dates in the language: show nothing rather than a mixed-language line
       t=(fmt&&fmt.t)||new Intl.DateTimeFormat(loc,{hour:'numeric',minute:'2-digit'}).format(now);
       d=(fmt&&fmt.d)||new Intl.DateTimeFormat(loc,{weekday:'long',month:'long',day:'numeric'}).format(now);
     }catch(e){return null;}
@@ -284,7 +297,8 @@ var YHGreet=(function(){
 (function(){
   var el=document.getElementById('greet');if(!el)return;
   var lang=(typeof T!=='undefined'&&T&&T[0])||'en';
-  if(!YHGreet.has(lang)){el.hidden=true;return;} // no vetted phrases for this language: show nothing rather than something wrong
+  var navl=((navigator.languages&&navigator.languages[0])||navigator.language||'').toLowerCase();
+  if(!YHGreet.has(lang)||(lang==='pa'&&/-pk$|arab/.test(navl))){el.hidden=true;return;} // Pakistani Punjabi is written in Shahmukhi, not the Gurmukhi script used here // no vetted phrases for this language: show nothing rather than something wrong
   var KEY='yh.greet',mem={};
   function load(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){return mem;}}
   function save(o){mem=o;try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){}}
