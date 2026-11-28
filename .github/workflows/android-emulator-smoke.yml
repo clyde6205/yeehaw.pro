@@ -48,6 +48,10 @@ jobs:
             ram: 1024
             cores: 1
           # Same slow phone on an EDGE-speed, high-latency emulated link (the emulator shapes real network traffic).
+          # Isolation experiment for the API 36 WebView native crash (Chrome_IOThread SIGTRAP inside the system image's WebView).
+          - api-level: 36
+            profile: google-apis-image
+            image: google_apis
           - api-level: 23
             profile: lowend-1gb-1core-edge
             ram: 1024
@@ -93,7 +97,7 @@ jobs:
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           AVDMANAGER="$(command -v avdmanager || find "$SDK_ROOT/cmdline-tools" -type f -name avdmanager | head -n 1)"
-          IMG="system-images;android-${{ matrix.api-level }};default;x86_64"
+          IMG="system-images;android-${{ matrix.api-level }};${{ matrix.image || 'default' }};x86_64"
           "$SDKMANAGER" --install "$IMG" >/dev/null
           mkdir -p "$ANDROID_AVD_HOME"
           echo no | "$AVDMANAGER" create avd --force -n test -k "$IMG" -d pixel_2
